@@ -1,0 +1,711 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FocoZen PIP</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --accent-foco: #f97316; 
+            --accent-pausa: #10b981;
+            --text-main: #ffffff;
+            --text-muted: #cbd5e1;
+        }
+
+        /* PALETA DE CORES DINÂMICAS */
+        :root[data-sound="nature"] { --accent-foco: #10b981; }
+        :root[data-sound="water"] { --accent-foco: #3b82f6; }
+        :root[data-sound="fire"] { --accent-foco: #f97316; }
+        :root[data-sound="music"] { --accent-foco: #a855f7; }
+        :root[data-sound="lofi"] { --accent-foco: #f5f5f4; }
+        :root[data-sound="jazz"] { --accent-foco: #fef3c7; }
+        :root[data-sound="classica"] { --accent-foco: #fef3c7; }
+        :root[data-sound="yellow"] { --accent-foco: #eab308; }
+        :root[data-sound="noise"] { --accent-foco: #6b7280; }
+        :root[data-sound="sky"] { --accent-foco: #0ea5e9; }
+        :root[data-sound="pink"] { --accent-foco: #ec4899; }
+        :root[data-sound="brown"] { --accent-foco: #92400e; }
+
+        body {
+            margin: 0; padding: 0;
+            font-family: 'Inter', sans-serif;
+            overflow: hidden; background: transparent;
+            user-select: none; color: var(--text-main);
+            -webkit-app-region: no-drag;
+        }
+
+        .pip-dynamic-bg {
+            position: absolute; top: 0; left: 0; right: 0; bottom: 0;
+            background-size: cover; background-position: center;
+            background-color: #0a0a0a; z-index: 0; border-radius: 16px;
+        }
+        
+        .pip-overlay {
+            position: absolute; top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(15, 23, 42, 0.1); 
+            backdrop-filter: blur(2px);
+            -webkit-backdrop-filter: blur(2px);
+            z-index: 1; border-radius: 16px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .pip-container {
+            position: relative; width: 100vw; height: 100vh;
+            box-sizing: border-box; display: flex; flex-direction: column;
+            align-items: center; justify-content: center;
+            padding: 18px 18px 14px 18px; z-index: 3;
+        }
+
+        .pip-drag-area {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 50px;
+            -webkit-app-region: no-drag;
+            z-index: 48;
+            pointer-events: auto;
+            background: transparent;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+        }
+
+        .pip-drag-area:active {
+            cursor: pointer;
+        }
+
+        .pip-drag-handle {
+            position: absolute;
+            top: 6px; /* Movido mais para cima, quase na borda */
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            padding: 5px 14px;
+            border-radius: 999px;
+            background: rgba(255, 255, 255, 0.09);
+            border: 1px solid rgba(255, 255, 255, 0.18);
+            -webkit-app-region: no-drag;
+            pointer-events: auto;
+            cursor: pointer;
+        }
+
+        .pip-drag-handle:active {
+            cursor: grabbing;
+            transform: scale(0.98);
+        }
+
+        .pip-drag-dots {
+            display: flex;
+            gap: 4px;
+        }
+
+        .pip-drag-dot {
+            width: 4px;
+            height: 4px;
+            border-radius: 50%;
+            background: rgba(255, 255, 255, 0.88);
+            box-shadow: 0 0 8px rgba(255, 255, 255, 0.28);
+        }
+
+        /* CORREÇÃO AQUI: Removemos o overlay daqui para não bloquear a tela toda */
+        button, .sound-list, .sound-wrapper { 
+            -webkit-app-region: no-drag; 
+        }
+
+        /* BOTÕES DE TOPO - GLASSMORPHISM */
+        .top-ctrl {
+            position: absolute; top: 12px;
+            background: rgba(15, 23, 42, 0.4);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            color: #ffffff;
+            cursor: pointer;
+            width: 30px; height: 30px;
+            border-radius: 50%;
+            display: flex; align-items: center; justify-content: center;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            font-size: 12px;
+            backdrop-filter: blur(8px);
+            -webkit-backdrop-filter: blur(8px);
+            z-index: 50;
+        }
+        .top-ctrl:hover {
+            background: rgba(255, 255, 255, 0.2);
+            transform: scale(1.1);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+        }
+        .btn-restore { right: 14px; width: 26px; height: 26px; font-size: 11px; top: 14px; }
+        .btn-minimize {
+            right: 48px; /* Ajustada posição */
+            width: 26px; height: 26px;
+            font-size: 11px;
+            top: 14px;
+        }
+        .btn-close { left: 12px; }
+        .btn-close:hover {
+            border-color: #ef4444;
+            color: #ef4444;
+            background: rgba(239, 68, 68, 0.15);
+        }
+
+        .pip-header {
+            font-size: 11px; text-transform: uppercase;
+            letter-spacing: 1.2px; color: #ffffff;
+            margin-bottom: 2px; margin-top: 10px; /* Reduzido para não cortar / dar overflow */
+            font-weight: 800;
+            max-width: 80%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+            text-align: center;
+            text-shadow: 0 2px 4px rgba(0,0,0,0.8);
+        }
+
+        /* CORREÇÃO AQUI: Removido o no-drag do relógio para permitir arrastar clicando nos números */
+        .pip-clock {
+            font-size: 2.5rem; font-weight: 800;
+            letter-spacing: -1.5px; line-height: 1;
+            text-shadow: 0 4px 15px rgba(0,0,0,0.8);
+            font-variant-numeric: tabular-nums;
+        }
+
+        .progress-bar-container {
+            width: 95%; height: 4px;
+            background: rgba(255,255,255,0.15); border-radius: 2px;
+            margin: 12px 0 16px 0; overflow: hidden;
+        }
+
+        .progress-fill {
+            height: 100%; width: 0%;
+            background: var(--accent-foco); border-radius: 2px;
+            transition: width 1s linear;
+            box-shadow: 0 0 12px var(--accent-foco);
+        }
+
+        .controls-row {
+            display: flex; width: 100%;
+            justify-content: space-between; align-items: center;
+        }
+
+        .sound-wrapper { position: relative; display: flex; gap: 6px; align-items: center; }
+        
+        .btn-sound {
+            background: rgba(0,0,0,0.4); border: 1px solid rgba(255,255,255,0.15);
+            border-radius: 8px; color: var(--text-main);
+            padding: 6px 10px; font-size: 11px; font-weight: 500;
+            cursor: pointer; display: flex; align-items: center; gap: 6px;
+            max-width: 95px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+        }
+
+        .main-controls { display: flex; gap: 10px; }
+        .btn-action {
+            background: rgba(0,0,0,0.4); border: 1px solid rgba(255,255,255,0.15);
+            border-radius: 50%; width: 34px; height: 34px; color: #fff;
+            cursor: pointer; display: flex; align-items: center; justify-content: center;
+            font-size: 12px;
+        }
+
+        .volume-hover-wrap {
+            position: relative;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 24px;
+            height: 24px;
+            -webkit-app-region: no-drag;
+        }
+
+        .volume-hover-wrap::after {
+            content: "";
+            position: absolute;
+            left: 50%;
+            bottom: 100%;
+            transform: translateX(-50%);
+            width: 44px;
+            height: 12px;
+        }
+
+        .volume-pop {
+            position: absolute;
+            bottom: calc(100% + 4px);
+            left: 50%;
+            transform: translateX(-50%) translateY(10px);
+            width: 40px;
+            height: 82px;
+            padding: 8px 0;
+            border-radius: 14px;
+            border: 1px solid rgba(255, 255, 255, 0.18);
+            background: rgba(15, 23, 42, 0.55);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.28s ease, transform 0.28s ease;
+            z-index: 130;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            overflow: hidden;
+        }
+
+        .volume-pop::before {
+            content: "";
+            position: absolute;
+            inset: 0;
+            border-radius: inherit;
+            background: var(--accent-foco);
+            opacity: 0.12;
+            pointer-events: none;
+        }
+
+        .volume-hover-wrap:hover .volume-pop,
+        .volume-hover-wrap.open .volume-pop,
+        .volume-pop:hover,
+        .volume-pop:focus-within {
+            opacity: 1;
+            pointer-events: auto;
+            transform: translateX(-50%) translateY(0);
+        }
+
+        .volume-pop input[type="range"] {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 58px;
+            height: 4px;
+            transform: rotate(-90deg);
+            background: transparent;
+            outline: none;
+            cursor: pointer;
+            position: relative;
+            z-index: 2;
+        }
+
+        .volume-pop input[type="range"]::-webkit-slider-runnable-track {
+            height: 4px;
+            border-radius: 999px;
+            background: linear-gradient(to right, rgba(255,255,255,0.35), var(--accent-foco));
+        }
+
+        .volume-pop input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background: var(--accent-foco);
+            margin-top: -3px;
+            box-shadow: 0 0 0 2px rgba(15, 23, 42, 0.45), 0 0 10px rgba(255, 255, 255, 0.25);
+        }
+
+        .btn-volume {
+            width: 24px !important;
+            height: 24px !important;
+            font-size: 10px;
+            color: #ffffff;
+            border-color: rgba(255,255,255,0.15);
+            background: rgba(0, 0, 0, 0.45);
+        }
+
+        .btn-volume:hover {
+            box-shadow: 0 0 12px rgba(255, 255, 255, 0.25);
+        }
+
+        .pip-inline-toast {
+            position: absolute;
+            left: 50%;
+            bottom: 16px;
+            transform: translateX(-50%) translateY(10px);
+            opacity: 0;
+            pointer-events: none;
+            z-index: 150;
+            padding: 8px 12px;
+            border-radius: 999px;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            background: rgba(15, 23, 42, 0.5);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            color: #fff;
+            font-size: 10px;
+            font-weight: 600;
+            transition: opacity 0.3s ease, transform 0.3s ease;
+            white-space: nowrap;
+        }
+
+        .pip-inline-toast.show {
+            opacity: 1;
+            transform: translateX(-50%) translateY(0);
+        }
+
+        .pip-drag-tooltip {
+            position: absolute;
+            top: 35px;
+            left: 50%;
+            transform: translateX(-50%) translateY(-4px);
+            opacity: 0;
+            pointer-events: none;
+            z-index: 121;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 9px 15px;
+            border-radius: 999px;
+            border: 1px solid rgba(255, 255, 255, 0.24);
+            background: rgba(15, 23, 42, 0.52);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            color: #fff;
+            font-size: 11px;
+            font-weight: 600;
+            transition: opacity 0.4s ease, transform 0.4s ease;
+            box-shadow: 0 10px 24px rgba(0, 0, 0, 0.28);
+        }
+
+        .pip-drag-tooltip.visible {
+            opacity: 1;
+            transform: translateX(-50%) translateY(0);
+        }
+
+        .pip-drag-tooltip i {
+            font-size: 11px;
+            color: var(--accent-foco);
+            animation: handNudge 1.2s ease-in-out infinite;
+        }
+
+        @keyframes handNudge {
+            0%, 100% { transform: translateX(0); }
+            50% { transform: translateX(4px); }
+        }
+
+        /* SCROLLBAR CUSTOMIZADO PADRÃO APP */
+        .sound-list {
+            position: absolute; bottom: 120%; left: 0;
+            width: 140px; max-height: 90px;
+            overflow-y: auto;
+            background: rgba(15, 23, 42, 0.98);
+            border: 1px solid rgba(255,255,255,0.2); border-radius: 12px;
+            padding: 4px; display: flex; flex-direction: column; gap: 2px;
+            opacity: 0; pointer-events: none;
+            transform: translateY(10px); transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            box-shadow: 0 10px 30px rgba(0,0,0,0.8); z-index: 100;
+        }
+        .sound-list::-webkit-scrollbar { width: 4px; }
+        .sound-list::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 10px; }
+        .sound-list.open { opacity: 1; pointer-events: all; transform: translateY(0); }
+
+        .sound-item {
+            background: transparent; border: none; color: var(--text-muted);
+            padding: 6px 8px; border-radius: 6px; text-align: left;
+            cursor: pointer; font-size: 10px; display: flex; align-items: center;
+            gap: 8px; transition: 0.2s;
+        }
+        .sound-item:hover { background: rgba(255,255,255,0.1); color: #fff; }
+
+        /* NOVO POPUP DE CONCLUSÃO PREMIUM - GLASSMORPHISM */
+        .pip-completion-overlay {
+            position: absolute; top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(10, 15, 25, 0.45); 
+            backdrop-filter: blur(14px); 
+            -webkit-backdrop-filter: blur(14px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            z-index: 200; border-radius: 16px;
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+            opacity: 0; pointer-events: none; transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+            transform: scale(0.95);
+        }
+        .pip-completion-overlay.active { opacity: 1; pointer-events: all; transform: scale(1); }
+        
+        .pip-comp-content { text-align: center; width: 90%; }
+        .pip-comp-content h3 { margin: 0 0 4px 0; font-size: 18px; font-weight: 800; color: #fff; text-shadow: 0 2px 8px rgba(0,0,0,0.6); letter-spacing: -0.5px; }
+        .pip-comp-content p { margin: 0 0 16px 0; font-size: 12px; color: var(--text-main); font-weight: 500; text-shadow: 0 1px 4px rgba(0,0,0,0.8); }
+        .pip-comp-actions { display: flex; gap: 10px; justify-content: center; margin-bottom: 15px; }
+        
+        .btn-comp {
+            background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.15);
+            color: #fff; padding: 10px 18px; border-radius: 20px; font-size: 11px; cursor: pointer;
+            transition: all 0.3s ease; font-weight: 700; backdrop-filter: blur(4px);
+        }
+        .btn-comp.primary { 
+            background: var(--accent-foco); 
+            border: 1px solid rgba(255, 255, 255, 0.3); 
+            box-shadow: 0 4px 15px rgba(0,0,0,0.4), inset 0 2px 4px rgba(255,255,255,0.2); 
+        }
+        .btn-comp:hover { transform: translateY(-2px); filter: brightness(1.15); box-shadow: 0 6px 18px rgba(0,0,0,0.5); }
+        
+        .btn-pip-link {
+            background: none; border: none; color: rgba(255, 255, 255, 0.7); text-decoration: underline;
+            font-size: 10px; cursor: pointer; transition: 0.3s;
+        }
+        .btn-pip-link:hover { color: #fff; text-shadow: 0 0 8px rgba(255,255,255,0.5); }
+    </style>
+</head>
+<body>
+    <div id="pipDynamicBg" class="pip-dynamic-bg"></div>
+    <div class="pip-overlay"></div>
+    
+    <div class="pip-container">
+        <div class="pip-drag-area" aria-hidden="true">
+            <div id="pipDragHandle" class="pip-drag-handle">
+                <div class="pip-drag-dots">
+                    <span class="pip-drag-dot"></span>
+                    <span class="pip-drag-dot"></span>
+                    <span class="pip-drag-dot"></span>
+                </div>
+            </div>
+        </div>
+        <button id="btnClosePip" class="top-ctrl btn-close" title="Fechar App" style="-webkit-app-region: no-drag; cursor: pointer; position: absolute; z-index: 9999;"><i class="fas fa-times"></i></button>
+        <button id="btnMinimizePip" class="top-ctrl btn-minimize" title="Minimizar para a bandeja"><i class="fas fa-minus"></i></button>
+        <button id="btnRestore" class="top-ctrl btn-restore" title="Maximizar App"><i class="fas fa-expand-alt"></i></button>
+        <div id="pipDragTooltip" class="pip-drag-tooltip"><i class="fa-solid fa-hand-pointer"></i><span>Clique para arrastar</span></div>
+
+        <div class="pip-header"><span id="pipTaskName">Sessão Livre</span> <span id="pipPhase"></span></div>
+        <div class="pip-clock" id="pipClock">25:00</div>
+        
+        <div class="progress-bar-container"><div class="progress-fill" id="pipProgress"></div></div>
+
+        <div class="controls-row">
+            <div class="sound-wrapper">
+                <button id="btnPipAudioPlay" class="btn-action" style="width: 26px; height: 26px;"><i class="fas fa-play" id="audioPlayIcon" style="font-size: 10px;"></i></button>
+                <div class="volume-hover-wrap">
+                    <button id="btnPipVolume" class="btn-action btn-volume"><i id="volumeIcon" class="fas fa-volume-up"></i></button>
+                    <div class="volume-pop">
+                        <input id="pipVolumeRange" type="range" min="0" max="100" value="70" aria-label="Volume PIP">
+                    </div>
+                </div>
+                <button id="btnSoundTrigger" class="btn-sound"><i class="fas fa-music"></i> <span id="pipSoundName">Silêncio</span></button>
+                <div class="sound-list" id="soundList"></div>
+            </div>
+            <div class="main-controls">
+                <button id="btnPipPlay" class="btn-action"><i class="fas fa-play" id="playIcon"></i></button>
+                <button id="btnPipReset" class="btn-action"><i class="fas fa-redo"></i></button>
+            </div>
+        </div>
+    </div>
+
+    <div id="pipCompletionOverlay" class="pip-completion-overlay">
+        <div class="pip-comp-content">
+            <i id="pipCompIcon" class="fas fa-coffee" style="font-size: 24px; color: var(--accent-foco); margin-bottom: 10px;"></i>
+            <h3 id="pipCompTitle">Concluído!</h3>
+            <p id="pipCompText">Excelente foco.</p>
+            <div id="pipCompActions" class="pip-comp-actions"></div>
+            <button class="btn-pip-link" onclick="window.electronAPI.sendPipAction('restore-app')">Abrir App Completo</button>
+        </div>
+    </div>
+    <div id="pipInlineToast" class="pip-inline-toast">Selecione algum som para iniciar</div>
+
+    <script>
+        const clockEl = document.getElementById('pipClock');
+        const progressEl = document.getElementById('pipProgress');
+        const phaseEl = document.getElementById('pipPhase');
+        const taskNameEl = document.getElementById('pipTaskName');
+        const bgEl = document.getElementById('pipDynamicBg');
+        const soundNameEl = document.getElementById('pipSoundName');
+        const soundList = document.getElementById('soundList');
+        const audioPlayIcon = document.getElementById('audioPlayIcon');
+        const playIcon = document.getElementById('playIcon');
+        const volumeWrapEl = document.querySelector('.volume-hover-wrap');
+        const volumeRangeEl = document.getElementById('pipVolumeRange');
+        const volumeIconEl = document.getElementById('volumeIcon');
+        const pipDragArea = document.querySelector('.pip-drag-area');
+        const pipDragHandle = document.getElementById('pipDragHandle');
+        const pipDragTooltip = document.getElementById('pipDragTooltip');
+        const pipInlineToast = document.getElementById('pipInlineToast');
+        const pipCompletionOverlay = document.getElementById('pipCompletionOverlay');
+        const pipCompActions = document.getElementById('pipCompActions');
+        const PIP_TOOLTIP_KEY = 'focozen_pip_drag_tooltip_seen_v2';
+        let hasReceivedInitialState = false;
+        let hasSelectedSound = false;
+        let pipVolume = 0.7;
+        let previousVolume = 0.7;
+        let pipToastTimer = null;
+        let volumePopCloseTimer = null;
+        let isPipDragActive = false;
+        let hasShownDragTooltip = false;
+        let dragTooltipHideTimer = null;
+
+        const pipSoundsConfig = [
+            { id: 'chuva', name: 'Chuva', icon: 'fa-cloud-rain' },
+            { id: 'oceano', name: 'Oceano', icon: 'fa-water' },
+            { id: 'floresta', name: 'Floresta', icon: 'fa-tree' },
+            { id: 'fogueira', name: 'Fogueira', icon: 'fa-fire' },
+            { id: 'teclado', name: 'Teclado', icon: 'fa-keyboard' },
+            { id: 'classica', name: 'Clássica', icon: 'fa-music' },
+            { id: 'Jazz', name: 'Jazz', icon: 'fa-music' },
+            { id: 'Lo-fi', name: 'Lo-Fi', icon: 'fa-headphones' },
+            { id: 'Brown noise', name: 'Brown Noise', icon: 'fa-wave-square' },
+            { id: 'Pink noise', name: 'Pink Noise', icon: 'fa-wave-square' },
+            { id: '40hz', name: '40Hz Gama', icon: 'fa-wave-square' }
+        ];
+
+        pipSoundsConfig.forEach(sound => {
+            const btn = document.createElement('button');
+            btn.className = 'sound-item';
+            btn.innerHTML = `<i class="fas ${sound.icon}"></i> ${sound.name}`;
+            btn.onclick = (e) => { e.stopPropagation(); window.electronAPI.sendPipAction('change-sound', sound.id); soundList.classList.remove('open'); };
+            soundList.appendChild(btn);
+        });
+
+        document.getElementById('btnSoundTrigger').addEventListener('click', (e) => { e.stopPropagation(); soundList.classList.toggle('open'); });
+        document.addEventListener('click', (e) => { if (!e.target.closest('.sound-wrapper')) soundList.classList.remove('open'); });
+
+        document.getElementById('btnRestore').addEventListener('click', () => window.electronAPI.exitPip());
+        
+        document.getElementById('btnMinimizePip').addEventListener('click', () => {
+            window.electronAPI.sendPipAction('minimize-to-tray');
+        });
+
+        document.getElementById('btnClosePip').addEventListener('click', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            
+            if (typeof window.electronAPI.closeApp === 'function') {
+                window.electronAPI.closeApp();
+            }
+            window.electronAPI.sendPipAction('close-app', null);
+            window.electronAPI.sendPipAction('quit-app', null); 
+        });
+
+        document.getElementById('btnPipPlay').addEventListener('click', () => window.electronAPI.sendPipAction('toggle-play'));
+        document.getElementById('btnPipReset').addEventListener('click', () => window.electronAPI.sendPipAction('reset'));
+        function showPipToast(message) {
+            pipInlineToast.textContent = message;
+            pipInlineToast.classList.remove('show');
+            void pipInlineToast.offsetWidth;
+            pipInlineToast.classList.add('show');
+            if (pipToastTimer) clearTimeout(pipToastTimer);
+            pipToastTimer = setTimeout(() => pipInlineToast.classList.remove('show'), 3000);
+        }
+
+        document.getElementById('btnPipAudioPlay').addEventListener('click', () => {
+            if (!hasSelectedSound) {
+                showPipToast('Selecione algum som para iniciar');
+                return;
+            }
+            window.electronAPI.sendPipAction('toggle-audio');
+        });
+
+        function updateVolumeIcon(volume) {
+            volumeIconEl.className = volume <= 0 ? 'fas fa-volume-mute' : 'fas fa-volume-up';
+        }
+
+        function applyVolume(value, shouldRemember = true) {
+            const clamped = Math.max(0, Math.min(1, value));
+            pipVolume = clamped;
+            if (shouldRemember && clamped > 0) previousVolume = clamped;
+            volumeRangeEl.value = Math.round(clamped * 100);
+            updateVolumeIcon(clamped);
+            if (window.electronAPI?.setVolume) {
+                window.electronAPI.setVolume(clamped);
+            } else {
+                window.electronAPI.sendPipAction('set-volume', clamped);
+            }
+        }
+
+        volumeRangeEl.addEventListener('input', (e) => {
+            const value = Number(e.target.value) / 100;
+            applyVolume(value);
+        });
+
+        function openVolumePop() {
+            if (volumePopCloseTimer) clearTimeout(volumePopCloseTimer);
+            volumeWrapEl.classList.add('open');
+        }
+
+        function closeVolumePopWithDelay() {
+            if (volumePopCloseTimer) clearTimeout(volumePopCloseTimer);
+            volumePopCloseTimer = setTimeout(() => {
+                volumeWrapEl.classList.remove('open');
+            }, 180);
+        }
+
+        volumeWrapEl.addEventListener('mouseenter', openVolumePop);
+        volumeWrapEl.addEventListener('mouseleave', closeVolumePopWithDelay);
+        volumeRangeEl.addEventListener('pointerdown', openVolumePop);
+        volumeRangeEl.addEventListener('focus', openVolumePop);
+        volumeRangeEl.addEventListener('blur', closeVolumePopWithDelay);
+
+        document.getElementById('btnPipVolume').addEventListener('click', (e) => {
+            e.stopPropagation();
+            if (pipVolume > 0) {
+                previousVolume = pipVolume;
+                applyVolume(0, false);
+            } else {
+                applyVolume(previousVolume > 0 ? previousVolume : 0.7, true);
+            }
+        });
+
+        pipDragArea.addEventListener('mousedown', (event) => {
+            isPipDragActive = true;
+            pipDragHandle.style.cursor = 'grabbing';
+            window.electronAPI.pipDragStart({ screenX: event.screenX, screenY: event.screenY });
+        });
+        window.addEventListener('mousemove', (event) => {
+            if (!isPipDragActive) return;
+            window.electronAPI.pipDragMove({ screenX: event.screenX, screenY: event.screenY });
+        });
+        window.addEventListener('mouseup', () => {
+            if (isPipDragActive) window.electronAPI.pipDragEnd();
+            isPipDragActive = false;
+            pipDragHandle.style.cursor = 'pointer';
+        });
+
+        // LÓGICA CORRIGIDA E SEGURA PARA O TOOLTIP DE ARRASTAR
+        const tooltip = document.getElementById('pipDragTooltip');
+
+        window.electronAPI.onSyncPipState((state) => {
+            if (!hasReceivedInitialState) {
+                hasReceivedInitialState = true;
+                const tooltipSeenKey = 'focozen_pip_drag_tooltip_seen_v5';
+                if (localStorage.getItem(tooltipSeenKey) !== 'true') {
+                    setTimeout(() => {
+                        tooltip.classList.add('visible');
+                        setTimeout(() => {
+                            tooltip.classList.remove('visible');
+                            localStorage.setItem(tooltipSeenKey, 'true');
+                        }, 5000);
+                    }, 500);
+                }
+            }
+            if (state.showCompletion) {
+                if (state.showCompletion === 'focus-complete') {
+                    document.getElementById('pipCompTitle').textContent = 'Foco Concluído!';
+                    document.getElementById('pipCompText').textContent = 'Iniciar pausa?';
+                    document.getElementById('pipCompIcon').className = 'fas fa-coffee';
+                    pipCompActions.innerHTML = `<button class="btn-comp primary" onclick="window.electronAPI.sendPipAction('start-phase', 'shortBreak')">Curta (5m)</button><button class="btn-comp" onclick="window.electronAPI.sendPipAction('start-phase', 'longBreak')">Longa (15m)</button>`;
+                } else if (state.showCompletion === 'task-complete') {
+                    document.getElementById('pipCompTitle').textContent = 'Tarefa Finalizada!';
+                    document.getElementById('pipCompText').textContent = 'Bom trabalho!';
+                    document.getElementById('pipCompIcon').className = 'fas fa-check-circle';
+                    pipCompActions.innerHTML = `<button class="btn-comp primary" onclick="window.electronAPI.sendPipAction('start-phase', 'shortBreak')">Pausa (5m)</button>`;
+                } else if (state.showCompletion === 'break-complete') {
+                    document.getElementById('pipCompTitle').textContent = 'Pausa Terminada';
+                    document.getElementById('pipCompText').textContent = 'Voltar ao foco?';
+                    document.getElementById('pipCompIcon').className = 'fas fa-brain';
+                    pipCompActions.innerHTML = `<button class="btn-comp primary" onclick="window.electronAPI.sendPipAction('start-phase', 'focus')">Iniciar Foco</button>`;
+                }
+                pipCompletionOverlay.classList.add('active');
+            } else if (state.hideCompletion) {
+                pipCompletionOverlay.classList.remove('active');
+            }
+            if (state.theme) document.documentElement.setAttribute('data-sound', state.theme);
+            if (state.timeString) clockEl.textContent = state.timeString;
+            if (state.progress !== undefined) progressEl.style.width = `${state.progress}%`;
+            if (state.phase) phaseEl.textContent = state.phase === 'focus' ? '' : ' (Pausa)';
+            if (state.taskName) taskNameEl.textContent = state.taskName;
+            if (state.bgImage) bgEl.style.backgroundImage = `url('assets/images/${state.bgImage}')`;
+            if (state.isRunning !== undefined) playIcon.className = state.isRunning ? 'fas fa-pause' : 'fas fa-play';
+            if (state.isAudioPlaying !== undefined) audioPlayIcon.className = state.isAudioPlaying ? 'fas fa-pause' : 'fas fa-play';
+            if (state.soundName) {
+                const sn = state.soundName;
+                soundNameEl.textContent = sn.length > 8 ? sn.substring(0,6)+'...' : sn;
+                hasSelectedSound = sn !== 'Silêncio';
+            }
+            if (state.masterVolume !== undefined) {
+                pipVolume = Number(state.masterVolume);
+                if (pipVolume > 0) previousVolume = pipVolume;
+                volumeRangeEl.value = Math.round(pipVolume * 100);
+                updateVolumeIcon(pipVolume);
+            }
+        });
+    </script>
+</body>
+</html>

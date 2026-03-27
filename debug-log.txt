@@ -1,0 +1,3 @@
+=== LOG 23/03/2026, 23:52:30 ===
+Procurando áudio em: C:\Users\Nathan\Desktop\FocoZenPro\assets\audio
+Arquivos encontrados: 40hz (Ondas Gama).mp3, Brown noise.mp3, chuva.mp3, classica.mp3, floresta.mp3, fogueira.mp3, Jazz.mp3, Lo-fi.mp3, oceano.mp3, Pink noise.mp3, teclado.mp3

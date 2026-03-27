@@ -1,0 +1,531 @@
+<!DOCTYPE html>
+<html lang="pt-PT">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdnjs.cloudflare.com; font-src 'self' https://fonts.gstatic.com https://cdnjs.cloudflare.com; img-src 'self' file: data:; media-src 'self' file:;">
+    <title>FocoZen Pro</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <!-- ===== SVG LIQUID GLASS FILTERS (CodePen-inspired) ===== -->
+    <svg xmlns="http://www.w3.org/2000/svg" style="position:absolute;width:0;height:0;overflow:hidden;" aria-hidden="true">
+        <defs>
+            <!-- LIQUID GLASS: frosted refraction with animated displacement on hover -->
+            <filter id="liquidGlass" primitiveUnits="objectBoundingBox" color-interpolation-filters="sRGB">
+                <!-- Noise texture as displacement source -->
+                <feTurbulence type="fractalNoise" baseFrequency="0.04 0.04" numOctaves="4" seed="2" stitchTiles="stitch" result="noise"/>
+                <feGaussianBlur in="SourceGraphic" stdDeviation="0.008" result="blur"/>
+                <feDisplacementMap in="blur" in2="noise" scale="0.6" xChannelSelector="R" yChannelSelector="G" result="displaced"/>
+                <!-- Specular highlight for glass luminosity -->
+                <feSpecularLighting in="noise" surfaceScale="4" specularConstant="1.5" specularExponent="15" lighting-color="rgba(255,255,255,0.9)" result="specular">
+                    <fePointLight x="0.5" y="0.2" z="0.8"/>
+                </feSpecularLighting>
+                <feComposite in="specular" in2="SourceGraphic" operator="in" result="specMask"/>
+                <feBlend in="displaced" in2="specMask" mode="screen"/>
+            </filter>
+
+            <!-- LIGHTER variant for cards -->
+            <filter id="liquidGlassLight" primitiveUnits="objectBoundingBox" color-interpolation-filters="sRGB">
+                <feTurbulence type="fractalNoise" baseFrequency="0.05 0.05" numOctaves="3" seed="7" stitchTiles="stitch" result="noise"/>
+                <feGaussianBlur in="SourceGraphic" stdDeviation="0.005" result="blur"/>
+                <feDisplacementMap in="blur" in2="noise" scale="0.4" xChannelSelector="R" yChannelSelector="G" result="displaced"/>
+                <feSpecularLighting in="noise" surfaceScale="3" specularConstant="1.2" specularExponent="18" lighting-color="rgba(255,255,255,0.8)" result="specular">
+                    <fePointLight x="0.4" y="0.15" z="0.7"/>
+                </feSpecularLighting>
+                <feComposite in="specular" in2="SourceGraphic" operator="in" result="specMask"/>
+                <feBlend in="displaced" in2="specMask" mode="screen"/>
+            </filter>
+        </defs>
+    </svg>
+
+    <div id="dynamicBg" class="dynamic-bg"></div>
+    <!-- Background overlay: much lighter to let wallpaper show through -->
+    <div class="bg-overlay"></div>
+
+    <!-- V2 LAYOUT SHELL -->
+    <div class="app-wrapper">
+        <!-- SIDEBAR MENU -->
+        <nav class="app-sidebar">
+            <div class="sidebar-brand">
+                <div class="sidebar-logo"><i class="fas fa-brain"></i></div>
+                <div class="sidebar-title">FOCOZEN</div>
+            </div>
+            <div class="sidebar-menu" id="sidebarMenu">
+                <a class="sidebar-item active" data-view="view-home"><i class="fas fa-home"></i><span>Home</span></a>
+                <a class="sidebar-item" data-view="view-stats"><i class="fas fa-chart-pie"></i><span>Estatísticas</span></a>
+                <a class="sidebar-item" data-view="view-settings"><i class="fas fa-cog"></i><span>Configurações</span></a>
+            </div>
+            
+            <div style="margin-top: auto; padding: 16px;">
+                <div id="sidebarUserProfileBox" class="glass-effect" style="display: flex; align-items: center; gap: 12px; padding: 12px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.05); background: rgba(0,0,0,0.2);">
+                    <div style="width: 36px; height: 36px; background: linear-gradient(135deg, var(--accent-primary), var(--accent-secondary)); border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 1.1rem; color: white; flex-shrink: 0;" id="sidebarUserInitials">Z</div>
+                    <div style="overflow: hidden;" id="sidebarUserTextInfo">
+                        <div style="font-size: 0.9rem; font-weight: 700; color: white; white-space: nowrap; text-overflow: ellipsis; overflow: hidden; max-width: 100%;" id="sidebarUserName">Mestre Zen</div>
+                        <div style="font-size: 0.7rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 1px; margin-top: 2px;">Pro User</div>
+                    </div>
+                </div>
+            </div>
+        </nav>
+
+        <!-- MAIN VIEWS AREA -->
+        <div class="app-main-area">
+
+            <!-- HOME VIEW (Classic App) -->
+            <div id="view-home" class="view-container active">
+                <div class="app-container">
+                    <header class="app-header" style="justify-content: flex-end;">
+                        <div class="header-controls">
+                            <div id="nowPlaying" class="now-playing"><i class="fas fa-music"></i><span>Nenhum som selecionado</span></div>
+                            <button id="btnTasks" class="btn-tasks"><i class="fas fa-list"></i><span id="headerTaskCount" class="badge">0</span></button>
+                            <button id="btnNewTaskHeader" class="btn-new-task-header"><i class="fas fa-plus"></i><span>Nova Tarefa</span></button>
+                            
+                            <button id="btnEnterPip" class="btn-new-task-header secondary-btn btn-pip-trigger" title="Modo PIP (Picture in Picture)">
+                                <i class="fas fa-external-link-alt"></i><span>PIP</span>
+                            </button>
+                        </div>
+                    </header>
+
+        <main class="main-content">
+            <section class="panel panel-sounds">
+                <div class="panel-header">
+                    <span><i class="fas fa-music"></i> Sons Ambientais</span>
+                    <button id="masterPlayPause" class="btn-master-play-icon"><i class="fas fa-play"></i></button>
+                </div>
+                <div id="soundGrid" class="sound-grid-container"></div>
+                <div class="volume-control">
+                    <label><i class="fas fa-volume-up"></i> Volume</label>
+                    <input type="range" id="masterVolume" min="0" max="100" value="70">
+                    <span id="volumeValue">70%</span>
+                </div>
+            </section>
+
+            <div class="center-column">
+                <section class="panel panel-controls">
+                    <div class="panel-header header-controls-wrap">
+                        <span><i class="fas fa-clock"></i> Timer Pomodoro</span>
+                        <div class="task-status-wrapper">
+                            <span id="currentTaskBadge" class="task-badge free-mode">Sessão Livre</span>
+                            <button id="btnFreeFocus" class="action-pill danger hidden" title="Sair da Tarefa Atual">
+                                <i class="fas fa-times"></i> Fechar
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="timer-modes">
+                        <button class="mode-btn active" data-mode="focus">Foco</button>
+                        <button class="mode-btn" data-mode="shortBreak">Pausa Curta</button>
+                        <button class="mode-btn" data-mode="longBreak">Pausa Longa</button>
+                    </div>
+
+                    <div class="timer-display">
+                        <div class="time-control-wrapper" style="position: relative;">
+                            <button id="decreaseTime5" class="time-adjust-btn"><i class="fas fa-minus"></i></button>
+                            <div class="time-big" id="timerDisplay">25:00</div>
+                            <button id="increaseTime5" class="time-adjust-btn"><i class="fas fa-plus"></i></button>
+                            
+                            <!-- Custom Dropdown Ao Lado do Relógio -->
+                            <div id="customCategoryDropdown" class="custom-dropdown-container">
+                                <div class="custom-dropdown-trigger" id="catTriggerBtn">
+                                    <i id="catTriggerIcon" class="fas fa-infinity"></i>
+                                    <span id="catTriggerText">Livre</span>
+                                    <i class="fas fa-chevron-down" style="font-size: 0.6rem; margin-left: 4px; opacity: 0.6;"></i>
+                                </div>
+                                <div class="custom-dropdown-menu" id="catMenu">
+                                    <div class="custom-dropdown-item active" data-val="Livre"><i class="fas fa-infinity"></i> Livre</div>
+                                    <div class="custom-dropdown-item" data-val="Trabalho"><i class="fas fa-briefcase"></i> Trabalho</div>
+                                    <div class="custom-dropdown-item" data-val="Estudos"><i class="fas fa-book"></i> Estudos</div>
+                                    <div class="custom-dropdown-item" data-val="Projetos"><i class="fas fa-laptop-code"></i> Projetos</div>
+                                    <div class="custom-dropdown-item" data-val="Leitura"><i class="fas fa-book-open"></i> Leitura</div>
+                                    <div class="custom-dropdown-item" data-val="Hobbies"><i class="fas fa-palette"></i> Hobbies</div>
+                                </div>
+                                <input type="hidden" id="globalCategorySelect" value="Livre">
+                            </div>
+                        </div>
+                        <div class="time-label" id="timeLabel">Período de Foco</div>
+                    </div>
+
+                    <div class="timer-controls">
+                        <button id="timerReset" class="ctrl-btn"><i class="fas fa-redo"></i></button>
+                        <button id="timerToggle" class="ctrl-btn btn-play"><i class="fas fa-play"></i></button>
+                    </div>
+                    <div class="timer-progress"><div id="timerProgress" class="progress-bar"></div></div>
+                </section>
+
+                <div class="bottom-tools-grid">
+                    <section class="panel panel-breath">
+                        <div class="panel-header">
+                            <span><i class="fas fa-lungs"></i> Respiração 4-7-8</span>
+                            <button id="breathInfo" class="btn-info"><i class="fas fa-info"></i></button>
+                        </div>
+                        <div class="breath-panel-graphic">
+                            <i class="fas fa-wind breath-hero-icon"></i>
+                            <p>Recupere o foco e a clareza mental instantaneamente com esta técnica.</p>
+                        </div>
+                        <button id="btnOpenBreathSession" class="btn-action">Iniciar Sessão</button>
+                    </section>
+
+                    <section class="panel panel-progress">
+                        <div class="panel-header">
+                            <span><i class="fas fa-chart-circle"></i> Progresso</span>
+                            <button id="btnToggleBubbleText" class="btn-info" title="Ocultar Percentagem"><i class="fas fa-eye"></i></button>
+                        </div>
+                        <div id="progressContent" class="progress-content"></div>
+                    </section>
+                </div>
+            </div>
+
+            <section class="panel panel-tasks sidebar-tasks">
+                <div class="panel-header">
+                    <span><i class="fas fa-clipboard-list"></i> Minhas Tarefas</span>
+                    <button id="btnAddTaskModal" class="btn-info"><i class="fas fa-plus"></i></button>
+                </div>
+                <div id="tasksListSidebar" class="tasks-list-sidebar"></div>
+                <div id="emptyStateSidebar" class="empty-state">
+                    <i class="fas fa-clipboard"></i><p>Nenhuma tarefa ainda</p><span>Clique em "Nova Tarefa" para começar</span>
+                </div>
+            </section>
+        </main>
+        </div><!-- fechar app-container -->
+        </div><!-- fechar view-home -->
+
+        <!-- STATS VIEW -->
+        <div id="view-stats" class="view-container stats-view">
+            <div class="app-container" style="padding-top: 20px; max-width: 1200px; margin: 0 auto;">
+                <div style="margin-bottom: 20px; display: flex; justify-content: space-between; align-items: flex-end;">
+                    <div>
+                        <h2 style="font-size: 1rem; font-weight: 700; margin-bottom: 2px; color: var(--text-secondary); letter-spacing: 3px; text-transform: uppercase;">Estatísticas /</h2>
+                        <h1 id="statsGreetingTitle" style="font-size: 2.5rem; font-weight: 800; color: white;">Mandou bem!</h1>
+                        <p id="statsGreetingSubtitle" style="color: var(--text-secondary); font-size: 1rem; margin-top: 3px;">Aqui está o resumo do seu foco.</p>
+                    </div>
+                    <div style="display: flex; gap: 8px; align-items: center; margin-bottom: 12px;">
+                        <!-- Period Selector -->
+                        <div class="stats-period-selector" id="statsPeriodSelector">
+                            <button class="stats-period-btn active" data-period="week">Semana</button>
+                            <button class="stats-period-btn" data-period="day">Hoje</button>
+                            <button class="stats-period-btn" data-period="month">Mês</button>
+                        </div>
+                        <!-- Refresh Btn -->
+                        <button id="btnRefreshStats" class="stats-refresh-btn" title="Atualizar dados">
+                            <i class="fas fa-sync-alt" id="refreshIcon"></i>
+                        </button>
+                    </div>
+                </div>
+                
+                <!-- Global Mini Player for Secondary Views -->
+                <div class="global-mini-player" id="statsMiniPlayer">
+                    <div class="mini-player-left">
+                        <button class="mini-play-btn" id="miniPlayBtn"><i class="fas fa-play" style="margin-left: 2px;"></i></button>
+                        <div class="mini-player-info">
+                            <span class="mini-player-label">Tocando Agora</span>
+                            <span class="mini-player-name" id="miniPlayerSoundName">Nenhum som</span>
+                        </div>
+                    </div>
+                    <div class="mini-player-right">
+                        <div class="mini-volume-wrapper">
+                            <i class="fas fa-volume-up" style="color: var(--text-secondary); font-size: 0.8rem;"></i>
+                            <input type="range" class="mini-volume-slider" id="miniVolumeSlider" min="0" max="100" value="70">
+                        </div>
+                        <button class="mini-sound-switch-btn" id="miniSoundSwitchBtn" title="Trocar som">
+                            <i class="fas fa-exchange-alt"></i>
+                        </button>
+                    </div>
+                    <!-- Sound Switcher Carousel (hidden by default) -->
+                    <div class="mini-sound-carousel" id="miniSoundCarousel"></div>
+                </div>
+                
+                <div id="bentoStatsGrid" class="bento-grid-dashboard">
+                    <!-- Nível 1: Cards -->
+                     <div class="bento-card bento-glow-primary">
+                        <div class="bento-card-header">
+                            <span style="font-size:0.8rem;font-weight:600;letter-spacing:1px;color:var(--text-secondary);"><i class="fas fa-clock" style="color:var(--accent-primary);margin-right:6px;"></i> FOCO HOJE</span>
+                        </div>
+                        <h2 id="statsFocusToday">0h 00m</h2>
+                    </div>
+                    <div class="bento-card bento-glow-primary">
+                        <div class="bento-card-header">
+                            <span style="font-size:0.8rem;font-weight:600;letter-spacing:1px;color:var(--text-secondary);"><i class="far fa-calendar-check" style="color:var(--accent-primary);margin-right:6px;"></i> FOCO SEMANA</span>
+                        </div>
+                        <h2 id="statsFocusWeek">0h 00m</h2>
+                    </div>
+                    <div class="bento-card bento-glow-primary">
+                        <div class="bento-card-header">
+                            <span style="font-size:0.8rem;font-weight:600;letter-spacing:1px;color:var(--text-secondary);"><i class="fas fa-fire" style="color:var(--accent-primary);margin-right:6px;"></i> OFENSIVA</span>
+                            <span id="statsStreakPercent" style="font-size:0.8rem; color:var(--text-secondary);">Melhor: 0</span>
+                        </div>
+                        <h2 id="statsStreak"><i class="fas fa-fire glow-icon-primary" id="streakFireIcon"></i>0 Dias</h2>
+                    </div>
+                    <div class="bento-card bento-glow-primary">
+                        <div class="bento-card-header">
+                            <span style="font-size:0.8rem;font-weight:600;letter-spacing:1px;color:var(--text-secondary);"><i class="fas fa-chart-line" style="color:var(--accent-primary);margin-right:6px;"></i> TAXA CONCLUSÃO</span>
+                        </div>
+                        <h2 id="statsCompletion">0% <span style="font-size:1rem;font-weight:400;color:var(--text-secondary);">de foco</span></h2>
+                    </div>
+                    
+                    <!-- Nível 2: Charts -->
+                    <div class="bento-panel bento-donut" style="grid-column: span 2;">
+                        <h3 class="bento-panel-title">DISTRIBUIÇÃO DE FOCO</h3>
+                        <div class="bento-chart-container donut-container">
+                            <canvas id="categoriesChart"></canvas>
+                        </div>
+                    </div>
+                    <div class="bento-panel bento-bar" style="grid-column: span 2;">
+                        <h3 class="bento-panel-title">CONSISTÊNCIA SEMANAL</h3>
+                        <div class="bento-chart-container bar-container">
+                            <canvas id="weekChart"></canvas>
+                        </div>
+                    </div>
+
+                    <!-- Nível 3: Linha do Tempo de Foco -->
+                    <div class="bento-panel" style="grid-column: span 4; position: relative;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+                            <h3 class="bento-panel-title" style="margin-bottom: 0;">LINHA DO TEMPO</h3>
+                            <div id="timelineSummary" style="font-size: 0.75rem; color: rgba(255,255,255,0.45);"></div>
+                        </div>
+                        <div id="focusTimeline" class="focus-timeline"></div>
+                        <div id="timelineTooltip" class="timeline-tooltip" style="display:none;"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- SETTINGS VIEW -->
+        <div id="view-settings" class="view-container">
+            <div class="app-container" style="padding-top: 50px; max-width: 800px; margin: 0 auto;">
+                <div style="margin-bottom: 20px;">
+                    <h1 style="font-size: 2.8rem; font-weight: 800; color: white;">Configurações</h1>
+                </div>
+
+                <!-- Global Mini Player for Settings View -->
+                <div class="global-mini-player" id="settingsMiniPlayer">
+                    <div class="mini-player-left">
+                        <button class="mini-play-btn" id="settingsMiniPlayBtn"><i class="fas fa-play" style="margin-left: 2px;"></i></button>
+                        <div class="mini-player-info">
+                            <span class="mini-player-label">Tocando Agora</span>
+                            <span class="mini-player-name" id="settingsMiniPlayerSoundName">Nenhum som</span>
+                        </div>
+                    </div>
+                    <div class="mini-player-right">
+                        <div class="mini-volume-wrapper">
+                            <i class="fas fa-volume-up" style="color: var(--text-secondary); font-size: 0.8rem;"></i>
+                            <input type="range" class="mini-volume-slider" id="settingsMiniVolumeSlider" min="0" max="100" value="70">
+                        </div>
+                        <button class="mini-sound-switch-btn" id="settingsSoundSwitchBtn" title="Trocar som">
+                            <i class="fas fa-exchange-alt"></i>
+                        </button>
+                    </div>
+                    <div class="mini-sound-carousel" id="settingsSoundCarousel"></div>
+                </div>
+                
+                <section class="panel glass-effect" style="padding: 30px; margin-bottom: 24px; border-radius: 20px;">
+                    <h3 style="margin-bottom: 24px; font-size: 1.3rem;"><i class="fas fa-user" style="color: var(--accent-primary); margin-right: 12px;"></i> Personalização de Perfil</h3>
+                    <div class="form-group" style="max-width: 400px;">
+                        <label>Exibição de Nome</label>
+                        <input type="text" id="settingsNameInput" class="modern-input" style="background: rgba(0,0,0,0.2); color: white; width: 100%; border: 1px solid rgba(255,255,255,0.1); padding: 12px; border-radius: 10px;">
+                    </div>
+                    <div style="display: flex; align-items: center; gap: 15px; margin-top: 20px;">
+                        <button id="btnSaveSettings" class="btn-modal primary">Salvar Alterações</button>
+                        <div id="settingsSavedMsg" style="color: #10b981; font-size: 0.9rem; font-weight: bold; background: rgba(16,185,129,0.1); padding: 8px 16px; border-radius: 20px; display: none; transform: translateZ(0); will-change: transform;"><i class="fas fa-check-circle"></i> Atualizado!</div>
+                    </div>
+                </section>
+
+                <section class="panel glass-effect" style="padding: 30px; border: 1px solid rgba(255,255,255,0.1); border-radius: 20px;">
+                    <h3 style="margin-bottom: 16px; font-size: 1.3rem; color: white;"><i class="fas fa-eraser" style="margin-right: 12px;"></i> Limpeza de Dados</h3>
+                    <p style="color: var(--text-secondary); margin-bottom: 24px; font-size: 1rem; line-height: 1.6;">Use este botão para apagar todos os seus registros de atividades, tarefas e configurações salvos localmente neste aplicativo.</p>
+                    <button id="btnSettingsResetData" class="btn-modal secondary" style="background: rgba(0,0,0,0.3); color: white; border-color: rgba(255,255,255,0.2); padding: 12px 24px; width: 100%; justify-content: center; position: relative;">
+                        <i class="fas fa-trash" style="position: absolute; left: 24px;"></i> <span>Resetar Aplicativo</span>
+                    </button>
+                </section>
+            </div>
+        </div>
+
+        </div><!-- fechar app-main-area -->
+    </div><!-- fechar app-wrapper -->
+
+    <div id="wizardModal" class="modal-overlay">
+        <!-- ONBOARDING CSS INSIDE OR IN FILE -->
+        <style>
+            .wizard-container { width: 450px; background: rgba(15, 23, 42, 0.7); backdrop-filter: blur(25px); border: 1px solid rgba(255,255,255,0.1); border-radius: 24px; overflow: hidden; position: relative; box-shadow: 0 25px 50px rgba(0,0,0,0.5); }
+            .wizard-step { display: none; padding: 40px 40px 80px 40px; text-align: center; animation: slideInRight 0.4s ease; }
+            .wizard-step.active { display: block; }
+            .wizard-icon { font-size: 3.5rem; color: var(--accent-primary); margin-bottom: 20px; text-shadow: 0 0 20px var(--accent-glow); }
+            .wiz-cat-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 10px; }
+            .wiz-cat-card { background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.1); border-radius: 12px; padding: 12px 10px; cursor: pointer; transition: all 0.2s; display: flex; flex-direction: column; align-items: center; gap: 8px; color: var(--text-secondary); }
+            .wiz-cat-card:hover { background: rgba(255,255,255,0.05); color: white; border-color: rgba(255,255,255,0.3); }
+            .wiz-cat-card.active { background: rgba(59, 130, 246, 0.2); border-color: #3b82f6; color: white; box-shadow: 0 0 15px rgba(59,130,246,0.3); }
+            .wiz-cat-card i { font-size: 1.4rem; }
+            .wiz-cat-card span { font-weight: 600; font-size: 0.85rem; }
+            .wizard-title { font-size: 1.6rem; font-weight: 800; margin-bottom: 10px; color: white; }
+            .wizard-desc { font-size: 0.95rem; color: var(--text-secondary); margin-bottom: 30px; line-height: 1.5; }
+            .wizard-actions { display: flex; justify-content: space-between; align-items: center; margin-top: 30px; }
+            .wizard-dots { display: flex; gap: 8px; justify-content: center; margin-bottom: 20px; }
+            .w-dot { width: 8px; height: 8px; border-radius: 50%; background: rgba(255,255,255,0.2); }
+            .w-dot.active { background: var(--accent-primary); box-shadow: 0 0 10px var(--accent-glow); }
+            @keyframes slideInRight { from { opacity: 0; transform: translateX(20px); } to { opacity: 1; transform: translateX(0); } }
+        </style>
+        
+        <div class="wizard-container">
+            <!-- P1: Welcome & Name -->
+            <div class="wizard-step active" id="wizardStep1" style="padding-bottom: 60px;">
+                <i class="fas fa-brain wizard-icon"></i>
+                <h2 class="wizard-title">Bem-vindo ao FocoZen</h2>
+                <p class="wizard-desc">O seu novo estúdio imersivo de produtividade chegou. Como gostaria de ser chamado?</p>
+                <input type="text" id="wizardNameInput" class="modern-input" placeholder="Digite seu nome" style="width: 100%; text-align: center; background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.1); padding: 14px; border-radius: 12px; font-size: 1.1rem; color: white;">
+                <div class="wizard-actions" style="justify-content: flex-end; margin-top: 40px;">
+                    <button class="btn-modal primary" onclick="nextWizard(1)" style="width: 100%; justify-content: center;">Continuar <i class="fas fa-arrow-right" style="margin-left: 10px;"></i></button>
+                </div>
+            </div>
+
+            <!-- P2: Base Category -->
+            <div class="wizard-step" id="wizardStep2" style="padding-bottom: 60px;">
+                <i class="fas fa-layer-group wizard-icon" style="color: #3b82f6; font-size: 2.5rem; margin-bottom: 10px;"></i>
+                <h2 class="wizard-title" style="font-size: 1.4rem;">Qual seu foco principal?</h2>
+                <p class="wizard-desc" style="margin-bottom: 15px; font-size: 0.85rem;">Nós geramos estatísticas do seu dia a dia.</p>
+                
+                <div class="wiz-cat-grid">
+                    <div class="wiz-cat-card active" onclick="selectWizCategory('Trabalho')"><i class="fas fa-briefcase"></i><span>Trabalho</span></div>
+                    <div class="wiz-cat-card" onclick="selectWizCategory('Estudos')"><i class="fas fa-book"></i><span>Estudos</span></div>
+                    <div class="wiz-cat-card" onclick="selectWizCategory('Projetos')"><i class="fas fa-laptop-code"></i><span>Projetos</span></div>
+                    <div class="wiz-cat-card" onclick="selectWizCategory('Leitura')"><i class="fas fa-book-open"></i><span>Leitura</span></div>
+                    <div class="wiz-cat-card" onclick="selectWizCategory('Hobbies')"><i class="fas fa-palette"></i><span>Hobbies</span></div>
+                    <div class="wiz-cat-card" onclick="selectWizCategory('Livre')"><i class="fas fa-infinity"></i><span>Livre</span></div>
+                </div>
+                <input type="hidden" id="wizardCategoryInput" value="Trabalho">
+
+                <div class="wizard-actions" style="margin-top: 25px; gap: 15px;">
+                    <button class="btn-modal secondary" style="flex: 1; justify-content: center;" onclick="prevWizard(2)">Voltar</button>
+                    <button class="btn-modal primary" style="flex: 1; justify-content: center;" onclick="nextWizard(2)">Continuar</button>
+                </div>
+            </div>
+
+            <!-- P3: Tutorial -->
+            <div class="wizard-step" id="wizardStep3" style="padding-bottom: 60px;">
+                <i class="fas fa-headphones wizard-icon" style="color: #10b981;"></i>
+                <h2 class="wizard-title">Imersão Total</h2>
+                <p class="wizard-desc" style="text-align: left;">
+                    <strong style="color:white;"><i class="fas fa-stopwatch" style="width: 20px;"></i> Pomodoro Automático:</strong> Nós controlamos o tempo de foco e as pausas curtas pra você.<br><br>
+                    <strong style="color:white;"><i class="fas fa-music" style="width: 20px;"></i> Sons Ambiente:</strong> Misture sons de chuva, lofi ou jazz para blindar o cérebro de distrações.<br><br>
+                    <strong style="color:white;"><i class="fas fa-chart-pie" style="width: 20px;"></i> Inteligência:</strong> O app cria gráficos do seu progresso na aba Estatísticas.
+                </p>
+                <div class="wizard-actions" style="margin-top: 40px; gap: 15px;">
+                    <button class="btn-modal secondary" style="flex: 1; justify-content: center;" onclick="prevWizard(3)">Voltar</button>
+                    <button class="btn-modal primary" style="flex: 1; justify-content: center;" onclick="finishWizard()"><i class="fas fa-rocket" style="margin-right: 10px;"></i> Começar</button>
+                </div>
+            </div>
+
+            <div class="wizard-dots" style="position: absolute; bottom: 15px; width: 100%;">
+                <div class="w-dot active" id="dot1"></div>
+                <div class="w-dot" id="dot2"></div>
+                <div class="w-dot" id="dot3"></div>
+            </div>
+        </div>
+    </div>
+
+    <div id="newTaskModal" class="modal-overlay">
+        <div class="modal-content-small">
+            <div class="modal-header-small">
+                <h3 id="modalTaskTitle"><i class="fas fa-plus-circle"></i> Nova Tarefa</h3>
+                <button id="closeNewTask" class="modal-close">×</button>
+            </div>
+            <div class="form-group">
+                <label><i class="fas fa-pen"></i> Nome da Tarefa</label>
+                <input type="text" id="taskNameInput" placeholder="Ex: Estudar JavaScript">
+            </div>
+            <div class="form-group">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                    <label style="margin-bottom: 0;"><i class="fas fa-tag"></i> Categoria</label>
+                    <button id="btnEditCategories" style="background: none; border: none; color: var(--text-secondary); cursor: pointer; transition: color 0.2s; font-size: 0.8rem;"><i class="fas fa-pen"></i></button>
+                </div>
+                <div class="category-chip-group" id="taskCategoryChips"></div>
+                <input type="hidden" id="taskCategoryInput" value="Livre">
+            </div>
+            <div class="form-group">
+                <label><i class="fas fa-list-check"></i> Subtarefas (Opcional)</label>
+                <div style="display: flex; gap: 8px;">
+                    <input type="text" id="subtaskInput" placeholder="Ex: Ler capítulo 1" style="margin-bottom: 0;">
+                    <button id="btnAddSubtask" class="btn-info" style="border-radius: var(--radius-sm); width: 45px; height: 45px; background: rgba(0,0,0,0.4);"><i class="fas fa-plus"></i></button>
+                </div>
+                <div id="tempSubtasksList" style="margin-top: 10px; display: flex; flex-direction: column; gap: 5px;"></div>
+            </div>
+            <div class="form-row">
+                <div class="form-group">
+                    <label><i class="fas fa-clock"></i> Tempo (min)</label>
+                    <div class="time-selector">
+                        <button id="decreaseTime" class="time-btn-sm">-</button>
+                        <input type="number" id="taskTimeInput" value="25" min="5" max="720">
+                        <button id="increaseTime" class="time-btn-sm">+</button>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label><i class="fas fa-stopwatch"></i> Pomodoros</label>
+                    <div class="time-selector">
+                        <button id="decreasePomodoros" class="time-btn-sm">-</button>
+                        <input type="number" id="taskPomodorosInput" value="1" min="1" max="20">
+                        <button id="increasePomodoros" class="time-btn-sm">+</button>
+                    </div>
+                </div>
+            </div>
+            <div id="taskTimeLockHint" style="display:none; margin-bottom: 8px; padding: 8px 12px; border-radius: 8px; background: rgba(245,158,11,0.1); border: 1px solid rgba(245,158,11,0.3); color: #f59e0b; font-size: 0.75rem; align-items: center; gap: 6px;">
+                <i class="fas fa-lock"></i> Termine ou reinicie o temporizador para alterar a duração.
+            </div>
+            <div class="pomodoro-suggestion">
+                <i class="fas fa-lightbulb"></i>
+                <div>
+                    <span>Sugestão: <strong id="suggestedPomodoros">1</strong> Pomodoro(s)</span>
+                    <small id="suggestionDetail">1 Pomodoro(s) = 25 min</small>
+                </div>
+            </div>
+            <div class="modal-actions">
+                <button id="cancelNewTask" class="btn-modal secondary">Cancelar</button>
+                <button id="btnSalvarTarefa" class="btn-modal primary">Salvar Tarefa</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="transitionModal" class="modal-overlay">
+        <div class="modal-content-small elegant-popup" style="text-align: center;">
+            <div id="transitionIcon" class="elegant-icon"><i class="fas fa-coffee"></i></div>
+            <h2 id="transitionTitle" class="elegant-title">Hora da Pausa</h2>
+            <p id="transitionMessage" class="elegant-message">Completou um pomodoro.</p>
+            <div id="transitionStats" class="complete-stats hidden" style="margin-bottom: 20px;">
+                <span style="color:#94a3b8;">Total de blocos hoje: <strong id="totalPomodorosTodayStats" style="color:white; font-size:1.2rem;">0</strong></span>
+            </div>
+            <div id="transitionActions" class="modal-actions elegant-actions"></div>
+        </div>
+    </div>
+
+    <div id="breathInfoModal" class="modal-overlay">
+        <div class="modal-content-small">
+            <div class="modal-header-small"><h3><i class="fas fa-lungs"></i> Respiração 4-7-8</h3><button id="closeBreathInfoBtn" class="modal-close">×</button></div>
+            <p class="info-text">Técnica do Dr. Andrew Weil baseada em Pranayama do Yoga.</p>
+            <div class="breath-steps-info">
+                <div class="breath-step-info"><div class="step-time">4s</div><div class="step-desc"><strong>Inspire</strong> pelo nariz</div></div>
+                <div class="breath-step-info"><div class="step-time">7s</div><div class="step-desc"><strong>Segure</strong> o ar</div></div>
+                <div class="breath-step-info"><div class="step-time">8s</div><div class="step-desc"><strong>Expire</strong> pela boca</div></div>
+            </div>
+            <div class="info-benefits"><strong>Benefícios:</strong> Reduz ansiedade, melhora foco, acalma mente.</div>
+            <div class="modal-actions"><button id="closeBreathInfo" class="btn-modal primary btn-full">Entendi</button></div>
+        </div>
+    </div>
+
+    <div id="breathActiveModal" class="modal-overlay breath-fullscreen-overlay">
+        <button id="closeBreathActive" class="btn-restore-mini" style="position:fixed; top:12px; right:12px; width:36px; height:36px; background:rgba(255,255,255,0.1); border:1px solid rgba(255,255,255,0.2); border-radius:10px; color:#fff; cursor:pointer; z-index:10; transition:all 0.3s ease; backdrop-filter:blur(10px);" title="Sair da Respiração"><i class="fas fa-times"></i></button>
+        <div class="breath-active-container">
+            <h2 id="breathPhaseTitle" class="breath-phase-title">Prepare-se...</h2>
+            <div id="breathActiveCircle" class="breath-active-circle">
+                <span id="breathTimeText" class="breath-time-text"></span>
+            </div>
+            <p class="breath-tip">Concentre-se apenas no movimento do círculo.</p>
+        </div>
+    </div>
+
+    <div id="appToast" class="glass-toast" role="status" aria-live="polite"></div>
+
+    <script src="./node_modules/chart.js/dist/chart.umd.js"></script>
+    <script src="renderer.js"></script>
+</body>
+</html>

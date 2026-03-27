@@ -1,0 +1,36 @@
+{
+  "name": "focozen-pro",
+  "version": "1.0.0",
+  "description": "Estúdio de Foco Imersivo",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "build:win": "electron-builder --win",
+    "build:mac": "electron-builder --mac"
+  },
+  "build": {
+    "appId": "com.focozen.pro",
+    "productName": "FocoZen Pro",
+    "mac": {
+      "target": [
+        "dmg",
+        "zip"
+      ],
+      "category": "public.app-category.productivity"
+    },
+    "win": {
+      "target": [
+        "portable"
+      ]
+    }
+  },
+  "author": "FocoZen",
+  "license": "MIT",
+  "devDependencies": {
+    "electron": "^28.0.0",
+    "electron-builder": "^24.13.3"
+  },
+  "dependencies": {
+    "chart.js": "^4.5.1"
+  }
+}
