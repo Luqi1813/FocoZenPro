@@ -1,0 +1,51 @@
+name: Create Trello Card on Changelog Update
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'CHANGELOG.md'
+
+jobs:
+  create-trello-card:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Extract latest version from CHANGELOG
+        id: version
+        run: |
+          VERSION=$(head -20 CHANGELOG.md | grep "## \[" | head -1 | sed 's/## \[\(.*\)\].*/\1/')
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+
+      - name: Extract changelog for latest version
+        id: changelog
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          
+          # Extract changelog section for this version
+          CHANGELOG=$(awk "/## \[$VERSION\]/,/## \[/" CHANGELOG.md | sed '$d')
+          
+          # Remove the version header line
+          CHANGELOG=$(echo "$CHANGELOG" | sed '1d')
+          
+          # Escape for form data
+          CHANGELOG=$(echo "$CHANGELOG" | jq -Rs .)
+          
+          echo "content=$CHANGELOG" >> $GITHUB_OUTPUT
+
+      - name: Create Trello Card in "Ready for Release" List
+        env:
+          TRELLO_API_KEY: ${{ secrets.TRELLO_API_KEY }}
+          TRELLO_TOKEN: ${{ secrets.TRELLO_TOKEN }}
+          TRELLO_READY_LIST_ID: ${{ secrets.TRELLO_READY_LIST_ID }}
+        run: |
+          curl -X POST "https://api.trello.com/1/cards" \
+            -d "key=$TRELLO_API_KEY" \
+            -d "token=$TRELLO_TOKEN" \
+            -d "idList=$TRELLO_READY_LIST_ID" \
+            -d "name=📝 Mudanças v${{ steps.version.outputs.version }} prontas" \
+            -d "desc=${{ steps.changelog.outputs.content }}" \
+            -d "pos=top" \
+            -d "idLabels=ready"
