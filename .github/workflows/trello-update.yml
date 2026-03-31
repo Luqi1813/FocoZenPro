@@ -17,16 +17,18 @@ jobs:
           VERSION_NUM="${VERSION#v}"
           
           # Extract changelog section for this version
-          CHANGELOG=$(awk "/## \[$VERSION_NUM\]/,/## \[/" CHANGELOG.md | head -n -1)
+          CHANGELOG=$(awk "/## \[$VERSION_NUM\]/,/## \[/" CHANGELOG.md | sed '$d')
           
           # If changelog is empty, use release notes
           if [ -z "$CHANGELOG" ]; then
             CHANGELOG="${{ github.event.release.body }}"
           fi
           
-          # Escape for JSON
-          CHANGELOG="${CHANGELOG//$'\n'/\\n}"
-          CHANGELOG="${CHANGELOG//\"/\\\"}"
+          # Remove the version header line
+          CHANGELOG=$(echo "$CHANGELOG" | sed '1d')
+          
+          # Escape for form data (URL encoding)
+          CHANGELOG=$(echo "$CHANGELOG" | jq -Rs .)
           
           echo "content=$CHANGELOG" >> $GITHUB_OUTPUT
 
