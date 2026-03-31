@@ -10,7 +10,7 @@ Todas as mudanças notáveis do FocoZen Pro serão documentadas neste arquivo.
 - Extração de changelog corrigida na automação Trello
 - Changelog completo agora é inserido corretamente na descrição do card
 - Workflow de Trello agora cria card antes do publish (na lista "Mudanças prontas pra lançamento")
-- JSON payload implementado para enviar changelog com descrição completa
+- JSON payload implementado para enviar changelog com descrição completa via API Trello
 
 ## [1.0.10] - 2026-03-31
 
