@@ -49,7 +49,7 @@ jobs:
               --arg key "$TRELLO_API_KEY" \
               --arg token "$TRELLO_TOKEN" \
               --arg idList "$TRELLO_RELEASED_LIST_ID" \
-              --arg name "✅ Release v$VERSION_NUM" \
+              --arg name "Release v$VERSION_NUM" \
               '{key: $key, token: $token, idList: $idList, name: $name, pos: "top"}')
 
             curl -s -X PUT "https://api.trello.com/1/cards/$CARD_ID" \
@@ -64,7 +64,7 @@ jobs:
               --arg key "$TRELLO_API_KEY" \
               --arg token "$TRELLO_TOKEN" \
               --arg idList "$TRELLO_RELEASED_LIST_ID" \
-              --arg name "✅ Release v$VERSION_NUM" \
+              --arg name "Release v$VERSION_NUM" \
               --arg desc "$CHANGELOG_CONTENT" \
               '{key: $key, token: $token, idList: $idList, name: $name, desc: $desc, pos: "top"}')
 

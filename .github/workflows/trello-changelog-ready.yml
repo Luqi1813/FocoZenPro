@@ -65,7 +65,7 @@ jobs:
             --arg key "$TRELLO_API_KEY" \
             --arg token "$TRELLO_TOKEN" \
             --arg idList "$TRELLO_READY_LIST_ID" \
-            --arg name "📝 Mudanças v${VERSION} prontas" \
+            --arg name "Mudanças v${VERSION} prontas" \
             --arg desc "$CHANGELOG_CONTENT" \
             '{key: $key, token: $token, idList: $idList, name: $name, desc: $desc, pos: "top"}')
           
