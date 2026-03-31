@@ -2,6 +2,15 @@
 
 Todas as mudancas notaveis do FocoZen Pro serao documentadas neste arquivo.
 
+## [1.0.14] - 2026-03-31
+
+### Corrigido
+- Empacotamento da release atualizado para incluir o CHANGELOG.md mais recente dentro do build
+- Distribuicao da atualizacao alinhada com as notas completas da versao publicadas no repositorio
+
+### Melhorado
+- Processo de release ajustado para refletir corretamente as ultimas mudancas no instalador publicado
+
 ## [1.0.13] - 2026-03-31
 
 ### Adicionado
