@@ -46,16 +46,21 @@ jobs:
           # Read changelog from file
           CHANGELOG_CONTENT=$(cat /tmp/changelog.txt)
           
-          # URL encode the description
-          ENCODED_DESC=$(echo "$CHANGELOG_CONTENT" | jq -sRr @uri)
+          # Create JSON payload
+          JSON_PAYLOAD=$(jq -n \
+            --arg key "$TRELLO_API_KEY" \
+            --arg token "$TRELLO_TOKEN" \
+            --arg idList "$TRELLO_READY_LIST_ID" \
+            --arg name "📝 Mudanças v${{ steps.version.outputs.version }} prontas" \
+            --arg desc "$CHANGELOG_CONTENT" \
+            --arg pos "top" \
+            '{key: $key, token: $token, idList: $idList, name: $name, desc: $desc, pos: $pos}')
+          
+          echo "Payload: $JSON_PAYLOAD"
           
           RESPONSE=$(curl -s -X POST "https://api.trello.com/1/cards" \
-            --data-urlencode "key=$TRELLO_API_KEY" \
-            --data-urlencode "token=$TRELLO_TOKEN" \
-            --data-urlencode "idList=$TRELLO_READY_LIST_ID" \
-            --data-urlencode "name=📝 Mudanças v${{ steps.version.outputs.version }} prontas" \
-            --data-urlencode "desc=$CHANGELOG_CONTENT" \
-            -d "pos=top")
+            -H "Content-Type: application/json" \
+            -d "$JSON_PAYLOAD")
           
           echo "Response: $RESPONSE"
           
