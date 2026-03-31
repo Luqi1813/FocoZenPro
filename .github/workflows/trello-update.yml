@@ -1,0 +1,45 @@
+name: Update Trello on Release
+
+on:
+  release:
+    types: [published]
+
+jobs:
+  update-trello:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Extract changelog for version
+        id: changelog
+        run: |
+          VERSION="${{ github.event.release.tag_name }}"
+          VERSION_NUM="${VERSION#v}"
+          
+          # Extract changelog section for this version
+          CHANGELOG=$(awk "/## \[$VERSION_NUM\]/,/## \[/" CHANGELOG.md | head -n -1)
+          
+          # If changelog is empty, use release notes
+          if [ -z "$CHANGELOG" ]; then
+            CHANGELOG="${{ github.event.release.body }}"
+          fi
+          
+          # Escape for JSON
+          CHANGELOG="${CHANGELOG//$'\n'/\\n}"
+          CHANGELOG="${CHANGELOG//\"/\\\"}"
+          
+          echo "content=$CHANGELOG" >> $GITHUB_OUTPUT
+
+      - name: Create Trello Card
+        env:
+          TRELLO_API_KEY: ${{ secrets.TRELLO_API_KEY }}
+          TRELLO_TOKEN: ${{ secrets.TRELLO_TOKEN }}
+          TRELLO_LIST_ID: ${{ secrets.TRELLO_LIST_ID }}
+        run: |
+          curl -X POST "https://api.trello.com/1/cards" \
+            -d "key=$TRELLO_API_KEY" \
+            -d "token=$TRELLO_TOKEN" \
+            -d "idList=$TRELLO_LIST_ID" \
+            -d "name=✅ Release ${{ github.event.release.tag_name }}" \
+            -d "desc=${{ steps.changelog.outputs.content }}" \
+            -d "pos=top"
