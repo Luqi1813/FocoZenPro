@@ -82,6 +82,16 @@ let isPipModeActive = false;
 let toastHideTimer = null;
 let testMode = false;
 let pendingCompletionType = null;
+let pendingTaskResolution = null;
+let feedbackPopupTimer = null;
+
+const motivationalRestartMessages = [
+    'Pausar não é desistir. Você pode recomeçar com mais clareza depois.',
+    'Seu progresso conta. Respire, recarregue e volte mais forte.',
+    'Todo grande avanço também respeita pausas inteligentes.',
+    'Você não perdeu o ritmo. Só está escolhendo o melhor momento para continuar.',
+    'Disciplina também é saber a hora de recomeçar com energia.'
+];
 
 let breathInterval;
 let breathPhaseTimer;
@@ -119,7 +129,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     try {
         renderTasksList();
         renderTasksSidebar();
-        deselectTask();
+        resetToFreeFocusSession();
     } catch(e) { console.error('Erro Render Inicial:', e); }
 
     try { updateVolumeDisplay(); } catch(e) { console.error('Erro Volume:', e); }
@@ -479,28 +489,36 @@ function initPipIntegration() {
             }
             else if (action === 'dismiss-completion') {
                 pendingCompletionType = null;
+                pendingTaskResolution = null;
             }
             else if (action === 'task-concluded') {
-                if (currentTask) {
-                    currentTask.completed = true;
-                    saveTasks(); renderProgress(); renderTasksSidebar(); renderTasksList();
-                }
-                syncStateToPip({ hideCompletion: true });
-                setTimeout(() => startPhase('shortBreak'), 300);
+                handleTaskConcludedFlow({ fromPip: true });
             }
             else if (action === 'task-add-time') {
-                syncStateToPip({ hideCompletion: true });
-                window.electronAPI.sendPipAction('restore-app');
-                setTimeout(() => showAddTimePopup(), 500);
+                syncStateToPip({ showAddTimePopup: true });
             }
             else if (action === 'task-continue-later') {
+                handleRestartLaterFlow({ fromPip: true });
+            }
+            else if (action === 'confirm-add-time') {
+                addTimeToCurrentTask(data || 5);
+            }
+            else if (action === 'confirmed-continue-later') {
+                syncStateToPip({ hideCompletion: true });
+            }
+            else if (action === 'task-discard') {
+                // Desistir da tarefa - desseleciona e minimiza o PiP
                 if (currentTask) {
-                    currentTask.completedPomodoros = Math.floor(currentTask.completedPomodoros);
+                    currentTask.completed = false;
+                    currentTask.completedPomodoros = 0;
                     saveTasks(); renderProgress(); renderTasksSidebar(); renderTasksList();
                 }
+                pendingCompletionType = null;
+                pendingTaskResolution = null;
+                deselectTask();
                 syncStateToPip({ hideCompletion: true });
-                window.electronAPI.sendPipAction('restore-app');
-                setTimeout(() => showContinueLaterPopup(), 500);
+                // Minimizar o PiP sem fechar o programa
+                window.electronAPI.sendPipAction('minimize-to-tray');
             }
             else if (action === 'set-volume') {
                 const parsedVolume = Number(data);
@@ -906,6 +924,219 @@ function resetTimer() {
     renderProgress(); renderTasksSidebar(); syncStateToPip();
 }
 
+function resetToFreeFocusSession() {
+    pauseTimer();
+    currentTask = null;
+    pendingCompletionType = null;
+    pendingTaskResolution = null;
+    const badge = document.getElementById('currentTaskBadge');
+    if (badge) {
+        badge.textContent = 'Sessão Livre';
+        badge.className = 'task-badge free-mode';
+    }
+    document.getElementById('btnFreeFocus')?.classList.add('hidden');
+    const globalCat = document.getElementById('globalCategorySelect');
+    if (globalCat) globalCat.value = 'Livre';
+    if (window.updateCustomDropdownUI) window.updateCustomDropdownUI('Livre');
+    timeLeft = POMODORO_MINUTES * 60;
+    totalTimerTime = timeLeft;
+    currentMode = 'focus';
+    document.getElementById('timeLabel').textContent = 'Período de Foco';
+    document.getElementById('timerToggle').innerHTML = '<i class="fas fa-play"></i>';
+    document.querySelectorAll('.mode-btn').forEach(b => b.classList.remove('active'));
+    document.querySelector('.mode-btn[data-mode="focus"]')?.classList.add('active');
+    updateTimerDisplay();
+    updateProgressBar();
+    renderProgress();
+    renderTasksSidebar();
+    renderTasksList();
+    syncStateToPip({ hideCompletion: true });
+}
+
+function getRandomRestartMessage() {
+    return motivationalRestartMessages[Math.floor(Math.random() * motivationalRestartMessages.length)];
+}
+
+function showTimedFeedbackPopup({ title, message, icon = 'fa-star', gradient = 'linear-gradient(135deg,#3b82f6,#1d4ed8)', duration = 2000, onDone = null }) {
+    if (feedbackPopupTimer) clearTimeout(feedbackPopupTimer);
+
+    const existing = document.getElementById('timedFeedbackPopup');
+    if (existing) existing.remove();
+
+    const overlay = document.createElement('div');
+    overlay.id = 'timedFeedbackPopup';
+    overlay.className = 'modal-overlay active custom-popup';
+    overlay.innerHTML = `
+        <div class="modal-content-small elegant-popup" style="text-align:center;max-width:360px;padding:24px 24px 20px;">
+            <div class="elegant-icon" style="background:${gradient};">
+                <i class="fas ${icon}"></i>
+            </div>
+            <h2 class="elegant-title" style="margin-bottom:10px;">${title}</h2>
+            <p class="elegant-message" style="margin-bottom:0;">${message}</p>
+        </div>`;
+
+    document.body.appendChild(overlay);
+
+    feedbackPopupTimer = setTimeout(() => {
+        overlay.remove();
+        feedbackPopupTimer = null;
+        if (onDone) onDone();
+    }, duration);
+}
+
+function showPipTimedFeedback({ title, message, icon = 'fa-star', duration = 2000, tone = 'success' }) {
+    syncStateToPip({
+        hideCompletion: true,
+        showFeedbackPopup: { title, message, icon, duration, tone }
+    });
+}
+
+function getPendingTaskResolution(task = currentTask) {
+    if (!task || !pendingTaskResolution || pendingTaskResolution.taskId !== task.id) return null;
+    return pendingTaskResolution;
+}
+
+function setPendingTaskResolution(task, compType) {
+    if (!task) {
+        pendingTaskResolution = null;
+        return;
+    }
+
+    pendingTaskResolution = {
+        taskId: task.id,
+        compType,
+        previousCompletedPomodoros: Math.max(0, task.completedPomodoros - 1),
+        previousEstimatedMinutes: task.estimatedMinutes,
+        sessionMinutes: Math.max(1, totalTimerTime / 60)
+    };
+}
+
+function clearForcedTaskCompletion(task = currentTask) {
+    if (!task) return;
+    task.completed = false;
+}
+
+function restartTaskProgress(task = currentTask) {
+    if (!task) return;
+    task.completed = false;
+    task.completedPomodoros = 0;
+    saveTasks();
+}
+
+function concludeCurrentTask(showToast = true) {
+    if (currentTask) {
+        currentTask.completed = true;
+        currentTask.completedPomodoros = Math.max(currentTask.completedPomodoros, currentTask.pomodoros);
+        saveTasks();
+        if (showToast) showGlassToast('Parabéns! Tarefa concluída 🎉');
+    }
+    resetToFreeFocusSession();
+}
+
+function restartCurrentTaskLater() {
+    if (currentTask) {
+        restartTaskProgress(currentTask);
+        renderTasksSidebar();
+        renderTasksList();
+        renderProgress();
+    }
+    resetToFreeFocusSession();
+}
+
+function handleTaskConcludedFlow({ fromPip = false } = {}) {
+    const finalize = () => {
+        concludeCurrentTask(false);
+        if (fromPip && window.electronAPI?.sendPipAction) {
+            window.electronAPI.sendPipAction('minimize-to-tray');
+        }
+    };
+
+    if (fromPip) {
+        showPipTimedFeedback({
+            title: 'Parabéns!',
+            message: 'Você concluiu a tarefa. Excelente foco.',
+            icon: 'fa-trophy',
+            tone: 'success',
+            duration: 2000
+        });
+        setTimeout(finalize, 2000);
+        return;
+    }
+
+    showTimedFeedbackPopup({
+        title: 'Parabéns!',
+        message: 'Você concluiu a tarefa. Excelente foco.',
+        icon: 'fa-trophy',
+        gradient: 'linear-gradient(135deg,#10b981,#059669)',
+        duration: 2000,
+        onDone: finalize
+    });
+}
+
+function handleRestartLaterFlow({ fromPip = false } = {}) {
+    const message = getRandomRestartMessage();
+    const finalize = () => {
+        restartCurrentTaskLater();
+        if (fromPip && window.electronAPI?.sendPipAction) {
+            window.electronAPI.sendPipAction('minimize-to-tray');
+        }
+    };
+
+    if (fromPip) {
+        showPipTimedFeedback({
+            title: 'Você consegue',
+            message,
+            icon: 'fa-seedling',
+            tone: 'motivation',
+            duration: 2000
+        });
+        setTimeout(finalize, 2000);
+        return;
+    }
+
+    showTimedFeedbackPopup({
+        title: 'Você consegue',
+        message,
+        icon: 'fa-seedling',
+        gradient: 'linear-gradient(135deg,#8b5cf6,#7c3aed)',
+        duration: 2000,
+        onDone: finalize
+    });
+}
+
+function addTimeToCurrentTask(extraMinutes = 5) {
+    if (!currentTask) return;
+
+    const pending = getPendingTaskResolution(currentTask);
+    const baseEstimatedMinutes = pending?.previousEstimatedMinutes ?? currentTask.estimatedMinutes;
+    const previousCompletedPomodoros = pending?.previousCompletedPomodoros ?? Math.floor(currentTask.completedPomodoros);
+    const sessionMinutes = pending?.sessionMinutes ?? Math.max(1, totalTimerTime / 60);
+
+    currentTask.completed = false;
+    currentTask.completedPomodoros = previousCompletedPomodoros;
+    currentTask.estimatedMinutes = baseEstimatedMinutes + extraMinutes;
+    saveTasks();
+
+    currentMode = 'focus';
+    pauseTimer();
+    totalTimerTime = (sessionMinutes + extraMinutes) * 60;
+    timeLeft = extraMinutes * 60;
+    pendingCompletionType = null;
+    pendingTaskResolution = null;
+
+    document.getElementById('timeLabel').textContent = 'Período de Foco';
+    document.getElementById('timerToggle').innerHTML = '<i class="fas fa-play"></i>';
+    document.querySelectorAll('.mode-btn').forEach(b => b.classList.remove('active'));
+    document.querySelector('.mode-btn[data-mode="focus"]')?.classList.add('active');
+    updateTimerDisplay();
+    updateProgressBar();
+    renderProgress();
+    renderTasksSidebar();
+    renderTasksList();
+    syncStateToPip({ hideCompletion: true });
+    showGlassToast(`+${extraMinutes} min adicionados 🔥`);
+}
+
 function completeTimer() {
     pauseTimer();
     let compType = '';
@@ -930,13 +1161,14 @@ function completeTimer() {
 
         if (currentTask) {
             currentTask.completedPomodoros++;
-            saveTasks(); renderProgress(); renderTasksSidebar(); renderTasksList();
             if (currentTask.completedPomodoros >= currentTask.pomodoros) {
-                currentTask.completed = true; saveTasks();
                 compType = 'task-complete';
             } else {
                 compType = 'focus-complete';
             }
+            currentTask.completed = false;
+            setPendingTaskResolution(currentTask, compType);
+            saveTasks(); renderProgress(); renderTasksSidebar(); renderTasksList();
         } else {
             completedPomodoros++;
             compType = 'focus-complete';
@@ -1023,7 +1255,7 @@ function showTaskCompletionPopup(compType) {
     overlay.innerHTML = `
         <div class="modal-content-small elegant-popup" style="text-align: center; max-width: 440px;">
             <div class="elegant-icon" style="background: linear-gradient(135deg, #f59e0b, #d97706);">
-                <i class="fas fa-coffee"></i>
+                <i class="fas fa-clipboard-check"></i>
             </div>
             <h2 class="elegant-title">Hora da pausa! ☕</h2>
             <p class="elegant-message">Você concluiu a tarefa?</p>
@@ -1036,19 +1268,38 @@ function showTaskCompletionPopup(compType) {
                     <i class="fas fa-plus-circle"></i> Adicionar mais tempo
                 </button>
                 <button class="btn-modal secondary btn-continue-later" style="width:100%;opacity:0.75;">
-                    <i class="fas fa-clock"></i> Continuar em outro momento
+                    <i class="fas fa-history"></i> Recomeçar em outro momento
                 </button>
             </div>
         </div>`;
     document.body.appendChild(overlay);
 
+    const titleEl = overlay.querySelector('.elegant-title');
+    const messageEl = overlay.querySelector('.elegant-message');
+    const iconEl = overlay.querySelector('.elegant-icon i');
+    const doneBtn = overlay.querySelector('.btn-task-done');
+    const addTimeBtn = overlay.querySelector('.btn-add-time');
+    const restartBtn = overlay.querySelector('.btn-continue-later');
+
+    if (titleEl) titleEl.textContent = 'Sessão concluída';
+    if (messageEl) messageEl.textContent = 'O que você quer fazer com esta tarefa agora?';
+    if (iconEl) iconEl.className = 'fas fa-clipboard-check';
+    if (doneBtn) {
+        doneBtn.style.gap = '12px';
+        doneBtn.innerHTML = '<i class="fas fa-check"></i> Sim, concluí!';
+    }
+    if (addTimeBtn) {
+        addTimeBtn.style.gap = '12px';
+        addTimeBtn.innerHTML = '<i class="fas fa-plus-circle"></i> Adicionar mais tempo';
+    }
+    if (restartBtn) {
+        restartBtn.style.gap = '12px';
+        restartBtn.innerHTML = '<i class="fas fa-history"></i> Recomeçar em outro momento';
+    }
+
     overlay.querySelector('.btn-task-done').onclick = () => {
         overlay.remove();
-        if (currentTask) {
-            currentTask.completed = true;
-            saveTasks(); renderProgress(); renderTasksSidebar(); renderTasksList();
-        }
-        showTransitionModal('break');
+        handleTaskConcludedFlow();
     };
     overlay.querySelector('.btn-add-time').onclick = () => {
         overlay.remove();
@@ -1056,7 +1307,7 @@ function showTaskCompletionPopup(compType) {
     };
     overlay.querySelector('.btn-continue-later').onclick = () => {
         overlay.remove();
-        showContinueLaterPopup();
+        handleRestartLaterFlow();
     };
 }
 
@@ -1065,20 +1316,20 @@ function showAddTimePopup() {
     const overlay = document.createElement('div');
     overlay.className = 'modal-overlay active custom-popup';
     overlay.innerHTML = `
-        <div class="modal-content-small elegant-popup" style="text-align:center;max-width:360px;">
+        <div class="modal-content-small elegant-popup" style="text-align:center;max-width:340px;padding:22px 22px 18px;">
             <div class="elegant-icon" style="background:linear-gradient(135deg,#3b82f6,#1d4ed8);">
                 <i class="fas fa-plus-circle"></i>
             </div>
             <h2 class="elegant-title">Adicionar Tempo</h2>
-            <p class="elegant-message">Quanto tempo mais precisa?</p>
-            <div style="display:flex;align-items:center;justify-content:center;gap:20px;margin:24px 0;">
+            <p class="elegant-message" style="margin-bottom:14px;">Quanto tempo mais precisa?</p>
+            <div style="display:flex;align-items:center;justify-content:center;gap:18px;margin:10px 0 18px;">
                 <button id="decreaseExtraTime" style="width:44px;height:44px;border-radius:50%;background:rgba(255,255,255,0.1);border:1px solid var(--border-color);color:white;font-size:1.2rem;cursor:pointer;display:flex;align-items:center;justify-content:center;"><i class="fas fa-minus"></i></button>
                 <span id="extraTimeDisplay" style="font-size:2rem;font-weight:700;min-width:90px;color:white;">5 min</span>
                 <button id="increaseExtraTime" style="width:44px;height:44px;border-radius:50%;background:rgba(255,255,255,0.1);border:1px solid var(--border-color);color:white;font-size:1.2rem;cursor:pointer;display:flex;align-items:center;justify-content:center;"><i class="fas fa-plus"></i></button>
             </div>
-            <div class="elegant-actions">
-                <button class="btn-modal secondary btn-cancel-extra">Cancelar</button>
-                <button class="btn-modal primary btn-confirm-extra" style="background:linear-gradient(135deg,#3b82f6,#1d4ed8);">Continuar Focando</button>
+            <div class="elegant-actions" style="margin-top:0;">
+                <button class="btn-modal secondary btn-cancel-extra" style="min-height:48px;">Cancelar</button>
+                <button class="btn-modal primary btn-confirm-extra" style="background:linear-gradient(135deg,#3b82f6,#1d4ed8);min-height:48px;">Continuar</button>
             </div>
         </div>`;
     document.body.appendChild(overlay);
@@ -1092,20 +1343,11 @@ function showAddTimePopup() {
     };
     overlay.querySelector('.btn-cancel-extra').onclick = () => {
         overlay.remove();
-        showTransitionModal('break');
+        showTaskCompletionPopup('task-complete');
     };
     overlay.querySelector('.btn-confirm-extra').onclick = () => {
         overlay.remove();
-        // Extend task duration if there's an active task
-        if (currentTask) {
-            currentTask.estimatedMinutes += extraMinutes;
-            saveTasks(); renderTasksSidebar(); renderTasksList();
-        }
-        timeLeft = extraMinutes * 60;
-        totalTimerTime = extraMinutes * 60;
-        updateTimerDisplay(); updateProgressBar();
-        toggleTimer();
-        showGlassToast(`+${extraMinutes} min adicionados 🔥`);
+        addTimeToCurrentTask(extraMinutes);
     };
 }
 
@@ -1127,16 +1369,15 @@ function showContinueLaterPopup() {
             </div>
             <h2 class="elegant-title">Até logo! 👋</h2>
             <p class="elegant-message" style="font-style:italic;">"${msg}"</p>
-            <button class="btn-modal primary" onclick="this.closest('.modal-overlay').remove(); showTransitionModal('break');" style="width:100%;margin-top:16px;background:linear-gradient(135deg,#8b5cf6,#7c3aed);">
-                Entendido, ir para pausa
+            <button class="btn-modal primary" onclick="this.closest('.modal-overlay').remove();" style="width:100%;margin-top:16px;background:linear-gradient(135deg,#8b5cf6,#7c3aed);">
+                Entendido
             </button>
         </div>`;
     document.body.appendChild(overlay);
     
-    // Reset task progress when choosing to continue later
     if (currentTask) {
-        currentTask.completedPomodoros = 0;
-        saveTasks(); renderTasksSidebar(); renderTasksList();
+        clearForcedTaskCompletion(currentTask);
+        saveTasks(); renderTasksSidebar(); renderTasksList(); renderProgress();
     }
 }
 
@@ -1838,6 +2079,8 @@ window.promptResumeSession = function() {
 function startTask(taskId) {
     // If we're already on this task, just toggle play
     if (currentTask && currentTask.id === taskId) {
+        // Se ainda está em modo break, muda para focus
+        if (currentMode !== 'focus') setTimerMode('focus');
         if (!isTimerRunning) toggleTimer();
         return;
     }
@@ -1846,6 +2089,8 @@ function startTask(taskId) {
     // We pass a callback to selectTask so it runs after the switch (and after any save modals).
     selectTask(taskId, false, () => {
         if (currentTask && !currentTask.completed && !isTimerRunning) {
+            // Garantir que está em modo focus antes de iniciar
+            if (currentMode !== 'focus') setTimerMode('focus');
             toggleTimer(); 
         }
     });

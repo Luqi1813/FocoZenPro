@@ -225,8 +225,8 @@ function createWindow() {
 
 function createPipWindow() {
     pipWindow = new BrowserWindow({
-        width: 320,
-        height: 180,
+        width: 500,
+        height: 228,
         frame: false,
         transparent: true,
         alwaysOnTop: true,

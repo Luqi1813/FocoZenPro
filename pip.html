@@ -31,9 +31,15 @@
         body {
             margin: 0; padding: 0;
             font-family: 'Inter', sans-serif;
-            overflow: visible; background: transparent;
+            overflow: hidden; background: transparent;
             user-select: none; color: var(--text-main);
             -webkit-app-region: no-drag;
+            scrollbar-width: none;
+            -ms-overflow-style: none;
+        }
+        
+        body::-webkit-scrollbar {
+            display: none;
         }
 
         .pip-dynamic-bg {
@@ -550,6 +556,8 @@
             display: flex; flex-direction: column; align-items: center; justify-content: center;
             opacity: 0; pointer-events: none; transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
             transform: scale(0.95);
+            padding: 20px;
+            overflow: hidden;
         }
         .pip-completion-overlay.active { opacity: 1; pointer-events: all; transform: scale(1); }
         
@@ -562,15 +570,81 @@
             transition: all 0.2s ease;
         }
         .btn-comp-dismiss:hover { background: rgba(255,255,255,0.2); color: #fff; transform: scale(1.1); }
-        .pip-comp-content { text-align: center; width: 90%; }
-        .pip-comp-content h3 { margin: 0 0 4px 0; font-size: 18px; font-weight: 800; color: #fff; text-shadow: 0 2px 8px rgba(0,0,0,0.6); letter-spacing: -0.5px; }
-        .pip-comp-content p { margin: 0 0 16px 0; font-size: 12px; color: var(--text-main); font-weight: 500; text-shadow: 0 1px 4px rgba(0,0,0,0.8); }
-        .pip-comp-actions { display: flex; gap: 10px; justify-content: center; margin-bottom: 15px; }
+        .pip-comp-content { text-align: center; width: min(100%, 500px); display: flex; flex-direction: column; gap: 10px; }
+        .pip-comp-content h3 { margin: 0; font-size: 18px; font-weight: 800; color: #fff; text-shadow: 0 2px 8px rgba(0,0,0,0.6); letter-spacing: -0.5px; }
+        .pip-comp-content p { margin: 0; font-size: 12px; color: var(--text-main); font-weight: 500; text-shadow: 0 1px 4px rgba(0,0,0,0.8); line-height: 1.45; }
+        .pip-comp-actions { display: flex; flex-direction: column; gap: 12px; justify-content: center; margin: 2px 0 4px; width: 100%; }
+        .pip-comp-actions.horizontal-3 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; align-items: stretch; }
+        .pip-comp-actions.horizontal-2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; align-items: stretch; }
+        .pip-comp-actions.single { display: flex; flex-direction: column; }
+        .pip-compact-content { width: min(100%, 360px); gap: 8px; }
+        .pip-feedback-content { width: min(100%, 320px); gap: 8px; }
+        .pip-feedback-content p { font-size: 13px; line-height: 1.45; }
+        .pip-feedback-icon.success { color: #34d399; }
+        .pip-feedback-icon.motivation { color: #a78bfa; }
+        .pip-stepper {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 16px;
+            margin: 8px 0 2px;
+        }
+        .pip-stepper-btn {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            background: rgba(255,255,255,0.1);
+            border: 1px solid rgba(255,255,255,0.16);
+            color: #fff;
+            font-size: 1.05rem;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s ease;
+        }
+        .pip-stepper-btn:hover {
+            background: rgba(255,255,255,0.16);
+            transform: translateY(-1px);
+        }
+        .pip-stepper-value {
+            min-width: 90px;
+            font-size: 1.7rem;
+            font-weight: 800;
+            color: #fff;
+            text-align: center;
+        }
+        .pip-compact-actions {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 10px;
+            width: 100%;
+            margin-top: 4px;
+        }
         
         .btn-comp {
             background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.15);
-            color: #fff; padding: 10px 18px; border-radius: 20px; font-size: 11px; cursor: pointer;
+            color: #fff; padding: 12px 14px; border-radius: 18px; font-size: 12px; cursor: pointer;
             transition: all 0.3s ease; font-weight: 700; backdrop-filter: blur(4px);
+            width: 100%;
+            min-height: 62px;
+            white-space: normal;
+            line-height: 1.35;
+            overflow: visible;
+            text-align: center;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 12px;
+            flex-direction: column;
+            padding-inline: 10px;
+        }
+        .btn-comp i { flex-shrink: 0; }
+        .btn-comp.compact {
+            min-height: 48px;
+            flex-direction: row;
+            gap: 8px;
+            padding: 10px 12px;
         }
         .btn-comp.primary { 
             background: var(--accent-foco); 
@@ -654,6 +728,47 @@
             <button class="btn-pip-link" onclick="window.electronAPI.sendPipAction('restore-app')">Abrir App Completo</button>
         </div>
     </div>
+
+    <!-- POPUP ADICIONAR TEMPO NO PIP -->
+    <div id="pipAddTimeOverlay" class="pip-completion-overlay">
+        <button class="btn-comp-dismiss" id="btnDismissAddTime" title="Fechar"><i class="fas fa-times"></i></button>
+        <div class="pip-comp-content pip-compact-content">
+            <i class="fas fa-plus-circle" style="font-size: 24px; color: #3b82f6; margin-bottom: 10px;"></i>
+            <h3 style="margin: 0 0 4px 0; font-size: 18px; font-weight: 800; color: #fff;">Adicionar Tempo</h3>
+            <p style="margin: 0; font-size: 12px; color: var(--text-main);">Quanto mais tempo precisa?</p>
+            <div class="pip-stepper">
+                <button id="pipDecreaseTime" class="pip-stepper-btn"><i class="fas fa-minus"></i></button>
+                <span id="pipExtraTimeDisplay" class="pip-stepper-value">5 min</span>
+                <button id="pipIncreaseTime" class="pip-stepper-btn"><i class="fas fa-plus"></i></button>
+            </div>
+            <div class="pip-compact-actions">
+                <button id="btnCancelAddTime" class="btn-comp compact">Cancelar</button>
+                <button id="btnConfirmAddTime" class="btn-comp primary compact" style="background:#3b82f6;">Continuar</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- POPUP CONTINUAR DEPOIS NO PIP -->
+    <div id="pipContinueLaterOverlay" class="pip-completion-overlay">
+        <button class="btn-comp-dismiss" id="btnDismissContinueLater" title="Fechar"><i class="fas fa-times"></i></button>
+        <div class="pip-comp-content">
+            <i class="fas fa-heart" style="font-size: 24px; color: #8b5cf6; margin-bottom: 10px;"></i>
+            <h3 style="margin: 0 0 4px 0; font-size: 18px; font-weight: 800; color: #fff;">Até logo! 👋</h3>
+            <p id="pipMotivationalMsg" style="margin: 0 0 16px 0; font-size: 12px; color: var(--text-main); font-style: italic;"></p>
+            <div class="pip-comp-actions">
+                <button id="btnConfirmContinueLater" class="btn-comp primary" style="background:#8b5cf6; width: 100%;">Entendido</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="pipFeedbackOverlay" class="pip-completion-overlay">
+        <div class="pip-comp-content pip-feedback-content">
+            <i id="pipFeedbackIcon" class="fas fa-star pip-feedback-icon success" style="font-size: 28px; margin-bottom: 8px;"></i>
+            <h3 id="pipFeedbackTitle">Parabéns!</h3>
+            <p id="pipFeedbackText">Você concluiu a tarefa.</p>
+        </div>
+    </div>
+
     <div id="pipInlineToast" class="pip-inline-toast">Selecione algum som para iniciar</div>
 
     <script>
@@ -675,6 +790,10 @@
         const pipInlineToast = document.getElementById('pipInlineToast');
         const pipCompletionOverlay = document.getElementById('pipCompletionOverlay');
         const pipCompActions = document.getElementById('pipCompActions');
+        const pipFeedbackOverlay = document.getElementById('pipFeedbackOverlay');
+        const pipFeedbackTitle = document.getElementById('pipFeedbackTitle');
+        const pipFeedbackText = document.getElementById('pipFeedbackText');
+        const pipFeedbackIcon = document.getElementById('pipFeedbackIcon');
         
         // NOVOS ELEMENTOS DE CONTROLE DE ÁUDIO
         const audioControlsSection = document.getElementById('audioControlsSection');
@@ -692,6 +811,7 @@
         let previousVolume = 0.7;
         let pipToastTimer = null;
         let volumePopCloseTimer = null;
+        let pipFeedbackTimer = null;
         let isPipDragActive = false;
         let hasShownDragTooltip = false;
         let dragTooltipHideTimer = null;
@@ -763,7 +883,7 @@
 
         document.getElementById('btnDismissCompletion').addEventListener('click', () => {
             pipCompletionOverlay.classList.remove('active');
-            window.electronAPI.sendPipAction('dismiss-completion');
+            window.electronAPI.sendPipAction('task-continue-later');
         });
 
         document.getElementById('btnRestore').addEventListener('click', () => window.electronAPI.exitPip());
@@ -786,6 +906,17 @@
             pipInlineToast.classList.add('show');
             if (pipToastTimer) clearTimeout(pipToastTimer);
             pipToastTimer = setTimeout(() => pipInlineToast.classList.remove('show'), 3000);
+        }
+
+        function showPipFeedbackPopup({ title, message, icon = 'fa-star', tone = 'success', duration = 2000 }) {
+            if (pipFeedbackTimer) clearTimeout(pipFeedbackTimer);
+            pipFeedbackTitle.textContent = title;
+            pipFeedbackText.textContent = message;
+            pipFeedbackIcon.className = `fas ${icon} pip-feedback-icon ${tone}`;
+            pipFeedbackOverlay.classList.add('active');
+            pipFeedbackTimer = setTimeout(() => {
+                pipFeedbackOverlay.classList.remove('active');
+            }, duration);
         }
 
         document.getElementById('btnPipAudioPlay').addEventListener('click', () => {
@@ -884,25 +1015,25 @@
                 if (state.showCompletion === 'focus-complete' && state.hasActiveTask) {
                     document.getElementById('pipCompTitle').textContent = 'Hora da pausa! ☕';
                     document.getElementById('pipCompText').textContent = 'Você concluiu a tarefa?';
-                    document.getElementById('pipCompIcon').className = 'fas fa-coffee';
+                    document.getElementById('pipCompIcon').className = 'fas fa-clipboard-check';
                     pipCompActions.innerHTML = `
-                        <button class="btn-comp primary" onclick="window.electronAPI.sendPipAction('task-concluded')" style="width:100%;background:linear-gradient(135deg,#10b981,#059669);margin-bottom:6px;"><i class="fas fa-check"></i> Sim, concluí!</button>
-                        <button class="btn-comp" onclick="window.electronAPI.sendPipAction('task-add-time')" style="width:100%;margin-bottom:6px;"><i class="fas fa-plus-circle"></i> Adicionar mais tempo</button>
-                        <button class="btn-comp" onclick="window.electronAPI.sendPipAction('task-continue-later')" style="width:100%;opacity:0.75;"><i class="fas fa-clock"></i> Continuar em outro momento</button>
+                        <button class="btn-comp primary" onclick="window.electronAPI.sendPipAction('task-concluded')" style="background:linear-gradient(135deg,#10b981,#059669);"><i class="fas fa-check"></i> Sim, concluí!</button>
+                        <button class="btn-comp" onclick="window.electronAPI.sendPipAction('task-add-time')"><i class="fas fa-plus-circle"></i> Adicionar mais tempo</button>
+                        <button class="btn-comp" onclick="window.electronAPI.sendPipAction('task-continue-later')" style="opacity:0.85;"><i class="fas fa-history"></i> Recomeçar em outro momento</button>
                     `;
                 } else if (state.showCompletion === 'focus-complete') {
                     document.getElementById('pipCompTitle').textContent = 'Foco Concluído!';
                     document.getElementById('pipCompText').textContent = 'Iniciar pausa?';
-                    document.getElementById('pipCompIcon').className = 'fas fa-coffee';
+                    document.getElementById('pipCompIcon').className = 'fas fa-clipboard-check';
                     pipCompActions.innerHTML = `<button class="btn-comp primary" onclick="window.electronAPI.sendPipAction('start-phase', 'shortBreak')">Curta (5m)</button><button class="btn-comp" onclick="window.electronAPI.sendPipAction('start-phase', 'longBreak')">Longa (15m)</button>`;
                 } else if (state.showCompletion === 'task-complete') {
                     document.getElementById('pipCompTitle').textContent = 'Hora da pausa! ☕';
                     document.getElementById('pipCompText').textContent = 'Você concluiu a tarefa?';
                     document.getElementById('pipCompIcon').className = 'fas fa-coffee';
                     pipCompActions.innerHTML = `
-                        <button class="btn-comp primary" onclick="window.electronAPI.sendPipAction('task-concluded')" style="width:100%;background:linear-gradient(135deg,#10b981,#059669);margin-bottom:6px;"><i class="fas fa-check"></i> Sim, concluí!</button>
-                        <button class="btn-comp" onclick="window.electronAPI.sendPipAction('task-add-time')" style="width:100%;margin-bottom:6px;"><i class="fas fa-plus-circle"></i> Adicionar mais tempo</button>
-                        <button class="btn-comp" onclick="window.electronAPI.sendPipAction('task-continue-later')" style="width:100%;opacity:0.75;"><i class="fas fa-clock"></i> Continuar em outro momento</button>
+                        <button class="btn-comp primary" onclick="window.electronAPI.sendPipAction('task-concluded')" style="background:linear-gradient(135deg,#10b981,#059669);"><i class="fas fa-check"></i> Sim, concluí!</button>
+                        <button class="btn-comp" onclick="window.electronAPI.sendPipAction('task-add-time')"><i class="fas fa-plus-circle"></i> Adicionar mais tempo</button>
+                        <button class="btn-comp" onclick="window.electronAPI.sendPipAction('task-continue-later')" style="opacity:0.85;"><i class="fas fa-history"></i> Recomeçar em outro momento</button>
                     `;
                 } else if (state.showCompletion === 'break-complete') {
                     document.getElementById('pipCompTitle').textContent = 'Pausa Terminada';
@@ -910,9 +1041,45 @@
                     document.getElementById('pipCompIcon').className = 'fas fa-brain';
                     pipCompActions.innerHTML = `<button class="btn-comp primary" onclick="window.electronAPI.sendPipAction('start-phase', 'focus')">Iniciar Foco</button>`;
                 }
+
+                if ((state.showCompletion === 'focus-complete' || state.showCompletion === 'task-complete') && state.hasActiveTask) {
+                    document.getElementById('pipCompTitle').textContent = 'Sessão concluída';
+                    document.getElementById('pipCompText').textContent = 'O que você quer fazer com esta tarefa agora?';
+                    document.getElementById('pipCompIcon').className = 'fas fa-clipboard-check';
+                    pipCompActions.className = 'pip-comp-actions horizontal-3';
+                    const actionButtons = pipCompActions.querySelectorAll('.btn-comp');
+                    if (actionButtons[0]) actionButtons[0].innerHTML = '<i class="fas fa-check"></i><span>Sim, concluí!</span>';
+                    if (actionButtons[1]) actionButtons[1].innerHTML = '<i class="fas fa-plus-circle"></i><span>Adicionar mais tempo</span>';
+                    if (actionButtons[2]) actionButtons[2].innerHTML = '<i class="fas fa-history"></i><span>Recomeçar em outro momento</span>';
+                } else if (state.showCompletion === 'focus-complete') {
+                    pipCompActions.className = 'pip-comp-actions horizontal-2';
+                } else if (state.showCompletion === 'break-complete') {
+                    pipCompActions.className = 'pip-comp-actions single';
+                }
                 pipCompletionOverlay.classList.add('active');
             } else if (state.hideCompletion) {
                 pipCompletionOverlay.classList.remove('active');
+            }
+            if (state.showFeedbackPopup) {
+                const feedback = state.showFeedbackPopup;
+                showPipFeedbackPopup(feedback);
+            }
+            if (state.showAddTimePopup) {
+                // Mostrar popup de adicionar tempo no PiP
+                document.getElementById('pipAddTimeOverlay').classList.add('active');
+            }
+            if (state.showContinueLaterPopup) {
+                // Mostrar popup de continuar depois no PiP
+                const msgs = [
+                    "Você não desistiu, apenas pausou. Isso é força! 💪",
+                    "O progresso acontece um passo de cada vez. Volte quando estiver pronto! 🌟",
+                    "Descansar também faz parte do sucesso. Você está no caminho certo! 🚀",
+                    "Cada pausa é uma preparação para o próximo avanço. Até logo! ⚡",
+                    "Grandes conquistas levam tempo. Não desista! 🏆"
+                ];
+                const msg = msgs[Math.floor(Math.random() * msgs.length)];
+                document.getElementById('pipMotivationalMsg').textContent = `"${msg}"`;
+                document.getElementById('pipContinueLaterOverlay').classList.add('active');
             }
             if (state.theme) document.documentElement.setAttribute('data-sound', state.theme);
             if (state.timeString) clockEl.textContent = state.timeString;
@@ -935,6 +1102,55 @@
                 audioVolumeSlider.value = Math.round(pipVolume * 100);
                 updateVolumeIcon(pipVolume);
             }
+        });
+
+        // === HANDLERS DOS POPUPS "Adicionar Tempo" e "Continuar Depois" ===
+        let pipExtraMinutes = 5;
+
+        // Popup "Adicionar Tempo" - Botões de +/-
+        document.getElementById('pipDecreaseTime').addEventListener('click', () => {
+            if (pipExtraMinutes > 5) {
+                pipExtraMinutes -= 5;
+                document.getElementById('pipExtraTimeDisplay').textContent = pipExtraMinutes + ' min';
+            }
+        });
+
+        document.getElementById('pipIncreaseTime').addEventListener('click', () => {
+            pipExtraMinutes += 5;
+            document.getElementById('pipExtraTimeDisplay').textContent = pipExtraMinutes + ' min';
+        });
+
+        // Popup "Adicionar Tempo" - Confirmar
+        document.getElementById('btnConfirmAddTime').addEventListener('click', () => {
+            document.getElementById('pipAddTimeOverlay').classList.remove('active');
+            // Envia comando para renderer estender o tempo
+            window.electronAPI.sendPipAction('confirm-add-time', pipExtraMinutes);
+            pipExtraMinutes = 5; // Reset para próxima vez
+            document.getElementById('pipExtraTimeDisplay').textContent = '5 min';
+        });
+
+        // Popup "Adicionar Tempo" - Cancelar
+        document.getElementById('btnCancelAddTime').addEventListener('click', () => {
+            document.getElementById('pipAddTimeOverlay').classList.remove('active');
+            // Volta ao popup principal mostrando as opções originais
+            // A próxima sincronização do timer vai restaurar o popup de completion
+        });
+
+        // Popup "Adicionar Tempo" - Fechar X
+        document.getElementById('btnDismissAddTime').addEventListener('click', () => {
+            document.getElementById('pipAddTimeOverlay').classList.remove('active');
+        });
+
+        // Popup "Continuar Depois" - Confirmar
+        document.getElementById('btnConfirmContinueLater').addEventListener('click', () => {
+            document.getElementById('pipContinueLaterOverlay').classList.remove('active');
+            // Envia comando para renderer (já fez o reset de progress)
+            window.electronAPI.sendPipAction('confirmed-continue-later');
+        });
+
+        // Popup "Continuar Depois" - Fechar X
+        document.getElementById('btnDismissContinueLater').addEventListener('click', () => {
+            document.getElementById('pipContinueLaterOverlay').classList.remove('active');
         });
     </script>
 </body>
