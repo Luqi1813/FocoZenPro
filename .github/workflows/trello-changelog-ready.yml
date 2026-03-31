@@ -30,10 +30,10 @@ jobs:
           # Remove the version header line
           CHANGELOG=$(echo "$CHANGELOG" | sed '1d')
           
-          # Escape for form data
-          CHANGELOG=$(echo "$CHANGELOG" | jq -Rs .)
+          # Save to file for curl to read
+          echo "$CHANGELOG" > /tmp/changelog.txt
           
-          echo "content=$CHANGELOG" >> $GITHUB_OUTPUT
+          echo "content=@/tmp/changelog.txt" >> $GITHUB_OUTPUT
 
       - name: Create Trello Card in "Ready for Release" List
         env:
@@ -42,14 +42,19 @@ jobs:
           TRELLO_READY_LIST_ID: ${{ secrets.TRELLO_READY_LIST_ID }}
         run: |
           echo "Creating card for version: ${{ steps.version.outputs.version }}"
-          echo "List ID: $TRELLO_READY_LIST_ID"
+          
+          # Read changelog from file
+          CHANGELOG_CONTENT=$(cat /tmp/changelog.txt)
+          
+          # URL encode the description
+          ENCODED_DESC=$(echo "$CHANGELOG_CONTENT" | jq -sRr @uri)
           
           RESPONSE=$(curl -s -X POST "https://api.trello.com/1/cards" \
-            -d "key=$TRELLO_API_KEY" \
-            -d "token=$TRELLO_TOKEN" \
-            -d "idList=$TRELLO_READY_LIST_ID" \
-            -d "name=📝 Mudanças v${{ steps.version.outputs.version }} prontas" \
-            -d "desc=${{ steps.changelog.outputs.content }}" \
+            --data-urlencode "key=$TRELLO_API_KEY" \
+            --data-urlencode "token=$TRELLO_TOKEN" \
+            --data-urlencode "idList=$TRELLO_READY_LIST_ID" \
+            --data-urlencode "name=📝 Mudanças v${{ steps.version.outputs.version }} prontas" \
+            --data-urlencode "desc=$CHANGELOG_CONTENT" \
             -d "pos=top")
           
           echo "Response: $RESPONSE"
