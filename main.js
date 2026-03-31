@@ -1,6 +1,32 @@
-const { app, BrowserWindow, ipcMain, screen } = require('electron');
+const { app, BrowserWindow, ipcMain, screen, dialog } = require('electron');
+const { autoUpdater } = require('electron-updater');
 const path = require('path');
 const fs = require('fs');
+
+// Function to extract changelog for a specific version
+function getChangelogForVersion(version) {
+    try {
+        const changelogPath = path.join(__dirname, 'CHANGELOG.md');
+        if (!fs.existsSync(changelogPath)) {
+            return 'Melhorias de desempenho e correções de bugs.';
+        }
+        
+        const changelog = fs.readFileSync(changelogPath, 'utf-8');
+        const versionRegex = new RegExp(`## \\[${version.replace(/\./g, '\\.')}\\][^]*?(?=## \\[|$)`, 's');
+        const match = changelog.match(versionRegex);
+        
+        if (match) {
+            // Remove the version header line and clean up
+            let notes = match[0].replace(/^## \[.*?\].*?\n/, '').trim();
+            return notes || 'Melhorias de desempenho e correções de bugs.';
+        }
+        
+        return 'Melhorias de desempenho e correções de bugs.';
+    } catch (err) {
+        console.error('Erro ao ler changelog:', err);
+        return 'Melhorias de desempenho e correções de bugs.';
+    }
+}
 
 // OTIMIZAÇÕES AGRESSIVAS DE MEMÓRIA RAM (CHROMIUM)
 app.commandLine.appendSwitch('disable-site-isolation-trials'); // Remove multiprocesso de abas soltas (poupa ~80MB)
@@ -13,6 +39,120 @@ let pipDragOffset = { x: 0, y: 0 };
 let isPipDragging = false;
 let isPipMode = false;
 let isQuitting = false;
+
+// Auto-updater configuration
+autoUpdater.autoDownload = true;
+autoUpdater.autoInstallOnAppQuit = true;
+
+// Force silent installation for updates
+autoUpdater.logger = require('electron-log');
+autoUpdater.logger.transports.file.level = 'info';
+
+// Auto-updater event handlers
+autoUpdater.on('checking-for-update', () => {
+    console.log('Verificando atualizações...');
+});
+
+autoUpdater.on('update-available', (info) => {
+    console.log('Atualização disponível:', info.version);
+});
+
+autoUpdater.on('update-not-available', () => {
+    console.log('Nenhuma atualização disponível.');
+});
+
+autoUpdater.on('error', (err) => {
+    console.error('Erro ao verificar atualizações:', err);
+});
+
+autoUpdater.on('download-progress', (progressObj) => {
+    console.log(`Download em progresso: ${Math.round(progressObj.percent)}%`);
+    if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send('download-progress', Math.round(progressObj.percent));
+    }
+});
+
+autoUpdater.on('update-downloaded', (info) => {
+    console.log('Atualização baixada:', info.version);
+    
+    // Get changelog from CHANGELOG.md for this version
+    const changelog = getChangelogForVersion(info.version);
+    
+    // Send update info to renderer for custom UI
+    if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send('update-downloaded', {
+            version: info.version,
+            releaseNotes: changelog,
+            releaseDate: info.releaseDate
+        });
+    }
+});
+
+// Expose app version to renderer
+ipcMain.handle('get-app-version', () => app.getVersion());
+
+// Get changelog for a specific version from CHANGELOG.md
+ipcMain.handle('get-changelog-for-version', (event, version) => {
+    return getChangelogForVersion(version);
+});
+
+// Get full changelog content
+ipcMain.handle('get-full-changelog', () => {
+    try {
+        const changelogPath = path.join(__dirname, 'CHANGELOG.md');
+        if (fs.existsSync(changelogPath)) {
+            const content = fs.readFileSync(changelogPath, 'utf-8');
+            // Remove the title and intro, keep only version sections
+            const sections = content.split('\n').slice(3).join('\n').trim();
+            return sections;
+        }
+        return 'Nenhum changelog disponível.';
+    } catch (err) {
+        console.error('Erro ao ler changelog completo:', err);
+        return 'Erro ao carregar changelog.';
+    }
+});
+
+// Handle install update request from renderer
+ipcMain.on('install-update', () => {
+    setImmediate(() => {
+        app.removeAllListeners('window-all-closed');
+        autoUpdater.quitAndInstall(true, true);
+    });
+});
+
+// Handle manual update check from settings
+ipcMain.on('check-for-updates', (event) => {
+    console.log('Recebida solicitação de verificação de atualizações');
+    
+    if (!app.isPackaged) {
+        console.log('Modo desenvolvimento - enviando resposta');
+        event.reply('update-check-result', { available: false, message: 'Verificação de atualizações desabilitada em desenvolvimento' });
+        return;
+    }
+    
+    console.log('Verificando atualizações no GitHub...');
+    autoUpdater.checkForUpdates()
+        .then((result) => {
+            console.log('Resultado da verificação:', result);
+            if (result && result.updateInfo && result.updateInfo.version) {
+                const currentVersion = app.getVersion();
+                console.log(`Versão atual: ${currentVersion}, Versão disponível: ${result.updateInfo.version}`);
+                
+                if (result.updateInfo.version !== currentVersion) {
+                    event.reply('update-check-result', { available: true, version: result.updateInfo.version });
+                } else {
+                    event.reply('update-check-result', { available: false, message: 'Você já está na versão mais recente!' });
+                }
+            } else {
+                event.reply('update-check-result', { available: false, message: 'Você já está na versão mais recente!' });
+            }
+        })
+        .catch((err) => {
+            console.error('Erro ao verificar atualizações:', err);
+            event.reply('update-check-result', { available: false, message: 'Erro ao verificar atualizações', error: err.message });
+        });
+});
 
 function createWindow() {
     mainWindow = new BrowserWindow({
@@ -35,6 +175,11 @@ function createWindow() {
     mainWindow.loadFile('index.html');
     mainWindow.setMenu(null);
     mainWindow.maximize();
+
+    // Open DevTools in development mode
+    if (!app.isPackaged) {
+        mainWindow.webContents.openDevTools();
+    }
 
     // MELHORIA 1: Só exibe a janela quando o conteúdo estiver pronto para renderizar
     mainWindow.once('ready-to-show', () => {
@@ -154,6 +299,7 @@ function registerIpcHandlers() {
         // Intercepta a nova ação de minimizar
         if (action === 'minimize-to-tray') {
             if (pipWindow) pipWindow.hide();
+            if (mainWindow && !mainWindow.isDestroyed()) mainWindow.minimize();
             return; 
         }
 
@@ -218,6 +364,14 @@ function registerIpcHandlers() {
 app.whenReady().then(() => {
     createWindow();
     registerIpcHandlers();
+    
+    // Check for updates immediately on startup (only in production)
+    if (!app.isPackaged) {
+        console.log('Modo desenvolvimento - verificação de atualizações desabilitada');
+    } else {
+        // Check for updates immediately when app opens
+        autoUpdater.checkForUpdatesAndNotify();
+    }
 });
 
 app.on('window-all-closed', () => { if (process.platform !== 'darwin') app.quit(); });

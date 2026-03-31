@@ -18,5 +18,15 @@ contextBridge.exposeInMainWorld('electronAPI', {
     setVolume: (volume) => ipcRenderer.send('set-volume', volume),
     pipDragStart: (payload) => ipcRenderer.send('pip-drag-start', payload),
     pipDragMove: (payload) => ipcRenderer.send('pip-drag-move', payload),
-    pipDragEnd: () => ipcRenderer.send('pip-drag-end')
+    pipDragEnd: () => ipcRenderer.send('pip-drag-end'),
+    
+    // Update system
+    getAppVersion: () => ipcRenderer.invoke('get-app-version'),
+    getFullChangelog: () => ipcRenderer.invoke('get-full-changelog'),
+    getChangelogForVersion: (version) => ipcRenderer.invoke('get-changelog-for-version', version),
+    onUpdateDownloaded: (callback) => ipcRenderer.on('update-downloaded', (_event, info) => callback(info)),
+    onDownloadProgress: (callback) => ipcRenderer.on('download-progress', (_event, pct) => callback(pct)),
+    installUpdate: () => ipcRenderer.send('install-update'),
+    checkForUpdates: () => ipcRenderer.send('check-for-updates'),
+    onUpdateCheckResult: (callback) => ipcRenderer.on('update-check-result', (_event, result) => callback(result))
 });

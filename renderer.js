@@ -59,6 +59,8 @@ let currentAudio = null;
 let currentSoundId = null;
 let isPlaying = false;
 let masterVolume = 0.7;
+let isMuted = false;
+let volumeBeforeMute = 0.7;
 let timerInterval = null;
 let timeLeft = POMODORO_MINUTES * 60;
 let isTimerRunning = false;
@@ -342,20 +344,15 @@ window.finishWizard = function() {
 // ROTEAMENTO V2
 // ==========================================
 function switchView(viewId) {
-    // Also update mini players if they exist
-    const miniName = document.getElementById('miniPlayerSoundName');
-    const settingsMiniName = document.getElementById('settingsMiniPlayerSoundName');
+    // Sync view player panels
     const nowPlayingSpan = document.getElementById('nowPlaying')?.querySelector('span');
     const titleText = nowPlayingSpan ? nowPlayingSpan.textContent : 'Nenhum som';
-    
-    if (miniName) miniName.textContent = titleText;
-    if (settingsMiniName) settingsMiniName.textContent = titleText;
-    
-    const miniBtn = document.getElementById('miniPlayBtn');
-    const settingsMiniBtn = document.getElementById('settingsMiniPlayBtn');
-    const isPlayingIcon = isPlaying ? '<i class="fas fa-pause"></i>' : '<i class="fas fa-play" style="margin-left: 2px;"></i>';
-    if (miniBtn) miniBtn.innerHTML = isPlayingIcon;
-    if (settingsMiniBtn) settingsMiniBtn.innerHTML = isPlayingIcon;
+    const statsName = document.getElementById('statsPlayerSoundName');
+    const settingsName = document.getElementById('settingsPlayerSoundName');
+    if (statsName) statsName.textContent = titleText;
+    if (settingsName) settingsName.textContent = titleText;
+    buildViewPlayerSounds('statsPlayerSounds');
+    buildViewPlayerSounds('settingsPlayerSounds');
 
     const statsEl = document.getElementById('view-stats');
     if (statsEl) statsEl.classList.remove('stats-anim-in');
@@ -401,6 +398,30 @@ function initNavigation() {
     });
 
     document.getElementById('btnSettingsResetData')?.addEventListener('click', resetAppData);
+    
+    document.getElementById('btnCheckUpdates')?.addEventListener('click', () => {
+        const btn = document.getElementById('btnCheckUpdates');
+        const status = document.getElementById('updateCheckStatus');
+        
+        if (btn && status) {
+            btn.disabled = true;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Verificando...';
+            status.style.display = 'none';
+            window._manualUpdateTriggered = true;
+            
+            if (window.electronAPI && window.electronAPI.checkForUpdates) {
+                window.electronAPI.checkForUpdates();
+            } else {
+                setTimeout(() => {
+                    window._manualUpdateTriggered = false;
+                    handleUpdateCheckResult({ 
+                        available: false, 
+                        message: 'Sistema de atualização não disponível em modo desenvolvimento.' 
+                    });
+                }, 500);
+            }
+        }
+    });
 }
 
 function updateSidebarProfile() {
@@ -565,6 +586,7 @@ async function initSoundSelector() {
     }
 
     document.getElementById('masterPlayPause')?.addEventListener('click', toggleMasterPlay);
+    document.getElementById('btnMuteToggle')?.addEventListener('click', toggleMute);
     document.getElementById('masterVolume')?.addEventListener('input', (e) => {
         masterVolume = e.target.value / 100;
         updateVolumeDisplay();
@@ -599,6 +621,13 @@ async function selectSound(sound, cardElement) {
 
     document.documentElement.setAttribute('data-sound', soundThemes[sound.id] || 'default');
     document.getElementById('nowPlaying').innerHTML = `<i class="fas fa-music"></i><span>${sound.name}</span>`;
+    const statsName = document.getElementById('statsPlayerSoundName');
+    const settingsName = document.getElementById('settingsPlayerSoundName');
+    if (statsName) statsName.textContent = sound.name;
+    if (settingsName) settingsName.textContent = sound.name;
+    document.querySelectorAll('.vpa-sound-item').forEach(item => {
+        item.classList.toggle('active', item.dataset.soundId === sound.id);
+    });
 
     try {
         if (window.electronAPI && window.electronAPI.getAudioPath) {
@@ -608,6 +637,30 @@ async function selectSound(sound, cardElement) {
         }
     } catch (e) { console.error('Erro audio:', e) }
     changeBackground(sound.image);
+    syncStateToPip();
+}
+
+function toggleMute() {
+    const btn = document.getElementById('btnMuteToggle');
+    const slider = document.getElementById('masterVolume');
+    if (isMuted) {
+        masterVolume = volumeBeforeMute;
+        isMuted = false;
+        if (btn) btn.querySelector('i').className = 'fas fa-volume-up';
+    } else {
+        volumeBeforeMute = masterVolume;
+        masterVolume = 0;
+        isMuted = true;
+        if (btn) btn.querySelector('i').className = 'fas fa-volume-mute';
+    }
+    if (currentAudio) currentAudio.volume = masterVolume;
+    if (slider) slider.value = Math.round(masterVolume * 100);
+    updateVolumeDisplay();
+    const muteIcon = isMuted ? 'fas fa-volume-mute' : 'fas fa-volume-up';
+    ['stats', 'settings'].forEach(prefix => {
+        const muteBtn = document.getElementById(`${prefix}PlayerMuteBtn`);
+        if (muteBtn) muteBtn.querySelector('i').className = muteIcon;
+    });
     syncStateToPip();
 }
 
@@ -621,56 +674,91 @@ function toggleMasterPlay() {
 }
 
 function updateMasterPlayButton() {
-    // DOM Elements for Mini Player in stats view
-    const miniPlayBtn = document.getElementById('miniPlayBtn');
-    const miniVolumeSlider = document.getElementById('miniVolumeSlider');
-    const settingsMiniPlayBtn = document.getElementById('settingsMiniPlayBtn');
-    const settingsMiniVolumeSlider = document.getElementById('settingsMiniVolumeSlider');
     const masterVolumeSlider = document.getElementById('masterVolume');
 
-    if (miniPlayBtn && !miniPlayBtn.dataset.bound) {
-        miniPlayBtn.dataset.bound = true;
-        miniPlayBtn.addEventListener('click', () => toggleMasterPlay());
-    }
-    if (settingsMiniPlayBtn && !settingsMiniPlayBtn.dataset.bound) {
-        settingsMiniPlayBtn.dataset.bound = true;
-        settingsMiniPlayBtn.addEventListener('click', () => toggleMasterPlay());
-    }
+    ['stats', 'settings'].forEach(prefix => {
+        const playBtn = document.getElementById(`${prefix}PlayerPlayBtn`);
+        const muteBtn = document.getElementById(`${prefix}PlayerMuteBtn`);
+        const volSlider = document.getElementById(`${prefix}PlayerVolumeSlider`);
 
-    if (miniVolumeSlider && masterVolumeSlider && !miniVolumeSlider.dataset.bound) {
-        miniVolumeSlider.dataset.bound = true;
-        miniVolumeSlider.addEventListener('input', (e) => {
-            masterVolumeSlider.value = e.target.value;
-            masterVolumeSlider.dispatchEvent(new Event('input'));
-        });
-    }
-    if (settingsMiniVolumeSlider && masterVolumeSlider && !settingsMiniVolumeSlider.dataset.bound) {
-        settingsMiniVolumeSlider.dataset.bound = true;
-        settingsMiniVolumeSlider.addEventListener('input', (e) => {
-            masterVolumeSlider.value = e.target.value;
-            masterVolumeSlider.dispatchEvent(new Event('input'));
-        });
-    }
-
-    if (miniVolumeSlider) miniVolumeSlider.value = Math.round(masterVolume * 100);
-    if (settingsMiniVolumeSlider) settingsMiniVolumeSlider.value = Math.round(masterVolume * 100);
+        if (playBtn && !playBtn.dataset.bound) {
+            playBtn.dataset.bound = true;
+            playBtn.addEventListener('click', () => toggleMasterPlay());
+        }
+        if (muteBtn && !muteBtn.dataset.bound) {
+            muteBtn.dataset.bound = true;
+            muteBtn.addEventListener('click', () => toggleMute());
+        }
+        if (volSlider && masterVolumeSlider && !volSlider.dataset.bound) {
+            volSlider.dataset.bound = true;
+            volSlider.addEventListener('input', (e) => {
+                masterVolumeSlider.value = e.target.value;
+                masterVolumeSlider.dispatchEvent(new Event('input'));
+            });
+        }
+        if (playBtn) {
+            if (isPlaying) {
+                playBtn.classList.add('playing');
+                playBtn.querySelector('i').className = 'fas fa-pause';
+            } else {
+                playBtn.classList.remove('playing');
+                playBtn.querySelector('i').className = 'fas fa-play';
+            }
+        }
+        if (volSlider) volSlider.value = Math.round(masterVolume * 100);
+    });
 
     const btn = document.getElementById('masterPlayPause');
-    const isPlayingIcon = isPlaying ? '<i class="fas fa-pause"></i>' : '<i class="fas fa-play" style="margin-left: 2px;"></i>';
-    
     if (isPlaying) {
         if(btn){ btn.classList.add('playing'); btn.querySelector('i').className = 'fas fa-pause'; }
     } else {
         if(btn){ btn.classList.remove('playing'); btn.querySelector('i').className = 'fas fa-play'; }
     }
-    
-    if(miniPlayBtn) miniPlayBtn.innerHTML = isPlayingIcon;
-    if(settingsMiniPlayBtn) settingsMiniPlayBtn.innerHTML = isPlayingIcon;
 
     syncStateToPip();
 }
 
-function updateVolumeDisplay() { document.getElementById('volumeValue').textContent = `${Math.round(masterVolume * 100)}%`; }
+function buildViewPlayerSounds(containerId) {
+    const container = document.getElementById(containerId);
+    if (!container || container.dataset.built) return;
+    container.dataset.built = 'true';
+
+    const trigger = container.closest('.vpa-sound-trigger');
+    if (trigger && !trigger.dataset.bound) {
+        trigger.dataset.bound = 'true';
+        trigger.addEventListener('click', (e) => {
+            e.stopPropagation();
+            trigger.classList.toggle('open');
+        });
+        document.addEventListener('click', (e) => {
+            if (!trigger.contains(e.target)) trigger.classList.remove('open');
+        });
+    }
+
+    soundsConfig.forEach(sound => {
+        const item = document.createElement('div');
+        item.className = `vpa-sound-item${currentSoundId === sound.id ? ' active' : ''}`;
+        item.dataset.soundId = sound.id;
+        item.innerHTML = `<i class="fas ${sound.icon}"></i><span>${sound.name}</span>`;
+        item.addEventListener('click', (e) => {
+            e.stopPropagation();
+            selectSound(sound);
+            trigger?.classList.remove('open');
+        });
+        container.appendChild(item);
+    });
+}
+
+function updateVolumeDisplay() {
+    const vol = Math.round(masterVolume * 100);
+    document.getElementById('volumeValue').textContent = `${vol}%`;
+    ['stats', 'settings'].forEach(prefix => {
+        const valEl = document.getElementById(`${prefix}PlayerVolumeValue`);
+        const slider = document.getElementById(`${prefix}PlayerVolumeSlider`);
+        if (valEl) valEl.textContent = `${vol}%`;
+        if (slider && !slider.matches(':active')) slider.value = vol;
+    });
+}
 
 function initTimer() {
     window.toggleTaskTimer = toggleTimer;
@@ -2456,4 +2544,326 @@ document.addEventListener('DOMContentLoaded', () => {
             toggleSoundCarousel('settingsSoundCarousel', 'settingsSoundSwitchBtn');
         });
     }, 500);
+    
+    // Setup update listeners
+    setupUpdateListeners();
 });
+
+// ========== UPDATE SYSTEM ==========
+function setupUpdateListeners() {
+    if (!window.electronAPI) {
+        console.warn('electronAPI não disponível - sistema de atualização desabilitado');
+        return;
+    }
+    
+    // Listen for update downloaded
+    if (window.electronAPI.onUpdateDownloaded) {
+        window.electronAPI.onUpdateDownloaded((info) => {
+            console.log('Atualização baixada:', info);
+            document.getElementById('updateDownloadBanner')?.remove();
+            document.getElementById('updateInlineProgress')?.remove();
+            if (window._manualUpdateTriggered) {
+                // Auto-install silently after manual check
+                window._manualUpdateTriggered = false;
+                localStorage.setItem('focozen_updated_version', info.version);
+                localStorage.setItem('focozen_changelog', info.releaseNotes || 'Melhorias de desempenho e correções de bugs.');
+                const btn = document.getElementById('btnCheckUpdates');
+                if (btn) btn.innerHTML = '<i class="fas fa-sync-alt fa-spin"></i> Instalando...';
+                setTimeout(() => { window.electronAPI.installUpdate(); }, 800);
+            } else {
+                showUpdateNotification(info);
+            }
+        });
+    }
+
+    // Show download progress banner
+    if (window.electronAPI.onDownloadProgress) {
+        window.electronAPI.onDownloadProgress((pct) => {
+            let banner = document.getElementById('updateDownloadBanner');
+            if (!banner) {
+                banner = document.createElement('div');
+                banner.id = 'updateDownloadBanner';
+                banner.style.cssText = 'position:fixed;bottom:20px;right:20px;z-index:99998;background:rgba(15,23,42,0.95);backdrop-filter:blur(20px);border:1px solid rgba(255,255,255,0.1);border-radius:16px;padding:16px 20px;min-width:280px;box-shadow:0 8px 32px rgba(0,0,0,0.4);';
+                banner.innerHTML = `
+                    <div style="display:flex;align-items:center;gap:12px;margin-bottom:10px;">
+                        <i class="fas fa-download" style="color:var(--accent-primary);"></i>
+                        <span style="font-weight:600;font-size:0.9rem;">Baixando atualização...</span>
+                        <span id="updateDownloadPct" style="margin-left:auto;font-size:0.85rem;color:var(--text-secondary);">0%</span>
+                    </div>
+                    <div style="background:rgba(255,255,255,0.1);border-radius:99px;height:4px;overflow:hidden;">
+                        <div id="updateDownloadBar" style="height:100%;background:linear-gradient(90deg,var(--accent-primary),var(--accent-secondary));width:0%;transition:width 0.3s ease;border-radius:99px;"></div>
+                    </div>`;
+                document.body.appendChild(banner);
+            }
+            document.getElementById('updateDownloadPct').textContent = pct + '%';
+            document.getElementById('updateDownloadBar').style.width = pct + '%';
+        });
+    }
+    
+    // Listen for manual update check results
+    if (window.electronAPI.onUpdateCheckResult) {
+        window.electronAPI.onUpdateCheckResult((result) => {
+            console.log('Resultado da verificação de atualização:', result);
+            handleUpdateCheckResult(result);
+        });
+    }
+    
+    // Check if app was just updated (show changelog)
+    checkForChangelog();
+
+    // Init Sobre section
+    initSobreSection();
+}
+
+function showUpdateNotification(info) {
+    const overlay = document.createElement('div');
+    overlay.className = 'modal-overlay';
+    overlay.style.zIndex = '99999';
+    overlay.innerHTML = `
+        <div class="modal-content-small elegant-popup" style="max-width: 480px; text-align: center;">
+            <div class="elegant-icon" style="background: linear-gradient(135deg, var(--accent-primary), var(--accent-secondary)); width: 70px; height: 70px; margin: 0 auto 20px;">
+                <i class="fas fa-download" style="font-size: 2rem;"></i>
+            </div>
+            <h2 class="elegant-title" style="font-size: 1.6rem; margin-bottom: 12px;">Nova Versão Disponível! 🎉</h2>
+            <p class="elegant-message" style="font-size: 1.1rem; margin-bottom: 8px;">Versão <strong>${info.version}</strong> foi baixada</p>
+            <div style="background: rgba(0,0,0,0.3); border-radius: 12px; padding: 16px; margin: 20px 0; text-align: left; max-height: 200px; overflow-y: auto;">
+                <div style="font-size: 0.75rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 1px; margin-bottom: 8px; font-weight: 700;">
+                    <i class="fas fa-list-ul"></i> O QUE HÁ DE NOVO
+                </div>
+                <div style="color: var(--text-secondary); font-size: 0.9rem; line-height: 1.6;">
+                    ${formatReleaseNotes(info.releaseNotes)}
+                </div>
+            </div>
+            <div class="elegant-actions" style="gap: 12px;">
+                <button class="btn-modal secondary btn-update-later" style="flex: 1;">Mais Tarde</button>
+                <button class="btn-modal primary btn-update-now" style="flex: 1; background: linear-gradient(135deg, var(--accent-primary), var(--accent-secondary));">
+                    <i class="fas fa-sync-alt"></i> Reiniciar Agora
+                </button>
+            </div>
+        </div>
+    `;
+    
+    document.body.appendChild(overlay);
+    
+    overlay.classList.add('active');
+    overlay.querySelector('.btn-update-now').addEventListener('click', () => {
+        // Save flag to show changelog after restart
+        localStorage.setItem('focozen_updated_version', info.version);
+        localStorage.setItem('focozen_changelog', info.releaseNotes || 'Melhorias de desempenho e correções de bugs.');
+        window.electronAPI.installUpdate();
+    });
+    
+    overlay.querySelector('.btn-update-later').addEventListener('click', () => {
+        overlay.remove();
+    });
+}
+
+function formatReleaseNotes(notes) {
+    if (!notes || notes === 'Melhorias de desempenho e correções de bugs.') {
+        return `
+            <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 6px;">
+                <i class="fas fa-check" style="color: var(--accent-primary); font-size: 0.8rem;"></i>
+                <span>Melhorias de desempenho</span>
+            </div>
+            <div style="display: flex; align-items: center; gap: 8px;">
+                <i class="fas fa-check" style="color: var(--accent-primary); font-size: 0.8rem;"></i>
+                <span>Correções de bugs</span>
+            </div>
+        `;
+    }
+    
+    // Parse markdown-style list or plain text
+    const lines = notes.split('\n').filter(l => l.trim());
+    return lines.map(line => {
+        const cleaned = line.replace(/^[-*]\s*/, '').trim();
+        return `
+            <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 6px;">
+                <i class="fas fa-check" style="color: var(--accent-primary); font-size: 0.8rem;"></i>
+                <span>${cleaned}</span>
+            </div>
+        `;
+    }).join('');
+}
+
+async function checkForChangelog() {
+    const updatedVersion = localStorage.getItem('focozen_updated_version');
+    
+    if (updatedVersion) {
+        // Clear one-time flags immediately
+        localStorage.removeItem('focozen_updated_version');
+        localStorage.removeItem('focozen_changelog');
+
+        // Read changelog from NEW app's CHANGELOG.md (after restart)
+        let changelog = 'Melhorias de desempenho e correções de bugs.';
+        if (window.electronAPI && window.electronAPI.getChangelogForVersion) {
+            try {
+                changelog = await window.electronAPI.getChangelogForVersion(updatedVersion);
+            } catch(e) {
+                console.error('Erro ao ler changelog para versão:', e);
+            }
+        }
+
+        // Save permanent copy for Sobre section
+        localStorage.setItem('focozen_last_version', updatedVersion);
+        localStorage.setItem('focozen_last_changelog', changelog);
+        
+        // Show changelog modal after app settles
+        setTimeout(() => {
+            showChangelogModal(updatedVersion, changelog);
+        }, 1500);
+    }
+}
+
+function showChangelogModal(version, notes) {
+    const overlay = document.createElement('div');
+    overlay.className = 'modal-overlay active';
+    overlay.style.zIndex = '99999';
+    overlay.innerHTML = `
+        <div class="modal-content-small elegant-popup" style="max-width: 500px; text-align: center;">
+            <div class="elegant-icon" style="background: linear-gradient(135deg, #10b981, #059669); width: 70px; height: 70px; margin: 0 auto 20px;">
+                <i class="fas fa-check-circle" style="font-size: 2rem;"></i>
+            </div>
+            <h2 class="elegant-title" style="font-size: 1.7rem; margin-bottom: 12px;">Atualização Concluída! ✨</h2>
+            <p class="elegant-message" style="font-size: 1rem; margin-bottom: 8px;">Agora você está usando a versão <strong>${version}</strong></p>
+            <div style="background: rgba(0,0,0,0.3); border-radius: 12px; padding: 16px; margin: 20px 0; text-align: left; max-height: 250px; overflow-y: auto;">
+                <div style="font-size: 0.75rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 1px; margin-bottom: 10px; font-weight: 700;">
+                    <i class="fas fa-sparkles"></i> NOVIDADES DESTA VERSÃO
+                </div>
+                <div style="color: var(--text-secondary); font-size: 0.9rem; line-height: 1.6;">
+                    ${formatReleaseNotes(notes)}
+                </div>
+            </div>
+            <button class="btn-modal primary" onclick="this.closest('.modal-overlay').remove()" style="width: 100%; background: linear-gradient(135deg, #10b981, #059669);">
+                <i class="fas fa-rocket"></i> Vamos Lá!
+            </button>
+        </div>
+    `;
+    
+    document.body.appendChild(overlay);
+}
+
+async function initSobreSection() {
+    let version = '—';
+    if (window.electronAPI && window.electronAPI.getAppVersion) {
+        version = await window.electronAPI.getAppVersion();
+    }
+
+    const versionEl = document.getElementById('sobreVersionNumber');
+    if (versionEl) versionEl.textContent = version;
+
+    const sobreChangelogEl = document.getElementById('sobreChangelogContent');
+    const sobreVersionLabel = document.getElementById('sobreLastVersionLabel');
+
+    if (sobreChangelogEl) {
+        // Load full changelog from CHANGELOG.md
+        if (window.electronAPI && window.electronAPI.getFullChangelog) {
+            try {
+                const fullChangelog = await window.electronAPI.getFullChangelog();
+                if (sobreVersionLabel) sobreVersionLabel.textContent = 'Histórico Completo de Versões';
+                sobreChangelogEl.innerHTML = formatFullChangelog(fullChangelog);
+            } catch (err) {
+                console.error('Erro ao carregar changelog:', err);
+                sobreChangelogEl.innerHTML = '<span style="color:var(--text-secondary);font-size:0.9rem;">Erro ao carregar histórico de versões.</span>';
+            }
+        } else {
+            sobreChangelogEl.innerHTML = '<span style="color:var(--text-secondary);font-size:0.9rem;">Histórico de versões não disponível.</span>';
+        }
+    }
+}
+
+function formatFullChangelog(markdown) {
+    if (!markdown || markdown.trim() === '') {
+        return '<span style="color:var(--text-secondary);font-size:0.9rem;">Nenhum changelog disponível.</span>';
+    }
+    
+    // Convert markdown to HTML with proper styling
+    let html = markdown
+        // Version headers (## [1.0.8] - 2026-03-31)
+        .replace(/^## \[([^\]]+)\] - (.+)$/gm, '<div style="margin-top:24px;margin-bottom:12px;padding-bottom:8px;border-bottom:1px solid rgba(255,255,255,0.1);"><span style="font-size:1.1rem;font-weight:700;color:var(--accent-primary);">v$1</span><span style="margin-left:10px;font-size:0.85rem;color:var(--text-secondary);">$2</span></div>')
+        // Category headers (### Adicionado, ### Corrigido, etc)
+        .replace(/^### (.+)$/gm, '<div style="margin-top:16px;margin-bottom:8px;font-size:0.75rem;font-weight:700;color:var(--text-secondary);text-transform:uppercase;letter-spacing:1px;"><i class="fas fa-chevron-right" style="font-size:0.6rem;margin-right:6px;"></i>$1</div>')
+        // Sub-category headers (#### 🎯 Sistema de Foco)
+        .replace(/^#### (.+)$/gm, '<div style="margin-top:14px;margin-bottom:8px;font-size:0.9rem;font-weight:600;color:white;">$1</div>')
+        // Bullet points
+        .replace(/^- (.+)$/gm, '<div style="display:flex;align-items:flex-start;gap:8px;margin-bottom:6px;padding-left:12px;"><i class="fas fa-check" style="color:var(--accent-primary);font-size:0.7rem;margin-top:4px;flex-shrink:0;"></i><span style="font-size:0.9rem;line-height:1.6;">$1</span></div>')
+        // Nested bullet points (with 2 spaces indent)
+        .replace(/^  - (.+)$/gm, '<div style="display:flex;align-items:flex-start;gap:8px;margin-bottom:4px;padding-left:32px;"><i class="fas fa-circle" style="color:var(--accent-primary);font-size:0.4rem;margin-top:6px;flex-shrink:0;"></i><span style="font-size:0.85rem;line-height:1.5;color:var(--text-secondary);">$1</span></div>');
+    
+    return html;
+}
+
+function handleUpdateCheckResult(result) {
+    const btn = document.getElementById('btnCheckUpdates');
+    const status = document.getElementById('updateCheckStatus');
+
+    if (result.available) {
+        // Show inline download progress in the updates section
+        if (btn) btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Baixando...';
+        const section = btn?.closest('section');
+        if (section && !document.getElementById('updateInlineProgress')) {
+            const prog = document.createElement('div');
+            prog.id = 'updateInlineProgress';
+            prog.style.cssText = 'margin-top:16px;';
+            prog.innerHTML = `
+                <div style="display:flex;justify-content:space-between;margin-bottom:6px;font-size:0.85rem;color:var(--text-secondary);">
+                    <span><i class="fas fa-download" style="color:var(--accent-primary);margin-right:6px;"></i>Baixando v${result.version}...</span>
+                    <span id="inlineDownloadPct">0%</span>
+                </div>
+                <div style="background:rgba(255,255,255,0.1);border-radius:99px;height:5px;overflow:hidden;">
+                    <div id="inlineDownloadBar" style="height:100%;background:linear-gradient(90deg,var(--accent-primary),var(--accent-secondary));width:0%;transition:width 0.3s ease;border-radius:99px;"></div>
+                </div>`;
+            section.appendChild(prog);
+            // Hook progress updates into inline bar too
+            if (window.electronAPI?.onDownloadProgress) {
+                window.electronAPI.onDownloadProgress((pct) => {
+                    const pctEl = document.getElementById('inlineDownloadPct');
+                    const barEl = document.getElementById('inlineDownloadBar');
+                    if (pctEl) pctEl.textContent = pct + '%';
+                    if (barEl) barEl.style.width = pct + '%';
+                });
+            }
+        }
+        return;
+    }
+
+    // Not available — reset button and show modal
+    if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-download"></i> Verificar Atualizações'; }
+    if (status) status.style.display = 'none';
+    window._manualUpdateTriggered = false;
+
+    const overlay = document.createElement('div');
+    overlay.className = 'modal-overlay active';
+    overlay.style.zIndex = '99999';
+    
+    if (false) {
+        // placeholder - result.available is always false here
+    } else {
+        overlay.innerHTML = `
+            <div class="modal-content-small elegant-popup" style="text-align: center;">
+                <div class="elegant-icon" style="background: linear-gradient(135deg, #10b981, #059669);">
+                    <i class="fas fa-check-circle"></i>
+                </div>
+                <h2 class="elegant-title">Tudo Atualizado!</h2>
+                <p class="elegant-message">${result.message || 'Você já está na versão mais recente.'}</p>
+                <button class="btn-modal primary" onclick="this.closest('.modal-overlay').remove()" style="background: linear-gradient(135deg, #10b981, #059669); display: block; margin: 0 auto;">Fechar</button>
+            </div>
+        `;
+    }
+    
+    document.body.appendChild(overlay);
+}
+
+// TEST FUNCTION - Call from DevTools console: testChangelog()
+window.testChangelog = function() {
+    const testChangelog = `### Corrigido
+- Scroll nas configurações agora funciona corretamente
+- Seções de configuração não são mais cortadas na parte inferior
+- Layout da view de estatísticas também ajustado para scroll adequado
+
+### Adicionado
+- Sistema de changelog real lendo do CHANGELOG.md
+- Histórico completo de todas as funcionalidades desde v1.0.0`;
+    
+    showChangelogModal('1.0.8', testChangelog);
+    console.log('✅ Changelog modal exibido! Verifique a tela.');
+};

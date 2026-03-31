@@ -2,6 +2,15 @@
 
 Todas as mudanças notáveis do FocoZen Pro serão documentadas neste arquivo.
 
+## [1.0.13] - 2026-03-31
+
+### Corrigido
+- Modal de atualização agora exibe o changelog real da versão instalada
+- Botão "Fechar" do modal "Tudo Atualizado" centralizado corretamente
+
+### Melhorado
+- Changelog lido do novo CHANGELOG.md após restart (não mais do cache antigo)
+
 ## [1.0.12] - 2026-03-31
 
 ### Melhorado
