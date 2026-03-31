@@ -19,19 +19,19 @@
         :root[data-sound="water"] { --accent-foco: #3b82f6; }
         :root[data-sound="fire"] { --accent-foco: #f97316; }
         :root[data-sound="music"] { --accent-foco: #a855f7; }
-        :root[data-sound="lofi"] { --accent-foco: #f5f5f4; }
-        :root[data-sound="jazz"] { --accent-foco: #fef3c7; }
-        :root[data-sound="classica"] { --accent-foco: #fef3c7; }
-        :root[data-sound="yellow"] { --accent-foco: #eab308; }
+        :root[data-sound="lofi"] { --accent-foco: #fbbf24; }
+        :root[data-sound="jazz"] { --accent-foco: #f97316; }
+        :root[data-sound="classica"] { --accent-foco: #f97316; }
+        :root[data-sound="yellow"] { --accent-foco: #f97316; }
         :root[data-sound="noise"] { --accent-foco: #6b7280; }
         :root[data-sound="sky"] { --accent-foco: #0ea5e9; }
         :root[data-sound="pink"] { --accent-foco: #ec4899; }
-        :root[data-sound="brown"] { --accent-foco: #92400e; }
+        :root[data-sound="brown"] { --accent-foco: #fbbf24; }
 
         body {
             margin: 0; padding: 0;
             font-family: 'Inter', sans-serif;
-            overflow: hidden; background: transparent;
+            overflow: visible; background: transparent;
             user-select: none; color: var(--text-main);
             -webkit-app-region: no-drag;
         }
@@ -56,6 +56,7 @@
             box-sizing: border-box; display: flex; flex-direction: column;
             align-items: center; justify-content: center;
             padding: 18px 18px 14px 18px; z-index: 3;
+            overflow: visible;
         }
 
         .pip-drag-area {
@@ -86,11 +87,14 @@
             gap: 5px;
             padding: 5px 14px;
             border-radius: 999px;
-            background: rgba(255, 255, 255, 0.09);
-            border: 1px solid rgba(255, 255, 255, 0.18);
+            background: rgba(15, 23, 42, 0.4);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            backdrop-filter: blur(8px);
+            -webkit-backdrop-filter: blur(8px);
             -webkit-app-region: no-drag;
             pointer-events: auto;
             cursor: pointer;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
         }
 
         .pip-drag-handle:active {
@@ -137,14 +141,9 @@
             transform: scale(1.1);
             box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
         }
-        .btn-restore { right: 14px; width: 26px; height: 26px; font-size: 11px; top: 14px; }
-        .btn-minimize {
-            right: 48px; /* Ajustada posição */
-            width: 26px; height: 26px;
-            font-size: 11px;
-            top: 14px;
-        }
-        .btn-close { left: 12px; }
+        .btn-restore { left: 14px; width: 30px; height: 30px; font-size: 12px; top: 12px; }
+        .btn-minimize { display: none; }
+        .btn-close { right: 12px; }
         .btn-close:hover {
             border-color: #ef4444;
             color: #ef4444;
@@ -163,7 +162,7 @@
 
         /* CORREÇÃO AQUI: Removido o no-drag do relógio para permitir arrastar clicando nos números */
         .pip-clock {
-            font-size: 2.5rem; font-weight: 800;
+            font-size: 2.8rem; font-weight: 800;
             letter-spacing: -1.5px; line-height: 1;
             text-shadow: 0 4px 15px rgba(0,0,0,0.8);
             font-variant-numeric: tabular-nums;
@@ -183,26 +182,29 @@
         }
 
         .controls-row {
-            display: flex; width: 100%;
-            justify-content: space-between; align-items: center;
+            display: flex; width: 100%; gap: 16px;
+            justify-content: center; align-items: center;
         }
 
-        .sound-wrapper { position: relative; display: flex; gap: 6px; align-items: center; }
+        .sound-wrapper { position: relative; display: none; gap: 6px; align-items: center; }
         
-        .btn-sound {
-            background: rgba(0,0,0,0.4); border: 1px solid rgba(255,255,255,0.15);
-            border-radius: 8px; color: var(--text-main);
-            padding: 6px 10px; font-size: 11px; font-weight: 500;
-            cursor: pointer; display: flex; align-items: center; gap: 6px;
-            max-width: 95px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-        }
-
         .main-controls { display: flex; gap: 10px; }
         .btn-action {
             background: rgba(0,0,0,0.4); border: 1px solid rgba(255,255,255,0.15);
             border-radius: 50%; width: 34px; height: 34px; color: #fff;
             cursor: pointer; display: flex; align-items: center; justify-content: center;
-            font-size: 12px;
+            font-size: 12px; transition: all 0.3s ease;
+        }
+        
+        .btn-action#btnPipPlay {
+            width: 44px; height: 44px; font-size: 16px;
+            background: var(--accent-foco); border-color: rgba(255,255,255,0.2);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+        }
+        
+        .btn-action#btnPipPlay:hover {
+            transform: scale(1.08);
+            box-shadow: 0 6px 16px rgba(0,0,0,0.4);
         }
 
         .volume-hover-wrap {
@@ -295,6 +297,143 @@
             background: var(--accent-foco);
             margin-top: -3px;
             box-shadow: 0 0 0 2px rgba(15, 23, 42, 0.45), 0 0 10px rgba(255, 255, 255, 0.25);
+        }
+
+        /* CONTROLES DE ÁUDIO - CANTO INFERIOR ESQUERDO */
+        .audio-controls-section {
+            position: absolute; bottom: 12px; left: 12px;
+            display: flex; gap: 0; align-items: center;
+            -webkit-app-region: no-drag;
+            z-index: 50;
+            background: rgba(15, 23, 42, 0.4);
+            backdrop-filter: blur(8px);
+            -webkit-backdrop-filter: blur(8px);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            border-radius: 50%;
+            padding: 0;
+            transition: all 0.28s cubic-bezier(0.4, 0, 0.2, 1);
+            overflow: visible;
+        }
+        
+        .audio-controls-section:hover {
+            border-radius: 8px;
+            background: rgba(15, 23, 42, 0.4);
+            padding: 6px 8px;
+            gap: 6px;
+        }
+        
+        .audio-mute-btn {
+            width: 30px; height: 30px; padding: 0;
+            border-radius: 50%;
+            background: transparent;
+            border: none;
+            color: #fff; cursor: pointer;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 12px;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            flex-shrink: 0;
+        }
+        
+        .audio-mute-btn:hover {
+            transform: scale(1.1);
+        }
+        
+        .audio-expanded-content {
+            display: none; gap: 6px; align-items: center;
+            background: transparent;
+            backdrop-filter: none;
+            -webkit-backdrop-filter: none;
+            border: none;
+            padding: 0;
+            opacity: 0; pointer-events: none;
+            transition: all 0.28s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        
+        .audio-controls-section:hover .audio-expanded-content,
+        .audio-controls-section.expanded .audio-expanded-content {
+            display: flex;
+            opacity: 1;
+            pointer-events: auto;
+        }
+        
+        .audio-slider-wrap {
+            display: flex; align-items: center; gap: 4px;
+            max-width: 50px;
+        }
+        
+        .audio-slider-wrap input[type="range"] {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 45px; height: 3px;
+            background: rgba(255,255,255,0.2);
+            outline: none;
+            border-radius: 2px;
+            cursor: pointer;
+        }
+        
+        .audio-slider-wrap input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 8px; height: 8px;
+            border-radius: 50%;
+            background: var(--accent-foco);
+            cursor: pointer;
+            box-shadow: 0 0 8px rgba(0,0,0,0.3);
+        }
+        
+        .audio-slider-wrap input[type="range"]::-moz-range-thumb {
+            width: 8px; height: 8px;
+            border-radius: 50%;
+            background: var(--accent-foco);
+            cursor: pointer;
+            box-shadow: 0 0 8px rgba(0,0,0,0.3);
+            border: none;
+        }
+        
+        .audio-sound-wrapper {
+            position: relative; display: flex; align-items: center;
+            -webkit-app-region: no-drag;
+            cursor: pointer;
+            overflow: visible;
+        }
+        
+        .audio-sound-wrapper .sound-list {
+            position: absolute; bottom: 100%; left: 0;
+            width: 140px; max-height: 120px;
+            margin-bottom: 6px;
+            background: rgba(15, 23, 42, 0.98);
+            border: 1px solid rgba(255,255,255,0.2); 
+            border-radius: 12px;
+            padding: 4px; 
+            display: flex; 
+            flex-direction: column; 
+            gap: 2px;
+            opacity: 0; 
+            pointer-events: none;
+            transform: translateY(10px) translateX(-50%); 
+            transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            box-shadow: 0 10px 30px rgba(0,0,0,0.8); 
+            z-index: 200;
+            overflow-y: auto;
+            left: 50%;
+        }
+        
+        .audio-sound-wrapper .sound-list.open {
+            opacity: 1;
+            pointer-events: all; 
+            transform: translateY(0) translateX(-50%);
+        }
+        
+        .audio-sound-name {
+            font-size: 10px; color: #fff; font-weight: 500;
+            max-width: 55px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+            padding: 4px 6px;
+            border-radius: 4px;
+            transition: all 0.2s;
+        }
+        
+        .audio-sound-wrapper:hover .audio-sound-name {
+            background: rgba(255,255,255,0.1);
         }
 
         .btn-volume {
@@ -414,6 +553,15 @@
         }
         .pip-completion-overlay.active { opacity: 1; pointer-events: all; transform: scale(1); }
         
+        .btn-comp-dismiss {
+            position: absolute; top: 10px; right: 10px;
+            width: 26px; height: 26px; border-radius: 50%;
+            background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2);
+            color: rgba(255,255,255,0.7); font-size: 12px; cursor: pointer;
+            display: flex; align-items: center; justify-content: center;
+            transition: all 0.2s ease;
+        }
+        .btn-comp-dismiss:hover { background: rgba(255,255,255,0.2); color: #fff; transform: scale(1.1); }
         .pip-comp-content { text-align: center; width: 90%; }
         .pip-comp-content h3 { margin: 0 0 4px 0; font-size: 18px; font-weight: 800; color: #fff; text-shadow: 0 2px 8px rgba(0,0,0,0.6); letter-spacing: -0.5px; }
         .pip-comp-content p { margin: 0 0 16px 0; font-size: 12px; color: var(--text-main); font-weight: 500; text-shadow: 0 1px 4px rgba(0,0,0,0.8); }
@@ -476,12 +624,28 @@
             </div>
             <div class="main-controls">
                 <button id="btnPipPlay" class="btn-action"><i class="fas fa-play" id="playIcon"></i></button>
-                <button id="btnPipReset" class="btn-action"><i class="fas fa-redo"></i></button>
+            </div>
+        </div>
+        
+        <!-- CONTROLES DE ÁUDIO - CANTO INFERIOR ESQUERDO -->
+        <div class="audio-controls-section" id="audioControlsSection">
+            <button id="audioMuteBtn" class="audio-mute-btn" title="Mute/Unmute">
+                <i class="fas fa-volume-up" id="audioMuteIcon"></i>
+            </button>
+            <div class="audio-expanded-content">
+                <div class="audio-slider-wrap">
+                    <input type="range" id="audioVolumeSlider" min="0" max="100" value="70" aria-label="Volume">
+                </div>
+                <div class="audio-sound-wrapper" id="audioSoundSelector">
+                    <span class="audio-sound-name" id="audioSoundNameDisplay">Silêncio</span>
+                    <div class="sound-list" id="soundList2"></div>
+                </div>
             </div>
         </div>
     </div>
 
     <div id="pipCompletionOverlay" class="pip-completion-overlay">
+        <button class="btn-comp-dismiss" id="btnDismissCompletion" title="Fechar"><i class="fas fa-times"></i></button>
         <div class="pip-comp-content">
             <i id="pipCompIcon" class="fas fa-coffee" style="font-size: 24px; color: var(--accent-foco); margin-bottom: 10px;"></i>
             <h3 id="pipCompTitle">Concluído!</h3>
@@ -511,6 +675,16 @@
         const pipInlineToast = document.getElementById('pipInlineToast');
         const pipCompletionOverlay = document.getElementById('pipCompletionOverlay');
         const pipCompActions = document.getElementById('pipCompActions');
+        
+        // NOVOS ELEMENTOS DE CONTROLE DE ÁUDIO
+        const audioControlsSection = document.getElementById('audioControlsSection');
+        const audioMuteBtn = document.getElementById('audioMuteBtn');
+        const audioMuteIcon = document.getElementById('audioMuteIcon');
+        const audioVolumeSlider = document.getElementById('audioVolumeSlider');
+        const audioSoundNameDisplay = document.getElementById('audioSoundNameDisplay');
+        const audioSoundSelector = document.getElementById('audioSoundSelector');
+        const soundList2 = document.getElementById('soundList2');
+        
         const PIP_TOOLTIP_KEY = 'focozen_pip_drag_tooltip_seen_v2';
         let hasReceivedInitialState = false;
         let hasSelectedSound = false;
@@ -544,8 +718,53 @@
             soundList.appendChild(btn);
         });
 
+        // POPULA A LISTA DE SONS DO CANTO INFERIOR ESQUERDO
+        pipSoundsConfig.forEach(sound => {
+            const btn = document.createElement('button');
+            btn.className = 'sound-item';
+            btn.innerHTML = `<i class="fas ${sound.icon}"></i> ${sound.name}`;
+            btn.onclick = (e) => { 
+                e.stopPropagation(); 
+                window.electronAPI.sendPipAction('change-sound', sound.id);
+                soundList2.classList.remove('open');
+            };
+            soundList2.appendChild(btn);
+        });
+
         document.getElementById('btnSoundTrigger').addEventListener('click', (e) => { e.stopPropagation(); soundList.classList.toggle('open'); });
         document.addEventListener('click', (e) => { if (!e.target.closest('.sound-wrapper')) soundList.classList.remove('open'); });
+
+        // EVENT LISTENERS DOS NOVOS CONTROLES DE ÁUDIO DO CANTO INFERIOR ESQUERDO
+        audioMuteBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            if (pipVolume > 0) {
+                previousVolume = pipVolume;
+                applyVolume(0, false);
+            } else {
+                applyVolume(previousVolume > 0 ? previousVolume : 0.7, true);
+            }
+        });
+
+        audioVolumeSlider.addEventListener('input', (e) => {
+            const value = Number(e.target.value) / 100;
+            applyVolume(value);
+        });
+
+        audioSoundSelector.addEventListener('click', (e) => {
+            e.stopPropagation();
+            soundList2.classList.toggle('open');
+        });
+
+        document.addEventListener('click', (e) => {
+            if (!e.target.closest('.audio-sound-wrapper') && !e.target.closest('.sound-list')) {
+                soundList2.classList.remove('open');
+            }
+        });
+
+        document.getElementById('btnDismissCompletion').addEventListener('click', () => {
+            pipCompletionOverlay.classList.remove('active');
+            window.electronAPI.sendPipAction('dismiss-completion');
+        });
 
         document.getElementById('btnRestore').addEventListener('click', () => window.electronAPI.exitPip());
         
@@ -556,16 +775,10 @@
         document.getElementById('btnClosePip').addEventListener('click', (e) => {
             e.preventDefault();
             e.stopPropagation();
-            
-            if (typeof window.electronAPI.closeApp === 'function') {
-                window.electronAPI.closeApp();
-            }
-            window.electronAPI.sendPipAction('close-app', null);
-            window.electronAPI.sendPipAction('quit-app', null); 
+            window.electronAPI.sendPipAction('minimize-to-tray');
         });
 
         document.getElementById('btnPipPlay').addEventListener('click', () => window.electronAPI.sendPipAction('toggle-play'));
-        document.getElementById('btnPipReset').addEventListener('click', () => window.electronAPI.sendPipAction('reset'));
         function showPipToast(message) {
             pipInlineToast.textContent = message;
             pipInlineToast.classList.remove('show');
@@ -585,6 +798,7 @@
 
         function updateVolumeIcon(volume) {
             volumeIconEl.className = volume <= 0 ? 'fas fa-volume-mute' : 'fas fa-volume-up';
+            audioMuteIcon.className = volume <= 0 ? 'fas fa-volume-mute' : 'fas fa-volume-up';
         }
 
         function applyVolume(value, shouldRemember = true) {
@@ -592,6 +806,7 @@
             pipVolume = clamped;
             if (shouldRemember && clamped > 0) previousVolume = clamped;
             volumeRangeEl.value = Math.round(clamped * 100);
+            audioVolumeSlider.value = Math.round(clamped * 100);
             updateVolumeIcon(clamped);
             if (window.electronAPI?.setVolume) {
                 window.electronAPI.setVolume(clamped);
@@ -697,12 +912,14 @@
             if (state.soundName) {
                 const sn = state.soundName;
                 soundNameEl.textContent = sn.length > 8 ? sn.substring(0,6)+'...' : sn;
+                audioSoundNameDisplay.textContent = sn.length > 8 ? sn.substring(0,6)+'...' : sn;
                 hasSelectedSound = sn !== 'Silêncio';
             }
             if (state.masterVolume !== undefined) {
                 pipVolume = Number(state.masterVolume);
                 if (pipVolume > 0) previousVolume = pipVolume;
                 volumeRangeEl.value = Math.round(pipVolume * 100);
+                audioVolumeSlider.value = Math.round(pipVolume * 100);
                 updateVolumeIcon(pipVolume);
             }
         });

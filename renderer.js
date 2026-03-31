@@ -462,7 +462,6 @@ function initPipIntegration() {
             }
             else if (action === 'restore-app') {
                 isPipModeActive = false;
-                window.electronAPI.exitPip();
                 renderTasksSidebar();
                 if (pendingCompletionType) {
                     const comp = pendingCompletionType;
@@ -477,6 +476,9 @@ function initPipIntegration() {
                         }
                     }, 500);
                 }
+            }
+            else if (action === 'dismiss-completion') {
+                pendingCompletionType = null;
             }
             else if (action === 'set-volume') {
                 const parsedVolume = Number(data);

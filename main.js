@@ -284,9 +284,11 @@ function registerIpcHandlers() {
     ipcMain.on('exit-pip', () => {
         isPipMode = false;
         if (pipWindow) pipWindow.hide();
-        if (mainWindow) {
+        if (mainWindow && !mainWindow.isDestroyed()) {
             if (mainWindow.isMinimized()) mainWindow.restore();
             mainWindow.show();
+            mainWindow.focus();
+            mainWindow.webContents.send('pip-action', 'restore-app');
         }
     });
 
@@ -305,7 +307,17 @@ function registerIpcHandlers() {
 
     ipcMain.on('pip-update-state', (event, state) => {
         if (pipWindow && !pipWindow.isDestroyed()) {
-            pipWindow.webContents.send('sync-pip-state', state);
+            if (state.showCompletion && !pipWindow.isVisible()) {
+                isPipMode = false;
+                if (mainWindow && !mainWindow.isDestroyed()) {
+                    if (mainWindow.isMinimized()) mainWindow.restore();
+                    mainWindow.show();
+                    mainWindow.focus();
+                    mainWindow.webContents.send('pip-action', 'restore-app');
+                }
+            } else {
+                pipWindow.webContents.send('sync-pip-state', state);
+            }
         }
     });
 
@@ -320,9 +332,11 @@ function registerIpcHandlers() {
         if (action === 'restore-app') {
             isPipMode = false;
             if (pipWindow) pipWindow.hide();
-            if (mainWindow) {
+            if (mainWindow && !mainWindow.isDestroyed()) {
                 if (mainWindow.isMinimized()) mainWindow.restore();
                 mainWindow.show();
+                mainWindow.focus();
+                mainWindow.webContents.send('pip-action', 'restore-app');
             }
             return;
         }
