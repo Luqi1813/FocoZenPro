@@ -1,27 +1,36 @@
 {
   "name": "focozen-pro",
-  "version": "1.0.0",
+  "version": "1.0.12",
   "description": "Estúdio de Foco Imersivo",
   "main": "main.js",
   "scripts": {
     "start": "electron .",
-    "build:win": "electron-builder --win",
-    "build:mac": "electron-builder --mac"
+    "dist": "electron-builder"
   },
   "build": {
-    "appId": "com.focozen.pro",
+    "appId": "com.luqi.focozenpro",
     "productName": "FocoZen Pro",
-    "mac": {
-      "target": [
-        "dmg",
-        "zip"
-      ],
-      "category": "public.app-category.productivity"
+    "files": [
+      "**/*",
+      "CHANGELOG.md"
+    ],
+    "publish": {
+      "provider": "github",
+      "owner": "Luqi1813",
+      "repo": "FocoZenPro"
     },
     "win": {
-      "target": [
-        "portable"
-      ]
+      "target": "nsis",
+      "icon": "icon.ico"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "shortcutName": "FocoZen Pro",
+      "perMachine": false,
+      "allowElevation": false,
+      "differentialPackage": true
     }
   },
   "author": "FocoZen",
@@ -31,6 +40,8 @@
     "electron-builder": "^24.13.3"
   },
   "dependencies": {
-    "chart.js": "^4.5.1"
+    "chart.js": "^4.5.1",
+    "electron-log": "^5.4.3",
+    "electron-updater": "^6.8.3"
   }
 }

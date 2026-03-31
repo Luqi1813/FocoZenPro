@@ -2,6 +2,12 @@
 
 Todas as mudanças notáveis do FocoZen Pro serão documentadas neste arquivo.
 
+## [1.0.12] - 2026-03-31
+
+### Melhorado
+- Automação Trello agora move card de "Mudanças prontas pra lançamento" para "Atualizações feitas" ao publicar release
+- Workflow de release reescrito com detecção de card por versão
+
 ## [1.0.11] - 2026-03-31
 
 ### Melhorado
