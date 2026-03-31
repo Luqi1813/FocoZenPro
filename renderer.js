@@ -805,7 +805,15 @@ function adjustTime(minutes) {
 function setTimerMode(mode) {
     pauseTimer(); currentMode = mode;
     let mins = testMode ? (1/12) : (mode === 'shortBreak' ? SHORT_BREAK_MINUTES : (mode === 'longBreak' ? LONG_BREAK_MINUTES : POMODORO_MINUTES));
-    timeLeft = testMode ? 5 : mins * 60; totalTimerTime = timeLeft;
+    
+    if (currentTask && mode === 'focus') {
+        timeLeft = Math.round(currentTask.estimatedMinutes * 60);
+        totalTimerTime = timeLeft;
+    } else {
+        timeLeft = testMode ? 5 : mins * 60; 
+        totalTimerTime = timeLeft;
+    }
+    
     document.getElementById('timeLabel').textContent = mode === 'focus' ? 'Período de Foco' : (mode === 'shortBreak' ? 'Pausa Curta' : 'Pausa Longa');
 
     document.querySelectorAll('.mode-btn').forEach(b => b.classList.remove('active'));
@@ -1106,7 +1114,11 @@ window.toggleTestMode = function() {
         btn.style.background = testMode ? 'linear-gradient(135deg,#ef4444,#b91c1c)' : '';
         btn.textContent = testMode ? '🧪 Modo Teste ON (5s)' : '🧪 Modo Teste';
     }
-    if (testMode) showGlassToast('Modo teste ativado: timer = 5s ⚡');
+    const taskTimeInput = document.getElementById('taskTimeInput');
+    if (taskTimeInput && taskTimeInput.value === '25') {
+        taskTimeInput.value = testMode ? '0.08' : '25';
+    }
+    if (testMode) showGlassToast('Modo teste ativado: timer e tarefas = 5s ⚡');
     else showGlassToast('Modo teste desativado');
     setTimerMode(currentMode);
 };
@@ -1219,7 +1231,7 @@ function initModals() {
     const openCreateModal = () => {
         editingTaskId = null;
         document.getElementById('taskNameInput').value = '';
-        document.getElementById('taskTimeInput').value = '25';
+        document.getElementById('taskTimeInput').value = testMode ? '0.08' : '25';
         document.getElementById('taskPomodorosInput').value = '1';
         document.getElementById('taskCategoryInput').value = 'Livre';
         document.querySelectorAll('#taskCategoryChips .cat-chip').forEach(c => c.classList.remove('active'));
@@ -1258,8 +1270,8 @@ function initTaskForm() {
     document.getElementById('taskTimeInput')?.addEventListener('input', (e) => {
         document.getElementById('taskPomodorosInput').value = Math.ceil((parseInt(e.target.value) || 25) / POMODORO_MINUTES); updatePomodoroSuggestion();
     });
-    document.getElementById('increaseTime')?.addEventListener('click', () => { const i = document.getElementById('taskTimeInput'); i.value = Math.min(720, parseInt(i.value) + 5); document.getElementById('taskPomodorosInput').value = Math.ceil(parseInt(i.value) / POMODORO_MINUTES); updatePomodoroSuggestion(); });
-    document.getElementById('decreaseTime')?.addEventListener('click', () => { const i = document.getElementById('taskTimeInput'); i.value = Math.max(5, parseInt(i.value) - 5); document.getElementById('taskPomodorosInput').value = Math.ceil(parseInt(i.value) / POMODORO_MINUTES); updatePomodoroSuggestion(); });
+    document.getElementById('increaseTime')?.addEventListener('click', () => { const i = document.getElementById('taskTimeInput'); const minVal = testMode ? 0.08 : 5; i.value = Math.min(720, parseFloat(i.value) + (testMode ? 0.08 : 5)); document.getElementById('taskPomodorosInput').value = Math.ceil(parseFloat(i.value) / POMODORO_MINUTES); updatePomodoroSuggestion(); });
+    document.getElementById('decreaseTime')?.addEventListener('click', () => { const i = document.getElementById('taskTimeInput'); const minVal = testMode ? 0.08 : 5; i.value = Math.max(minVal, parseFloat(i.value) - (testMode ? 0.08 : 5)); document.getElementById('taskPomodorosInput').value = Math.ceil(parseFloat(i.value) / POMODORO_MINUTES); updatePomodoroSuggestion(); });
     document.getElementById('increasePomodoros')?.addEventListener('click', () => { const i = document.getElementById('taskPomodorosInput'); i.value = Math.min(20, parseInt(i.value) + 1); updatePomodoroSuggestion(); });
     document.getElementById('decreasePomodoros')?.addEventListener('click', () => { const i = document.getElementById('taskPomodorosInput'); i.value = Math.max(1, parseInt(i.value) - 1); updatePomodoroSuggestion(); });
 
@@ -1311,7 +1323,7 @@ function criarOuEditarTarefa() {
         const t = tasks.find(x => x.id === editingTaskId);
         if(t) {
             t.name = name; 
-            const newMins = parseInt(document.getElementById('taskTimeInput')?.value) || 25;
+            const newMins = parseFloat(document.getElementById('taskTimeInput')?.value) || 25;
             t.estimatedMinutes = newMins;
             t.pomodoros = parseInt(document.getElementById('taskPomodorosInput')?.value) || 1; 
             t.subtasks = [...tempSubtasks];
@@ -1337,7 +1349,7 @@ function criarOuEditarTarefa() {
         editingTaskId = null;
     } else {
         const task = {
-            id: Date.now(), name: name, estimatedMinutes: parseInt(document.getElementById('taskTimeInput')?.value) || 25,
+            id: Date.now(), name: name, estimatedMinutes: parseFloat(document.getElementById('taskTimeInput')?.value) || 25,
             pomodoros: parseInt(document.getElementById('taskPomodorosInput')?.value) || 1, category: category,
             completedPomodoros: 0, completed: false, subtasks: [...tempSubtasks], createdAt: new Date().toISOString()
         };
@@ -1367,7 +1379,7 @@ function renderTasksList() {
         allTasks.forEach(task => {
             const item = document.createElement('div'); item.className = `task-item ${task.completed ? 'completed' : ''}`;
             item.innerHTML = `
-                <div class="task-item-info" onclick="window.selectTask(${task.id})"><div class="task-item-name">${task.name}</div><div class="task-item-meta"><span>${task.estimatedMinutes} min</span></div></div>
+                <div class="task-item-info" onclick="window.selectTask(${task.id})"><div class="task-item-name">${task.name}</div><div class="task-item-meta"><span>${task.estimatedMinutes < 1 ? '5s' : task.estimatedMinutes + ' min'}</span></div></div>
                 <div class="task-item-actions-modal" style="display:flex; align-items:center; gap:8px;">
                     <div class="task-item-check" onclick="window.toggleTaskComplete(${task.id})">${task.completed ? '<i class="fas fa-check"></i>' : ''}</div>
                     <button class="action-pill danger" onclick="event.stopPropagation(); window.deleteTask(${task.id})" style="border:none; border-radius:50%; width:28px; height:28px; background:rgba(239,68,68,0.2); color:#ef4444; cursor:pointer; display:flex; align-items:center; justify-content:center; padding:0;"><i class="fas fa-trash"></i></button>
