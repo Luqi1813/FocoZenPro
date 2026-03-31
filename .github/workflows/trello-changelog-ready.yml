@@ -41,11 +41,22 @@ jobs:
           TRELLO_TOKEN: ${{ secrets.TRELLO_TOKEN }}
           TRELLO_READY_LIST_ID: ${{ secrets.TRELLO_READY_LIST_ID }}
         run: |
-          curl -X POST "https://api.trello.com/1/cards" \
+          echo "Creating card for version: ${{ steps.version.outputs.version }}"
+          echo "List ID: $TRELLO_READY_LIST_ID"
+          
+          RESPONSE=$(curl -s -X POST "https://api.trello.com/1/cards" \
             -d "key=$TRELLO_API_KEY" \
             -d "token=$TRELLO_TOKEN" \
             -d "idList=$TRELLO_READY_LIST_ID" \
             -d "name=📝 Mudanças v${{ steps.version.outputs.version }} prontas" \
             -d "desc=${{ steps.changelog.outputs.content }}" \
-            -d "pos=top" \
-            -d "idLabels=ready"
+            -d "pos=top")
+          
+          echo "Response: $RESPONSE"
+          
+          if echo "$RESPONSE" | grep -q "id"; then
+            echo "✅ Card created successfully!"
+          else
+            echo "❌ Failed to create card"
+            exit 1
+          fi
