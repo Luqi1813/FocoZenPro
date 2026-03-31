@@ -13,60 +13,75 @@ jobs:
     steps:
       - uses: actions/checkout@v3
 
-      - name: Extract latest version from CHANGELOG
-        id: version
+      - name: Debug and Extract Changelog
+        id: extract
         run: |
-          VERSION=$(head -20 CHANGELOG.md | grep "## \[" | head -1 | sed 's/## \[\(.*\)\].*/\1/')
+          echo "=== CONTEÚDO DO CHANGELOG.MD ==="
+          head -30 CHANGELOG.md
+          
+          echo ""
+          echo "=== EXTRAINDO VERSÃO ==="
+          VERSION=$(grep "^## \[" CHANGELOG.md | head -1 | sed 's/## \[\([^]]*\)\].*/\1/')
+          echo "Versão encontrada: [$VERSION]"
+          
+          echo ""
+          echo "=== EXTRAINDO CHANGELOG DA VERSÃO ==="
+          SECTION=$(awk "BEGIN{found=0} /^## \[$VERSION\]/{found=1; next} found && /^## \[/{exit} found{print}" CHANGELOG.md)
+          echo "Conteúdo extraído:"
+          echo "$SECTION"
+          echo "=== FIM DO CONTEÚDO ==="
+          
+          echo ""
+          echo "=== VERIFICANDO SE CONTEÚDO ESTÁ VAZIO ==="
+          if [ -z "$SECTION" ]; then
+            echo "❌ CONTEÚDO VAZIO! O awk não extraiu nada."
+          else
+            LINE_COUNT=$(echo "$SECTION" | wc -l)
+            echo "✅ Conteúdo extraído com $LINE_COUNT linhas"
+          fi
+          
+          # Save to file
+          printf '%s' "$SECTION" > /tmp/changelog.txt
+          
           echo "version=$VERSION" >> $GITHUB_OUTPUT
 
-      - name: Extract changelog for latest version
-        id: changelog
-        run: |
-          VERSION="${{ steps.version.outputs.version }}"
-          
-          # Extract changelog section for this version
-          CHANGELOG=$(awk "/## \[$VERSION\]/,/## \[/" CHANGELOG.md | sed '$d')
-          
-          # Remove the version header line
-          CHANGELOG=$(echo "$CHANGELOG" | sed '1d')
-          
-          # Save to file for curl to read
-          echo "$CHANGELOG" > /tmp/changelog.txt
-          
-          echo "content=@/tmp/changelog.txt" >> $GITHUB_OUTPUT
-
-      - name: Create Trello Card in "Ready for Release" List
+      - name: Create Trello Card
         env:
           TRELLO_API_KEY: ${{ secrets.TRELLO_API_KEY }}
           TRELLO_TOKEN: ${{ secrets.TRELLO_TOKEN }}
           TRELLO_READY_LIST_ID: ${{ secrets.TRELLO_READY_LIST_ID }}
         run: |
-          echo "Creating card for version: ${{ steps.version.outputs.version }}"
-          
-          # Read changelog from file
+          VERSION="${{ steps.extract.outputs.version }}"
           CHANGELOG_CONTENT=$(cat /tmp/changelog.txt)
           
-          # Create JSON payload
+          echo "=== VERSÃO: $VERSION ==="
+          echo "=== LISTA ID: $TRELLO_READY_LIST_ID ==="
+          echo "=== CHANGELOG: ==="
+          echo "$CHANGELOG_CONTENT"
+          echo "=== FIM ==="
+          
+          # Build JSON safely with jq
           JSON_PAYLOAD=$(jq -n \
             --arg key "$TRELLO_API_KEY" \
             --arg token "$TRELLO_TOKEN" \
             --arg idList "$TRELLO_READY_LIST_ID" \
-            --arg name "📝 Mudanças v${{ steps.version.outputs.version }} prontas" \
+            --arg name "📝 Mudanças v${VERSION} prontas" \
             --arg desc "$CHANGELOG_CONTENT" \
-            --arg pos "top" \
-            '{key: $key, token: $token, idList: $idList, name: $name, desc: $desc, pos: $pos}')
+            '{key: $key, token: $token, idList: $idList, name: $name, desc: $desc, pos: "top"}')
           
-          echo "Payload: $JSON_PAYLOAD"
+          echo "=== JSON GERADO (sem secrets) ==="
+          echo "$JSON_PAYLOAD" | jq 'del(.key, .token)'
           
           RESPONSE=$(curl -s -X POST "https://api.trello.com/1/cards" \
             -H "Content-Type: application/json" \
             -d "$JSON_PAYLOAD")
           
-          echo "Response: $RESPONSE"
+          echo "=== RESPOSTA DA API TRELLO ==="
+          echo "$RESPONSE" | jq '{id, name, desc, shortUrl}' 2>/dev/null || echo "$RESPONSE"
           
-          if echo "$RESPONSE" | grep -q "id"; then
-            echo "✅ Card created successfully!"
+          if echo "$RESPONSE" | grep -q '"id"'; then
+            echo "✅ Card criado com sucesso!"
           else
-            echo "❌ Failed to create card"
+            echo "❌ Falha ao criar card"
             exit 1
           fi
