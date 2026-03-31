@@ -881,16 +881,29 @@
                 }
             }
             if (state.showCompletion) {
-                if (state.showCompletion === 'focus-complete') {
+                if (state.showCompletion === 'focus-complete' && state.hasActiveTask) {
+                    document.getElementById('pipCompTitle').textContent = 'Hora da pausa! ☕';
+                    document.getElementById('pipCompText').textContent = 'Você concluiu a tarefa?';
+                    document.getElementById('pipCompIcon').className = 'fas fa-coffee';
+                    pipCompActions.innerHTML = `
+                        <button class="btn-comp primary" onclick="window.electronAPI.sendPipAction('task-concluded')" style="width:100%;background:linear-gradient(135deg,#10b981,#059669);margin-bottom:6px;"><i class="fas fa-check"></i> Sim, concluí!</button>
+                        <button class="btn-comp" onclick="window.electronAPI.sendPipAction('task-add-time')" style="width:100%;margin-bottom:6px;"><i class="fas fa-plus-circle"></i> Adicionar mais tempo</button>
+                        <button class="btn-comp" onclick="window.electronAPI.sendPipAction('task-continue-later')" style="width:100%;opacity:0.75;"><i class="fas fa-clock"></i> Continuar em outro momento</button>
+                    `;
+                } else if (state.showCompletion === 'focus-complete') {
                     document.getElementById('pipCompTitle').textContent = 'Foco Concluído!';
                     document.getElementById('pipCompText').textContent = 'Iniciar pausa?';
                     document.getElementById('pipCompIcon').className = 'fas fa-coffee';
                     pipCompActions.innerHTML = `<button class="btn-comp primary" onclick="window.electronAPI.sendPipAction('start-phase', 'shortBreak')">Curta (5m)</button><button class="btn-comp" onclick="window.electronAPI.sendPipAction('start-phase', 'longBreak')">Longa (15m)</button>`;
                 } else if (state.showCompletion === 'task-complete') {
-                    document.getElementById('pipCompTitle').textContent = 'Tarefa Finalizada!';
-                    document.getElementById('pipCompText').textContent = 'Bom trabalho!';
-                    document.getElementById('pipCompIcon').className = 'fas fa-check-circle';
-                    pipCompActions.innerHTML = `<button class="btn-comp primary" onclick="window.electronAPI.sendPipAction('start-phase', 'shortBreak')">Pausa (5m)</button>`;
+                    document.getElementById('pipCompTitle').textContent = 'Hora da pausa! ☕';
+                    document.getElementById('pipCompText').textContent = 'Você concluiu a tarefa?';
+                    document.getElementById('pipCompIcon').className = 'fas fa-coffee';
+                    pipCompActions.innerHTML = `
+                        <button class="btn-comp primary" onclick="window.electronAPI.sendPipAction('task-concluded')" style="width:100%;background:linear-gradient(135deg,#10b981,#059669);margin-bottom:6px;"><i class="fas fa-check"></i> Sim, concluí!</button>
+                        <button class="btn-comp" onclick="window.electronAPI.sendPipAction('task-add-time')" style="width:100%;margin-bottom:6px;"><i class="fas fa-plus-circle"></i> Adicionar mais tempo</button>
+                        <button class="btn-comp" onclick="window.electronAPI.sendPipAction('task-continue-later')" style="width:100%;opacity:0.75;"><i class="fas fa-clock"></i> Continuar em outro momento</button>
+                    `;
                 } else if (state.showCompletion === 'break-complete') {
                     document.getElementById('pipCompTitle').textContent = 'Pausa Terminada';
                     document.getElementById('pipCompText').textContent = 'Voltar ao foco?';

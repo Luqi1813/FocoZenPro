@@ -480,6 +480,28 @@ function initPipIntegration() {
             else if (action === 'dismiss-completion') {
                 pendingCompletionType = null;
             }
+            else if (action === 'task-concluded') {
+                if (currentTask) {
+                    currentTask.completed = true;
+                    saveTasks(); renderProgress(); renderTasksSidebar(); renderTasksList();
+                }
+                syncStateToPip({ hideCompletion: true });
+                setTimeout(() => startPhase('shortBreak'), 300);
+            }
+            else if (action === 'task-add-time') {
+                syncStateToPip({ hideCompletion: true });
+                window.electronAPI.sendPipAction('restore-app');
+                setTimeout(() => showAddTimePopup(), 500);
+            }
+            else if (action === 'task-continue-later') {
+                if (currentTask) {
+                    currentTask.completedPomodoros = Math.floor(currentTask.completedPomodoros);
+                    saveTasks(); renderProgress(); renderTasksSidebar(); renderTasksList();
+                }
+                syncStateToPip({ hideCompletion: true });
+                window.electronAPI.sendPipAction('restore-app');
+                setTimeout(() => showContinueLaterPopup(), 500);
+            }
             else if (action === 'set-volume') {
                 const parsedVolume = Number(data);
                 if (Number.isNaN(parsedVolume)) return;
@@ -516,7 +538,7 @@ function syncStateToPip(extraState = {}) {
         window.electronAPI.sendPipState({
             timeString, progress, phase: currentMode,
             isRunning: isTimerRunning, soundName, isAudioPlaying: isPlaying,
-            taskName, bgImage, theme, masterVolume, ...extraState
+            taskName, bgImage, theme, masterVolume, hasActiveTask: !!currentTask, ...extraState
         });
     } catch (err) {
         console.error("Erro ao sincronizar PIP:", err);
@@ -1074,6 +1096,11 @@ function showAddTimePopup() {
     };
     overlay.querySelector('.btn-confirm-extra').onclick = () => {
         overlay.remove();
+        // Extend task duration if there's an active task
+        if (currentTask) {
+            currentTask.estimatedMinutes += extraMinutes;
+            saveTasks(); renderTasksSidebar(); renderTasksList();
+        }
         timeLeft = extraMinutes * 60;
         totalTimerTime = extraMinutes * 60;
         updateTimerDisplay(); updateProgressBar();
@@ -1105,6 +1132,12 @@ function showContinueLaterPopup() {
             </button>
         </div>`;
     document.body.appendChild(overlay);
+    
+    // Reset task progress when choosing to continue later
+    if (currentTask) {
+        currentTask.completedPomodoros = 0;
+        saveTasks(); renderTasksSidebar(); renderTasksList();
+    }
 }
 
 window.toggleTestMode = function() {
