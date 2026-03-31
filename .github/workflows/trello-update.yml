@@ -10,38 +10,68 @@ jobs:
     steps:
       - uses: actions/checkout@v3
 
-      - name: Extract changelog for version
-        id: changelog
-        run: |
-          VERSION="${{ github.event.release.tag_name }}"
-          VERSION_NUM="${VERSION#v}"
-          
-          # Extract changelog section for this version
-          CHANGELOG=$(awk "/## \[$VERSION_NUM\]/,/## \[/" CHANGELOG.md | sed '$d')
-          
-          # If changelog is empty, use release notes
-          if [ -z "$CHANGELOG" ]; then
-            CHANGELOG="${{ github.event.release.body }}"
-          fi
-          
-          # Remove the version header line
-          CHANGELOG=$(echo "$CHANGELOG" | sed '1d')
-          
-          # Escape for form data (URL encoding)
-          CHANGELOG=$(echo "$CHANGELOG" | jq -Rs .)
-          
-          echo "content=$CHANGELOG" >> $GITHUB_OUTPUT
-
-      - name: Create Trello Card
+      - name: Extract and move Trello card
         env:
           TRELLO_API_KEY: ${{ secrets.TRELLO_API_KEY }}
           TRELLO_TOKEN: ${{ secrets.TRELLO_TOKEN }}
-          TRELLO_LIST_ID: ${{ secrets.TRELLO_LIST_ID }}
+          TRELLO_READY_LIST_ID: ${{ secrets.TRELLO_READY_LIST_ID }}
+          TRELLO_RELEASED_LIST_ID: ${{ secrets.TRELLO_RELEASED_LIST_ID }}
         run: |
-          curl -X POST "https://api.trello.com/1/cards" \
-            -d "key=$TRELLO_API_KEY" \
-            -d "token=$TRELLO_TOKEN" \
-            -d "idList=$TRELLO_LIST_ID" \
-            -d "name=✅ Release ${{ github.event.release.tag_name }}" \
-            -d "desc=${{ steps.changelog.outputs.content }}" \
-            -d "pos=top"
+          VERSION="${{ github.event.release.tag_name }}"
+          VERSION_NUM="${VERSION#v}"
+          echo "=== Versão publicada: $VERSION_NUM ==="
+
+          # Extract changelog from CHANGELOG.md
+          CHANGELOG=$(awk "BEGIN{found=0} /^## \[$VERSION_NUM\]/{found=1; next} found && /^## \[/{exit} found{print}" CHANGELOG.md)
+          if [ -z "$CHANGELOG" ]; then
+            CHANGELOG="${{ github.event.release.body }}"
+          fi
+          echo "=== Changelog extraído ==="
+          echo "$CHANGELOG"
+
+          # Save changelog to file
+          printf '%s' "$CHANGELOG" > /tmp/changelog.txt
+          CHANGELOG_CONTENT=$(cat /tmp/changelog.txt)
+
+          # Search for card in "Mudanças prontas pra lançamento"
+          echo "=== Buscando card na lista 'Mudanças prontas pra lançamento' ==="
+          CARDS=$(curl -s "https://api.trello.com/1/lists/$TRELLO_READY_LIST_ID/cards?key=$TRELLO_API_KEY&token=$TRELLO_TOKEN")
+          echo "Cards encontrados: $(echo "$CARDS" | jq '[.[].name]')"
+
+          CARD_ID=$(echo "$CARDS" | jq -r ".[] | select(.name | test(\"$VERSION_NUM\"; \"i\")) | .id" | head -1)
+          echo "Card ID encontrado: $CARD_ID"
+
+          if [ -n "$CARD_ID" ]; then
+            echo "✅ Movendo card para 'Atualizações feitas'..."
+
+            # Move + rename in one request
+            MOVE=$(jq -n \
+              --arg key "$TRELLO_API_KEY" \
+              --arg token "$TRELLO_TOKEN" \
+              --arg idList "$TRELLO_RELEASED_LIST_ID" \
+              --arg name "✅ Release v$VERSION_NUM" \
+              '{key: $key, token: $token, idList: $idList, name: $name, pos: "top"}')
+
+            curl -s -X PUT "https://api.trello.com/1/cards/$CARD_ID" \
+              -H "Content-Type: application/json" \
+              -d "$MOVE"
+
+            echo "✅ Card movido e renomeado com sucesso!"
+          else
+            echo "⚠️ Card não encontrado. Criando card direto em 'Atualizações feitas'..."
+
+            NEW_CARD=$(jq -n \
+              --arg key "$TRELLO_API_KEY" \
+              --arg token "$TRELLO_TOKEN" \
+              --arg idList "$TRELLO_RELEASED_LIST_ID" \
+              --arg name "✅ Release v$VERSION_NUM" \
+              --arg desc "$CHANGELOG_CONTENT" \
+              '{key: $key, token: $token, idList: $idList, name: $name, desc: $desc, pos: "top"}')
+
+            RESPONSE=$(curl -s -X POST "https://api.trello.com/1/cards" \
+              -H "Content-Type: application/json" \
+              -d "$NEW_CARD")
+
+            echo "Resposta: $(echo "$RESPONSE" | jq '{id, name, shortUrl}' 2>/dev/null)"
+            echo "✅ Card criado com sucesso!"
+          fi
