@@ -569,7 +569,7 @@ LAYOUT PRINCIPAL E TRANSIÇÕES FLUIDAS
 .sound-card span { font-size: 0.75rem; color: var(--text-secondary); font-weight: 600; text-shadow: 0 1px 2px rgba(0,0,0,0.8); }
 .sound-card.active span { color: var(--accent-primary); }
 
-.panel-sounds { overflow: visible; }
+.panel-sounds { overflow: hidden; }
 .panel-sounds::before, .panel-sounds::after,
 .panel-controls::before, .panel-controls::after { content: none; }
 .panel-sounds-header { justify-content: flex-start; overflow: visible; }

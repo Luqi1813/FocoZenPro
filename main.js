@@ -248,6 +248,20 @@ function createPipWindow() {
         }
     });
 
+    pipWindow.on('close', (e) => {
+        if (!isQuitting) {
+            e.preventDefault();
+            pipWindow.hide();
+            isPipMode = false;
+            if (mainWindow && !mainWindow.isDestroyed()) {
+                if (mainWindow.isMinimized()) mainWindow.restore();
+                mainWindow.show();
+                mainWindow.focus();
+                mainWindow.webContents.send('pip-action', 'restore-app');
+            }
+        }
+    });
+
     pipWindow.loadFile('pip.html');
 }
 

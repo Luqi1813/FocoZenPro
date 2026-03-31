@@ -80,6 +80,8 @@ let editingTaskId = null;
 let showBubbleText = true;
 let isPipModeActive = false;
 let toastHideTimer = null;
+let testMode = false;
+let pendingCompletionType = null;
 
 let breathInterval;
 let breathPhaseTimer;
@@ -462,6 +464,19 @@ function initPipIntegration() {
                 isPipModeActive = false;
                 window.electronAPI.exitPip();
                 renderTasksSidebar();
+                if (pendingCompletionType) {
+                    const comp = pendingCompletionType;
+                    pendingCompletionType = null;
+                    setTimeout(() => {
+                        if ((comp === 'task-complete' || comp === 'focus-complete') && currentTask) {
+                            showTaskCompletionPopup(comp);
+                        } else if (comp === 'focus-complete') {
+                            showTransitionModal('break');
+                        } else if (comp === 'break-complete') {
+                            showTransitionModal('focus');
+                        }
+                    }, 500);
+                }
             }
             else if (action === 'set-volume') {
                 const parsedVolume = Number(data);
@@ -787,8 +802,8 @@ function adjustTime(minutes) {
 
 function setTimerMode(mode) {
     pauseTimer(); currentMode = mode;
-    let mins = mode === 'shortBreak' ? SHORT_BREAK_MINUTES : (mode === 'longBreak' ? LONG_BREAK_MINUTES : POMODORO_MINUTES);
-    timeLeft = mins * 60; totalTimerTime = timeLeft;
+    let mins = testMode ? (1/12) : (mode === 'shortBreak' ? SHORT_BREAK_MINUTES : (mode === 'longBreak' ? LONG_BREAK_MINUTES : POMODORO_MINUTES));
+    timeLeft = testMode ? 5 : mins * 60; totalTimerTime = timeLeft;
     document.getElementById('timeLabel').textContent = mode === 'focus' ? 'Período de Foco' : (mode === 'shortBreak' ? 'Pausa Curta' : 'Pausa Longa');
 
     document.querySelectorAll('.mode-btn').forEach(b => b.classList.remove('active'));
@@ -899,11 +914,16 @@ function completeTimer() {
     }
 
     if (isPipModeActive) {
+        pendingCompletionType = compType;
         syncStateToPip({ showCompletion: compType });
     } else {
-        if (compType === 'task-complete') showTaskSuccessModal(currentTask.name);
-        else if (compType === 'focus-complete') showTransitionModal('break');
-        else showTransitionModal('focus');
+        if ((compType === 'task-complete' || compType === 'focus-complete') && currentTask) {
+            showTaskCompletionPopup(compType);
+        } else if (compType === 'focus-complete') {
+            showTransitionModal('break');
+        } else {
+            showTransitionModal('focus');
+        }
     }
 }
 
@@ -930,6 +950,9 @@ function showTransitionModal(nextPhase) {
         stats.classList.remove('hidden');
         document.getElementById('totalPomodorosTodayStats').textContent = totalPomodorosToday;
 
+        const closeBtn = document.getElementById('transitionModalClose');
+        if (closeBtn) closeBtn.style.display = 'flex';
+
         const isLongBreakTime = (totalPomodorosToday % 4 === 0);
 
         if(isLongBreakTime) {
@@ -944,6 +967,8 @@ function showTransitionModal(nextPhase) {
         title.textContent = 'De volta ao Foco';
         message.textContent = 'Pausa finalizada. Pronto?';
         stats.classList.add('hidden');
+        const closeBtn2 = document.getElementById('transitionModalClose');
+        if (closeBtn2) closeBtn2.style.display = 'none';
         actions.innerHTML = `<button onclick="closeTransitionModal()" class="btn-modal secondary">Depois</button><button onclick="startPhase('focus')" class="btn-modal primary">Iniciar Foco</button>`;
     }
     modal.classList.add('active');
@@ -958,6 +983,131 @@ window.startPhase = function(mode) {
 };
 
 window.closeTransitionModal = function() { document.getElementById('transitionModal').classList.remove('active'); };
+
+function showTaskCompletionPopup(compType) {
+    const taskName = currentTask ? currentTask.name : '';
+    const overlay = document.createElement('div');
+    overlay.className = 'modal-overlay active custom-popup';
+    overlay.innerHTML = `
+        <div class="modal-content-small elegant-popup" style="text-align: center; max-width: 440px;">
+            <div class="elegant-icon" style="background: linear-gradient(135deg, #f59e0b, #d97706);">
+                <i class="fas fa-coffee"></i>
+            </div>
+            <h2 class="elegant-title">Hora da pausa! ☕</h2>
+            <p class="elegant-message">Você concluiu a tarefa?</p>
+            ${taskName ? `<div style="background:rgba(0,0,0,0.25);border-radius:10px;padding:8px 14px;margin:10px 0;font-size:0.85rem;color:var(--text-secondary);"><i class="fas fa-tasks" style="margin-right:6px;"></i>${taskName}</div>` : ''}
+            <div class="elegant-actions" style="flex-direction:column;gap:10px;margin-top:16px;">
+                <button class="btn-modal primary btn-task-done" style="width:100%;background:linear-gradient(135deg,#10b981,#059669);">
+                    <i class="fas fa-check"></i> Sim, concluí!
+                </button>
+                <button class="btn-modal secondary btn-add-time" style="width:100%;">
+                    <i class="fas fa-plus-circle"></i> Adicionar mais tempo
+                </button>
+                <button class="btn-modal secondary btn-continue-later" style="width:100%;opacity:0.75;">
+                    <i class="fas fa-clock"></i> Continuar em outro momento
+                </button>
+            </div>
+        </div>`;
+    document.body.appendChild(overlay);
+
+    overlay.querySelector('.btn-task-done').onclick = () => {
+        overlay.remove();
+        if (currentTask) {
+            currentTask.completed = true;
+            saveTasks(); renderProgress(); renderTasksSidebar(); renderTasksList();
+        }
+        showTransitionModal('break');
+    };
+    overlay.querySelector('.btn-add-time').onclick = () => {
+        overlay.remove();
+        showAddTimePopup();
+    };
+    overlay.querySelector('.btn-continue-later').onclick = () => {
+        overlay.remove();
+        showContinueLaterPopup();
+    };
+}
+
+function showAddTimePopup() {
+    let extraMinutes = 5;
+    const overlay = document.createElement('div');
+    overlay.className = 'modal-overlay active custom-popup';
+    overlay.innerHTML = `
+        <div class="modal-content-small elegant-popup" style="text-align:center;max-width:360px;">
+            <div class="elegant-icon" style="background:linear-gradient(135deg,#3b82f6,#1d4ed8);">
+                <i class="fas fa-plus-circle"></i>
+            </div>
+            <h2 class="elegant-title">Adicionar Tempo</h2>
+            <p class="elegant-message">Quanto tempo mais precisa?</p>
+            <div style="display:flex;align-items:center;justify-content:center;gap:20px;margin:24px 0;">
+                <button id="decreaseExtraTime" style="width:44px;height:44px;border-radius:50%;background:rgba(255,255,255,0.1);border:1px solid var(--border-color);color:white;font-size:1.2rem;cursor:pointer;display:flex;align-items:center;justify-content:center;"><i class="fas fa-minus"></i></button>
+                <span id="extraTimeDisplay" style="font-size:2rem;font-weight:700;min-width:90px;color:white;">5 min</span>
+                <button id="increaseExtraTime" style="width:44px;height:44px;border-radius:50%;background:rgba(255,255,255,0.1);border:1px solid var(--border-color);color:white;font-size:1.2rem;cursor:pointer;display:flex;align-items:center;justify-content:center;"><i class="fas fa-plus"></i></button>
+            </div>
+            <div class="elegant-actions">
+                <button class="btn-modal secondary btn-cancel-extra">Cancelar</button>
+                <button class="btn-modal primary btn-confirm-extra" style="background:linear-gradient(135deg,#3b82f6,#1d4ed8);">Continuar Focando</button>
+            </div>
+        </div>`;
+    document.body.appendChild(overlay);
+
+    overlay.querySelector('#decreaseExtraTime').onclick = () => {
+        if (extraMinutes > 5) { extraMinutes -= 5; overlay.querySelector('#extraTimeDisplay').textContent = extraMinutes + ' min'; }
+    };
+    overlay.querySelector('#increaseExtraTime').onclick = () => {
+        extraMinutes += 5;
+        overlay.querySelector('#extraTimeDisplay').textContent = extraMinutes + ' min';
+    };
+    overlay.querySelector('.btn-cancel-extra').onclick = () => {
+        overlay.remove();
+        showTransitionModal('break');
+    };
+    overlay.querySelector('.btn-confirm-extra').onclick = () => {
+        overlay.remove();
+        timeLeft = extraMinutes * 60;
+        totalTimerTime = extraMinutes * 60;
+        updateTimerDisplay(); updateProgressBar();
+        toggleTimer();
+        showGlassToast(`+${extraMinutes} min adicionados 🔥`);
+    };
+}
+
+function showContinueLaterPopup() {
+    const msgs = [
+        "Você não desistiu, apenas pausou. Isso é força! 💪",
+        "O progresso acontece um passo de cada vez. Volte quando estiver pronto! 🌟",
+        "Descansar também faz parte do sucesso. Você está no caminho certo! 🚀",
+        "Cada pausa é uma preparação para o próximo avanço. Até logo! ⚡",
+        "Grandes conquistas levam tempo. Não desista! 🏆"
+    ];
+    const msg = msgs[Math.floor(Math.random() * msgs.length)];
+    const overlay = document.createElement('div');
+    overlay.className = 'modal-overlay active custom-popup';
+    overlay.innerHTML = `
+        <div class="modal-content-small elegant-popup" style="text-align:center;max-width:420px;">
+            <div class="elegant-icon" style="background:linear-gradient(135deg,#8b5cf6,#7c3aed);">
+                <i class="fas fa-heart"></i>
+            </div>
+            <h2 class="elegant-title">Até logo! 👋</h2>
+            <p class="elegant-message" style="font-style:italic;">"${msg}"</p>
+            <button class="btn-modal primary" onclick="this.closest('.modal-overlay').remove(); showTransitionModal('break');" style="width:100%;margin-top:16px;background:linear-gradient(135deg,#8b5cf6,#7c3aed);">
+                Entendido, ir para pausa
+            </button>
+        </div>`;
+    document.body.appendChild(overlay);
+}
+
+window.toggleTestMode = function() {
+    testMode = !testMode;
+    const btn = document.getElementById('btnTestMode');
+    if (btn) {
+        btn.style.background = testMode ? 'linear-gradient(135deg,#ef4444,#b91c1c)' : '';
+        btn.textContent = testMode ? '🧪 Modo Teste ON (5s)' : '🧪 Modo Teste';
+    }
+    if (testMode) showGlassToast('Modo teste ativado: timer = 5s ⚡');
+    else showGlassToast('Modo teste desativado');
+    setTimerMode(currentMode);
+};
 
 function customConfirm(title, message, onConfirm) {
     const overlay = document.createElement('div'); overlay.className = 'modal-overlay active custom-popup';
