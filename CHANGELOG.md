@@ -2,6 +2,30 @@
 
 Todas as mudancas notaveis do FocoZen Pro serao documentadas neste arquivo.
 
+## [1.1.0] - 2026-04-01
+
+### Adicionado
+- Assistente global em formato de chat, acessivel em todas as abas do app
+- Comandos em linguagem natural para consultar historico, foco, categorias, metas e tarefas
+- Respostas mais conversacionais, com memoria curta de contexto entre mensagens
+- Acao rapida pelo assistente para iniciar foco, iniciar tarefa, navegar entre telas e limpar a conversa
+- Nova experiencia de metas com painel dedicado, comparativos por categoria e acompanhamento de progresso
+
+### Melhorado
+- Dashboard de Estatisticas refinado com filtros reorganizados, visuais mais limpos e melhor distribuicao das informacoes
+- Grafico de distribuicao de foco reajustado para lidar melhor com varias categorias, incluindo "Outros"
+- Fluxo de Picture-in-Picture aprimorado, com redimensionamento dinamico e melhor posicionamento quando aparecem as opcoes pos-tarefa
+- PiP e popups de conclusao ficaram mais consistentes entre foco, conclusao, recomeco e tempo extra
+- Sistema de metas ficou mais claro visualmente, com comparativos mais uteis e configuracao mais organizada
+- Entendimento do assistente para comandos de foco e tarefas ficou mais flexivel, incluindo pedidos com duracao, categoria e follow-ups
+
+### Corrigido
+- Diversos problemas de layout, legibilidade e sobreposicao de elementos no chat do assistente e nas telas de Metas/Estatisticas
+- Fluxos de conclusao de tarefa no PiP e no app principal para preservar melhor progresso e evitar pausas indevidas
+- Casos de texto truncado, labels inconsistentes e trechos com encoding incorreto em partes da interface
+- Comportamentos sensiveis do timer, tarefas longas, troca de tarefa e retorno para Sessao Livre
+- Estabilidade geral do renderer com reforco em persistencia local e tratamento de estados mais fragis
+
 ## [1.0.14] - 2026-03-31
 
 ### Corrigido
