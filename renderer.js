@@ -27,16 +27,16 @@ const soundThemes = {
 const quotes = [
     { text: "A mente que se abre a uma nova ideia jamais voltará ao seu tamanho original.", author: "Albert Einstein" },
     { text: "O conhecimento é a única riqueza que se expande quando compartilhada.", author: "Sócrates" },
-    { text: "Não espere por circunstâncias ideais. Comece agora.", author: "Sêneca" }
+    { text: "Nao espere por circunstancias ideais. Comece agora.", author: "Seneca" }
 ];
 
 const successQuotes = [
-    { text: "A vitória pertence ao mais perseverante.", author: "Napoleão Bonaparte" },
-    { text: "Não é porque as coisas são difíceis que não ousamos; é porque não ousamos que elas são difíceis.", author: "Sêneca" },
+    { text: "A vitoria pertence ao mais perseverante.", author: "Napoleao Bonaparte" },
+    { text: "Nao e porque as coisas sao dificeis que nao ousamos; e porque nao ousamos que elas sao dificeis.", author: "Seneca" },
     { text: "O sucesso é ir de fracasso em fracasso sem perder o entusiasmo.", author: "Winston Churchill" },
     { text: "Faça o que puder, com o que tiver, onde estiver.", author: "Theodore Roosevelt" },
     { text: "A disciplina é a ponte entre metas e realizações.", author: "Jim Rohn" },
-    { text: "Você não precisa ser grande para começar, mas precisa começar para ser grande.", author: "Zig Ziglar" }
+    { text: "Voce nao precisa ser grande para comecar, mas precisa comecar para ser grande.", author: "Zig Ziglar" }
 ];
 
 const POMODORO_MINUTES = 25;
@@ -71,12 +71,14 @@ let tasks = [];
 let currentTask = null;
 let username = 'Convidado';
 let focusHistory = [];
+let focusGoals = [];
 let completedPomodoros = 0;
 let totalPomodorosToday = 0;
 let isDeleteMode = false;
 let selectedTasksForDelete = new Set();
 let tempSubtasks = [];
 let editingTaskId = null;
+let editingGoalId = null;
 let showBubbleText = true;
 let isPipModeActive = false;
 let toastHideTimer = null;
@@ -86,25 +88,82 @@ let pendingTaskResolution = null;
 let feedbackPopupTimer = null;
 
 const motivationalRestartMessages = [
-    'Pausar não é desistir. Você pode recomeçar com mais clareza depois.',
+    'Pausar nao e desistir. Voce pode recomecar com mais clareza depois.',
     'Seu progresso conta. Respire, recarregue e volte mais forte.',
     'Todo grande avanço também respeita pausas inteligentes.',
-    'Você não perdeu o ritmo. Só está escolhendo o melhor momento para continuar.',
+    'Voce nao perdeu o ritmo. So esta escolhendo o melhor momento para continuar.',
     'Disciplina também é saber a hora de recomeçar com energia.'
 ];
 
 let breathInterval;
 let breathPhaseTimer;
 
-// INICIALIZAÇÃO BLINDADA
+function getTaskFocusDurationSeconds(task = currentTask) {
+    if (!task) return testMode ? 5 : POMODORO_MINUTES * 60;
+
+    const completedBlocks = Math.floor(task.completedPomodoros || 0);
+    const totalMinutes = Number(task.estimatedMinutes) || POMODORO_MINUTES;
+    const remainingMinutes = Math.max(0, totalMinutes - (completedBlocks * POMODORO_MINUTES));
+    const nextBlockMinutes = remainingMinutes > 0 ? Math.min(POMODORO_MINUTES, remainingMinutes) : POMODORO_MINUTES;
+
+    return testMode ? 5 : Math.max(1, Math.round(nextBlockMinutes * 60));
+}
+
+function readJsonStorage(key, fallback) {
+    try {
+        const raw = localStorage.getItem(key);
+        if (!raw) return fallback;
+        const parsed = JSON.parse(raw);
+        return parsed ?? fallback;
+    } catch (error) {
+        console.warn(`Falha ao ler ${key} do armazenamento local:`, error);
+        return fallback;
+    }
+}
+
+function writeJsonStorage(key, value) {
+    localStorage.setItem(key, JSON.stringify(value));
+}
+
+function readNumberStorage(key, fallback = 0) {
+    const value = Number.parseInt(localStorage.getItem(key), 10);
+    return Number.isFinite(value) ? value : fallback;
+}
+
+function saveTasks() {
+    writeJsonStorage('focozen_tasks', tasks);
+}
+
+function saveFocusHistory() {
+    writeJsonStorage('focozen_history', focusHistory);
+}
+
+function saveFocusGoals() {
+    writeJsonStorage('focozen_goals', focusGoals);
+}
+
+function saveUserCategories() {
+    writeJsonStorage('focozen_categories', userCategories);
+}
+
+function readSavedSession() {
+    return readJsonStorage('focozen_saved_session', null);
+}
+
+function saveSavedSession(session) {
+    writeJsonStorage('focozen_saved_session', session);
+}
+
+// INICIALIZACAO BLINDADA
 document.addEventListener('DOMContentLoaded', async () => {
-    console.log("🚀 Iniciando FocoZen Pro...");
+    console.log("Iniciando FocoZen Pro...");
 
     try {
-        tasks = JSON.parse(localStorage.getItem('focozen_tasks')) || [];
-        totalPomodorosToday = parseInt(localStorage.getItem('focozen_total_pomodoros')) || 0;
+        tasks = readJsonStorage('focozen_tasks', []);
+        totalPomodorosToday = readNumberStorage('focozen_total_pomodoros', 0);
         showBubbleText = localStorage.getItem('focozen_show_bubble_text') !== 'false';
-        focusHistory = JSON.parse(localStorage.getItem('focozen_history')) || [];
+        focusHistory = readJsonStorage('focozen_history', []);
+        focusGoals = readJsonStorage('focozen_goals', []);
         
         username = localStorage.getItem('focozen_username');
         if (username) {
@@ -115,17 +174,17 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
     } catch(e) { console.error('Erro de Storage:', e); tasks = []; }
 
-    try { updateSidebarProfile(); initNavigation(); } catch(e) { console.error('Erro Navegação:', e); }
+    try { updateSidebarProfile(); initNavigation(); } catch(e) { console.error('Erro Navegacao:', e); }
     try { loadDailyQuote(); } catch(e) { console.error('Erro Quote:', e); }
     try { await initSoundSelector(); } catch(e) { console.error('Erro Sons:', e); }
     try { initTimer(); } catch(e) { console.error('Erro Timer:', e); }
-    try { initBreath(); } catch(e) { console.error('Erro Respiração:', e); }
+    try { initBreath(); } catch(e) { console.error('Erro Respiracao:', e); }
     try { initModals(); } catch(e) { console.error('Erro Modais:', e); }
     try { initTaskForm(); } catch(e) { console.error('Erro Formulário:', e); }
     try { initSidebarControls(); } catch(e) { console.error('Erro Sidebar:', e); }
     try { initPipIntegration(); } catch(e) { console.error('Erro PIP:', e); }
 
-    // ATUALIZAÇÃO FORÇADA DAS LISTAS PARA CORRIGIR O BUG "NENHUMA TAREFA"
+    // ATUALIZACAO FORCADA DAS LISTAS PARA CORRIGIR O BUG "NENHUMA TAREFA"
     try {
         renderTasksList();
         renderTasksSidebar();
@@ -165,9 +224,10 @@ document.addEventListener('DOMContentLoaded', async () => {
             });
         }
         
-        userCategories = JSON.parse(localStorage.getItem('focozen_categories')) || defaultCategories;
+        userCategories = readJsonStorage('focozen_categories', defaultCategories);
         if (window.renderTimerDropdown) window.renderTimerDropdown();
         if (window.renderCategoryChips) window.renderCategoryChips();
+        resetGoalForm();
         
         document.getElementById('btnEditCategories')?.addEventListener('click', () => {
             if(window.toggleCategoryEdit) window.toggleCategoryEdit();
@@ -180,7 +240,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     } catch(e) { console.error('Erro Listeners Extras:', e); }
 
     // RETAIN INCOMPLETE SESSIONS ON BOOT
-    if (localStorage.getItem('focozen_saved_session')) {
+    if (readSavedSession()) {
         setTimeout(() => window.promptResumeSession(), 1500);
     } else {
         setTimeout(() => { 
@@ -208,12 +268,12 @@ window.renderTimerDropdown = function() {
             e.stopPropagation();
             const hasProgress = currentMode === 'focus' && timeLeft < totalTimerTime;
             if (isTimerRunning || hasProgress) {
-                customAlert('Sessão Ativa', 'Para mudar a categoria, reinicie o temporizador ou conclua a sessão atual.');
+                customAlert('Sessao Ativa', 'Para mudar a categoria, reinicie o temporizador ou conclua a sessao atual.');
                 menu.classList.remove('show');
                 return;
             }
             if (currentTask) {
-                customAlert('Tarefa Vinculada', 'Para mudar a categoria, edite a tarefa (botão de lápis na barra lateral).');
+                customAlert('Tarefa Vinculada', 'Para mudar a categoria, edite a tarefa (botao de lapis na barra lateral).');
                 menu.classList.remove('show');
                 return;
             }
@@ -246,9 +306,10 @@ window.renderCategoryChips = function() {
             delBtn.onclick = (e) => {
                 e.stopPropagation();
                 userCategories = userCategories.filter(c => c.name !== cat.name);
-                localStorage.setItem('focozen_categories', JSON.stringify(userCategories));
+                saveUserCategories();
                 renderCategoryChips();
                 renderTimerDropdown();
+                renderGoalCategoryOptions();
             };
             div.appendChild(delBtn);
         } else if (!isEditingCategories) {
@@ -276,8 +337,9 @@ window.renderCategoryChips = function() {
                 const val = inp.value.trim();
                 if (val && !userCategories.find(c => c.name === val)) {
                     userCategories.push({ name: val, icon: 'fa-tag' });
-                    localStorage.setItem('focozen_categories', JSON.stringify(userCategories));
+                    saveUserCategories();
                     renderTimerDropdown();
+                    renderGoalCategoryOptions();
                 }
                 renderCategoryChips();
             };
@@ -360,10 +422,13 @@ function switchView(viewId) {
     const nowPlayingSpan = document.getElementById('nowPlaying')?.querySelector('span');
     const titleText = nowPlayingSpan ? nowPlayingSpan.textContent : 'Nenhum som';
     const statsName = document.getElementById('statsPlayerSoundName');
+    const goalsName = document.getElementById('goalsPlayerSoundName');
     const settingsName = document.getElementById('settingsPlayerSoundName');
     if (statsName) statsName.textContent = titleText;
+    if (goalsName) goalsName.textContent = titleText;
     if (settingsName) settingsName.textContent = titleText;
     buildViewPlayerSounds('statsPlayerSounds');
+    buildViewPlayerSounds('goalsPlayerSounds');
     buildViewPlayerSounds('settingsPlayerSounds');
 
     const statsEl = document.getElementById('view-stats');
@@ -383,6 +448,9 @@ function switchView(viewId) {
         requestAnimationFrame(() => {
             if (statsEl) statsEl.classList.add('stats-anim-in');
         });
+    }
+    if (viewId === 'view-goals') {
+        if (window.compileGoalsData) window.compileGoalsData();
     }
     if (viewId === 'view-settings') {
         const input = document.getElementById('settingsNameInput');
@@ -428,7 +496,7 @@ function initNavigation() {
                     window._manualUpdateTriggered = false;
                     handleUpdateCheckResult({ 
                         available: false, 
-                        message: 'Sistema de atualização não disponível em modo desenvolvimento.' 
+                        message: 'Sistema de atualizacao nao disponivel em modo desenvolvimento.' 
                     });
                 }, 500);
             }
@@ -444,7 +512,7 @@ function updateSidebarProfile() {
 }
 
 // ==========================================
-// INTEGRAÇÃO PIP
+// INTEGRACAO PIP
 // ==========================================
 function initPipIntegration() {
     const btnEnterPip = document.getElementById('btnEnterPip');
@@ -477,7 +545,7 @@ function initPipIntegration() {
                     const comp = pendingCompletionType;
                     pendingCompletionType = null;
                     setTimeout(() => {
-                        if ((comp === 'task-complete' || comp === 'focus-complete') && currentTask) {
+                        if (comp === 'task-complete' && currentTask) {
                             showTaskCompletionPopup(comp);
                         } else if (comp === 'focus-complete') {
                             showTransitionModal('break');
@@ -548,7 +616,7 @@ function syncStateToPip(extraState = {}) {
         const activeCard = document.querySelector('.sound-card.active span');
         const soundName = activeCard ? activeCard.textContent : 'Silêncio';
 
-        const taskName = currentTask ? currentTask.name : 'Sessão Livre';
+        const taskName = currentTask ? currentTask.name : 'Sessao Livre';
         const soundObj = soundsConfig.find(s => s.id === currentSoundId);
         const bgImage = soundObj ? soundObj.image : 'default.jpg';
         const theme = soundThemes[currentSoundId] || 'default';
@@ -679,8 +747,10 @@ async function selectSound(sound, cardElement) {
     document.documentElement.setAttribute('data-sound', soundThemes[sound.id] || 'default');
     document.getElementById('nowPlaying').innerHTML = `<i class="fas fa-music"></i><span>${sound.name}</span>`;
     const statsName = document.getElementById('statsPlayerSoundName');
+    const goalsName = document.getElementById('goalsPlayerSoundName');
     const settingsName = document.getElementById('settingsPlayerSoundName');
     if (statsName) statsName.textContent = sound.name;
+    if (goalsName) goalsName.textContent = sound.name;
     if (settingsName) settingsName.textContent = sound.name;
     document.querySelectorAll('.vpa-sound-item').forEach(item => {
         item.classList.toggle('active', item.dataset.soundId === sound.id);
@@ -714,7 +784,7 @@ function toggleMute() {
     if (slider) slider.value = Math.round(masterVolume * 100);
     updateVolumeDisplay();
     const muteIcon = isMuted ? 'fas fa-volume-mute' : 'fas fa-volume-up';
-    ['stats', 'settings'].forEach(prefix => {
+    ['stats', 'goals', 'settings'].forEach(prefix => {
         const muteBtn = document.getElementById(`${prefix}PlayerMuteBtn`);
         if (muteBtn) muteBtn.querySelector('i').className = muteIcon;
     });
@@ -733,7 +803,7 @@ function toggleMasterPlay() {
 function updateMasterPlayButton() {
     const masterVolumeSlider = document.getElementById('masterVolume');
 
-    ['stats', 'settings'].forEach(prefix => {
+    ['stats', 'goals', 'settings'].forEach(prefix => {
         const playBtn = document.getElementById(`${prefix}PlayerPlayBtn`);
         const muteBtn = document.getElementById(`${prefix}PlayerMuteBtn`);
         const volSlider = document.getElementById(`${prefix}PlayerVolumeSlider`);
@@ -809,7 +879,7 @@ function buildViewPlayerSounds(containerId) {
 function updateVolumeDisplay() {
     const vol = Math.round(masterVolume * 100);
     document.getElementById('volumeValue').textContent = `${vol}%`;
-    ['stats', 'settings'].forEach(prefix => {
+    ['stats', 'goals', 'settings'].forEach(prefix => {
         const valEl = document.getElementById(`${prefix}PlayerVolumeValue`);
         const slider = document.getElementById(`${prefix}PlayerVolumeSlider`);
         if (valEl) valEl.textContent = `${vol}%`;
@@ -847,7 +917,7 @@ function setTimerMode(mode) {
     let mins = testMode ? (1/12) : (mode === 'shortBreak' ? SHORT_BREAK_MINUTES : (mode === 'longBreak' ? LONG_BREAK_MINUTES : POMODORO_MINUTES));
     
     if (currentTask && mode === 'focus') {
-        timeLeft = Math.round(currentTask.estimatedMinutes * 60);
+        timeLeft = getTaskFocusDurationSeconds(currentTask);
         totalTimerTime = timeLeft;
     } else {
         timeLeft = testMode ? 5 : mins * 60; 
@@ -913,9 +983,9 @@ function resetTimer() {
         saveTasks();
     }
     setTimerMode(currentMode);
-    // If a task is active, restore timer from task duration (not generic Pomodoro default)
+    // If a task is active, restore timer from the current focus block
     if (currentTask && currentMode === 'focus') {
-        timeLeft = currentTask.estimatedMinutes * 60;
+        timeLeft = getTaskFocusDurationSeconds(currentTask);
         totalTimerTime = timeLeft;
         updateTimerDisplay();
         updateProgressBar();
@@ -931,7 +1001,7 @@ function resetToFreeFocusSession() {
     pendingTaskResolution = null;
     const badge = document.getElementById('currentTaskBadge');
     if (badge) {
-        badge.textContent = 'Sessão Livre';
+        badge.textContent = 'Sessao Livre';
         badge.className = 'task-badge free-mode';
     }
     document.getElementById('btnFreeFocus')?.classList.add('hidden');
@@ -1156,7 +1226,7 @@ function completeTimer() {
             category: activeCategory,
             taskId: currentTask ? currentTask.id : null
         });
-        localStorage.setItem('focozen_history', JSON.stringify(focusHistory));
+        saveFocusHistory();
         // ------------------------------------
 
         if (currentTask) {
@@ -1181,7 +1251,7 @@ function completeTimer() {
         pendingCompletionType = compType;
         syncStateToPip({ showCompletion: compType });
     } else {
-        if ((compType === 'task-complete' || compType === 'focus-complete') && currentTask) {
+        if (compType === 'task-complete' && currentTask) {
             showTaskCompletionPopup(compType);
         } else if (compType === 'focus-complete') {
             showTransitionModal('break');
@@ -1210,7 +1280,7 @@ function showTransitionModal(nextPhase) {
 
     if (nextPhase === 'break') {
         icon.innerHTML = '<i class="fas fa-coffee"></i>';
-        title.textContent = 'Sessão Concluída';
+        title.textContent = 'Sessao Concluida';
         stats.classList.remove('hidden');
         document.getElementById('totalPomodorosTodayStats').textContent = totalPomodorosToday;
 
@@ -1281,7 +1351,7 @@ function showTaskCompletionPopup(compType) {
     const addTimeBtn = overlay.querySelector('.btn-add-time');
     const restartBtn = overlay.querySelector('.btn-continue-later');
 
-    if (titleEl) titleEl.textContent = 'Sessão concluída';
+    if (titleEl) titleEl.textContent = 'Sessao concluida';
     if (messageEl) messageEl.textContent = 'O que você quer fazer com esta tarefa agora?';
     if (iconEl) iconEl.className = 'fas fa-clipboard-check';
     if (doneBtn) {
@@ -1353,11 +1423,11 @@ function showAddTimePopup() {
 
 function showContinueLaterPopup() {
     const msgs = [
-        "Você não desistiu, apenas pausou. Isso é força! 💪",
+        "Voce nao desistiu, apenas pausou. Isso e forca!",
         "O progresso acontece um passo de cada vez. Volte quando estiver pronto! 🌟",
         "Descansar também faz parte do sucesso. Você está no caminho certo! 🚀",
-        "Cada pausa é uma preparação para o próximo avanço. Até logo! ⚡",
-        "Grandes conquistas levam tempo. Não desista! 🏆"
+        "Cada pausa e uma preparacao para o proximo avanco. Ate logo!",
+        "Grandes conquistas levam tempo. Nao desista! "
     ];
     const msg = msgs[Math.floor(Math.random() * msgs.length)];
     const overlay = document.createElement('div');
@@ -1386,7 +1456,7 @@ window.toggleTestMode = function() {
     const btn = document.getElementById('btnTestMode');
     if (btn) {
         btn.style.background = testMode ? 'linear-gradient(135deg,#ef4444,#b91c1c)' : '';
-        btn.textContent = testMode ? '🧪 Modo Teste ON (5s)' : '🧪 Modo Teste';
+        btn.textContent = testMode ? 'Modo Teste ON (5s)' : 'Modo Teste';
     }
     const taskTimeInput = document.getElementById('taskTimeInput');
     if (taskTimeInput && taskTimeInput.value === '25') {
@@ -1557,7 +1627,7 @@ function initTaskForm() {
 function initSidebarControls() {
     const oldBtn = document.getElementById('btnAddTaskModal');
     if (oldBtn) {
-        const trashBtn = document.createElement('button'); trashBtn.className = 'btn-info'; trashBtn.innerHTML = '<i class="fas fa-trash-alt"></i>'; trashBtn.title = 'Seleção em Massa';
+        const trashBtn = document.createElement('button'); trashBtn.className = 'btn-info'; trashBtn.innerHTML = '<i class="fas fa-trash-alt"></i>'; trashBtn.title = 'Selecao em Massa';
         trashBtn.onclick = () => { isDeleteMode = !isDeleteMode; selectedTasksForDelete.clear(); renderTasksSidebar(); };
         oldBtn.parentNode.replaceChild(trashBtn, oldBtn);
     }
@@ -1636,8 +1706,6 @@ function criarOuEditarTarefa() {
     syncStateToPip();
 }
 
-function saveTasks() { localStorage.setItem('focozen_tasks', JSON.stringify(tasks)); }
-
 function renderTasksList() {
     const list = document.getElementById('tasksListModal');
     const empty = document.getElementById('emptyStateModal');
@@ -1685,7 +1753,7 @@ function renderTasksSidebar() {
         const item = document.createElement('div'); 
         item.className = `task-item-sidebar ${isCurrent ? 'active' : ''} ${task.completed ? 'completed' : ''} ${isDeleteMode ? 'delete-mode-active' : ''}`;
         
-        // Calculate elapsed using estimatedMinutes (not pomodoros×25)
+        // Calculate elapsed using estimatedMinutes (not pomodoros x 25)
         const taskTotalMins = task.estimatedMinutes || (task.pomodoros * 25);
         const elapsedFraction = task.pomodoros > 0 ? (task.completedPomodoros / task.pomodoros) : 0;
         // If this is the current active task, add real-time in-session elapsed
@@ -1714,9 +1782,9 @@ function renderTasksSidebar() {
         
         const actionRowHtml = `
             <div class="task-sidebar-action-row">
-                ${isCurrent && currentMode === 'focus' && !task.completed ? 
-                    (isTimerRunning ? 
-                        `<button class="action-pill" style="background:#f59e0b; color:white; box-shadow: 0 4px 15px rgba(245,158,11,0.4);" onclick="event.stopPropagation(); window.toggleTaskTimer()" title="Pausar"><i class="fas fa-pause"></i></button>` 
+                ${isCurrent && currentMode === 'focus' && !task.completed
+                    ? (isTimerRunning
+                        ? `<button class="action-pill" style="background:#f59e0b; color:white; box-shadow: 0 4px 15px rgba(245,158,11,0.4);" onclick="event.stopPropagation(); window.toggleTaskTimer()" title="Pausar"><i class="fas fa-pause"></i></button>`
                         : `<button class="action-pill primary" onclick="event.stopPropagation(); window.toggleTaskTimer()" title="Retomar"><i class="fas fa-play"></i></button>`)
                     : `<button class="action-pill primary" onclick="event.stopPropagation(); window.startTask(${task.id})" title="Iniciar"><i class="fas fa-play"></i></button>`
                 }
@@ -1735,7 +1803,7 @@ function renderTasksSidebar() {
                     </div>
                     <div style="display:flex; align-items:center; gap:8px;">
                         ${isCurrent && !task.completed ? '<span class="task-sidebar-badge">Ativa</span>' : ''}
-                        ${task.completed ? '<span class="task-sidebar-badge" style="background:#10b981;">Concluída</span>' : ''}
+                        ${task.completed ? '<span class="task-sidebar-badge" style="background:#10b981;">Concluida</span>' : ''}
                         ${isDeleteMode ? `<label class="delete-checkbox-label" onclick="event.stopPropagation();"><input type="checkbox" ${selectedTasksForDelete.has(task.id) ? 'checked' : ''} onchange="window.toggleTaskSelection(${task.id}, this.checked)"><span class="delete-checkbox-custom"></span></label>` : ''}
                     </div>
                 </div>
@@ -1839,7 +1907,7 @@ function deselectTask() {
     if (isTimerRunning) pauseTimer();
     currentTask = null;
     const badge = document.getElementById('currentTaskBadge');
-    badge.textContent = 'Sessão Livre'; badge.className = 'task-badge free-mode';
+    badge.textContent = 'Sessao Livre'; badge.className = 'task-badge free-mode';
     document.getElementById('btnFreeFocus').classList.add('hidden');
     const globalCat = document.getElementById('globalCategorySelect');
     if (globalCat) globalCat.value = "Livre";
@@ -1874,7 +1942,7 @@ window.attemptDeselectTask = function(isAppClosing) {
                     durationMinutes: Math.max(1, Math.round(elapsedSecs / 60)),
                     category: activeCategory, taskId: null
                 });
-                localStorage.setItem('focozen_history', JSON.stringify(focusHistory));
+                saveFocusHistory();
             }
         }
         if (window.electronAPI && window.electronAPI.closeApp) window.electronAPI.closeApp();
@@ -1891,11 +1959,11 @@ window.attemptDeselectTask = function(isAppClosing) {
     }
 
     const titleText = isAppClosing ? 'Sair do FocoZen?' : 'Pausar Tarefa?';
-    const msgText = isAppClosing 
-        ? 'Você tem um temporizador rodando. Deseja salvar o progresso atual, ou desistir da sessão e sair?'
-        : 'Você tem progresso nesta sessão. Deseja continuar a tarefa em outro momento (salvar progresso) ou desistir?';
+    const msgText = isAppClosing
+        ? 'Voce tem um temporizador rodando. Deseja salvar o progresso atual, ou desistir da sessao e sair?'
+        : 'Voce tem progresso nesta sessao. Deseja continuar a tarefa em outro momento (salvar progresso) ou desistir?';
     
-    const btnCancelText = isAppClosing ? 'Desistir e Sair' : 'Desistir (Perder Sessão)';
+    const btnCancelText = isAppClosing ? 'Desistir e Sair' : 'Desistir (Perder Sessao)';
     const btnSaveText = isAppClosing ? 'Salvar e Sair' : 'Salvar e Fechar Tarefa';
 
     const overlay = document.createElement('div'); overlay.className = 'modal-overlay active custom-popup';
@@ -1958,7 +2026,7 @@ window.attemptDeselectTask = function(isAppClosing) {
             totalTimerTime: savedTotalTime, 
             mode: savedMode 
         };
-        localStorage.setItem('focozen_saved_session', JSON.stringify(stateObj));
+        saveSavedSession(stateObj);
         console.log('[SAVE] Session saved:', stateObj);
 
         if (isAppClosing) {
@@ -1971,7 +2039,7 @@ window.attemptDeselectTask = function(isAppClosing) {
             totalTimerTime = timeLeft;
             currentMode = 'focus';
             const badge = document.getElementById('currentTaskBadge');
-            if (badge) { badge.textContent = 'Sessão Livre'; badge.className = 'task-badge free-mode'; }
+            if (badge) { badge.textContent = 'Sessao Livre'; badge.className = 'task-badge free-mode'; }
             document.getElementById('btnFreeFocus')?.classList.add('hidden');
             const globalCat = document.getElementById('globalCategorySelect');
             if (globalCat) globalCat.value = 'Livre';
@@ -1993,8 +2061,8 @@ window.toggleTaskSelectionWrap = function(id) {
 };
 
 window.promptResumeSession = function() {
-    const sessionStr = localStorage.getItem('focozen_saved_session');
-    if (!sessionStr) return;
+    const session = readSavedSession();
+    if (!session) return;
     
     // Auto Show modal wizard check
     const checkWizard = () => {
@@ -2004,15 +2072,14 @@ window.promptResumeSession = function() {
     };
     
     try {
-        const session = JSON.parse(sessionStr);
         if(!session) { checkWizard(); return; }
         
         const overlay = document.createElement('div'); overlay.className = 'modal-overlay active custom-popup';
         overlay.innerHTML = `
             <div class="elegant-popup" style="text-align: center; max-width: 420px;">
                 <div class="elegant-icon" style="color: #10b981;"><i class="fas fa-play-circle"></i></div>
-                <h3 class="elegant-title">Sessão Encontrada</h3>
-                <p class="elegant-message">Detectamos uma sessão pausada anteriormente. Deseja retomá-la de onde parou?</p>
+                <h3 class="elegant-title">Sessao Encontrada</h3>
+                <p class="elegant-message">Detectamos uma sessao pausada anteriormente. Deseja retoma-la de onde parou?</p>
                 <div class="elegant-actions">
                     <button class="btn-modal danger btn-discard">Descartar</button>
                     <button class="btn-modal primary btn-resume">Retomar</button>
@@ -2048,7 +2115,7 @@ window.promptResumeSession = function() {
                     renderTasksSidebar();
                     toggleTimer(); // Resume counting
                 } else {
-                    showGlassToast("A tarefa da sessão já foi concluída ou excluída.");
+                    showGlassToast("A tarefa da sessao ja foi concluida ou excluida.");
                     checkWizard();
                 }
             } else {
@@ -2108,7 +2175,7 @@ function selectTask(taskId, skipTimerSync, onComplete) {
                 durationMinutes: Math.max(1, Math.round(elapsedSecs / 60)),
                 category: activeCategory, taskId: null
             });
-            localStorage.setItem('focozen_history', JSON.stringify(focusHistory));
+            saveFocusHistory();
         }
         pauseTimer();
         _doSelectTask(taskId, skipTimerSync);
@@ -2155,7 +2222,7 @@ function selectTask(taskId, skipTimerSync, onComplete) {
                     totalTimerTime, 
                     mode: currentMode 
                 };
-                localStorage.setItem('focozen_saved_session', JSON.stringify(stateObj));
+                saveSavedSession(stateObj);
             }
             // Now do a clean reset and switch
             pauseTimer();
@@ -2175,9 +2242,7 @@ function _doSelectTask(taskId, skipTimerSyncInput) {
     if (currentTask && !currentTask.completed) {
         let skipTimerSync = skipTimerSyncInput;
         // Check if there's a saved session for this newly selected task
-        const sessionStr = localStorage.getItem('focozen_saved_session');
-        let session = null;
-        try { if(sessionStr) session = JSON.parse(sessionStr); } catch(e){}
+        const session = readSavedSession();
         
         if (session && session.taskId === taskId) {
             // Restore exact saved timer state for this task
@@ -2202,7 +2267,7 @@ function _doSelectTask(taskId, skipTimerSyncInput) {
         
         // If not restoring from the physical localstorage session, we can mathematically restore from the decimal fraction!
         if (!skipTimerSync) {
-            totalTimerTime = currentTask.estimatedMinutes * 60;
+            totalTimerTime = getTaskFocusDurationSeconds(currentTask);
             const fractionDone = currentTask.completedPomodoros % 1; // get the decimal part (e.g., 0.2 means 20% done)
             
             // Reconstruct the exact timeLeft from the fraction!
@@ -2238,7 +2303,7 @@ function deleteTask(taskId) {
 
 function renderProgress() {
     const content = document.getElementById('progressContent'); if (!content) return;
-    let percent = 0; let title = "Sessão Livre de Foco";
+    let percent = 0; let title = "Sessao Livre de Foco";
     let currentHtml = "";
 
     if (currentTask) {
@@ -2304,7 +2369,7 @@ function updateTaskBubbleProgress() {
     if (percentageEl) percentageEl.textContent = `${Math.floor(percent)}%`;
 }
 
-function updateHeaderTaskCount() { document.getElementById('headerTaskCount').textContent = tasks.filter(t => !t.completed).length; }
+function updateHeaderTaskCount() { const badge = document.getElementById('headerTaskCount'); if (badge) badge.textContent = tasks.filter(t => !t.completed).length; }
 
 function initBreath() {
     document.getElementById('btnOpenBreathSession')?.addEventListener('click', startBreathSession);
@@ -2376,40 +2441,482 @@ window.removeTempSubtask = removeTempSubtask; window.editTask = editTask;
 let chartCatInstance = null;
 let chartWeekInstance = null;
 
-function injectFakeDataIfNeeded() {
-    if (!focusHistory || focusHistory.length === 0 || focusHistory.length < 400) {
-        // Force clear old data and regenerate richer 90-day data
-        localStorage.removeItem('focozen_history');
-        const fakeHist = [];
-        const now = new Date();
-        const cats = ['Estudos', 'Trabalho', 'Projetos', 'Leitura', 'Hobbies'];
-        
-        // 90 days of rich data for heatmap and chart visualization
-        for (let i = 0; i < 90; i++) {
-            const d = new Date(now);
-            d.setDate(d.getDate() - i);
-            const dStr = d.toISOString().split('T')[0];
-            
-            // 4-8 sessions per day, realistic spread
-            const sessions = Math.floor(Math.random() * 5) + 4;
-            for(let j = 0; j < sessions; j++) {
-                const hour = Math.floor(Math.random() * 16) + 6; // 6am to 10pm
-                const minute = Math.floor(Math.random() * 60);
-                const sessionDate = new Date(d);
-                sessionDate.setHours(hour, minute, 0, 0);
-                fakeHist.push({
-                    id: sessionDate.getTime(),
-                    date: dStr,
-                    durationMinutes: Math.floor(Math.random() * 55) + 8,
-                    category: cats[Math.floor(Math.random() * cats.length)],
-                    taskId: null
-                });
-            }
-        }
-        focusHistory = fakeHist;
-        localStorage.setItem('focozen_history', JSON.stringify(focusHistory));
-        console.log('Mock data (90 days, ' + focusHistory.length + ' entries) injected.');
+const categoryPalette = [
+    { from: '#60a5fa', to: '#2563eb' },
+    { from: '#34d399', to: '#059669' },
+    { from: '#f59e0b', to: '#d97706' },
+    { from: '#f472b6', to: '#db2777' },
+    { from: '#a78bfa', to: '#7c3aed' },
+    { from: '#22d3ee', to: '#0891b2' },
+    { from: '#fb7185', to: '#e11d48' },
+    { from: '#4ade80', to: '#16a34a' },
+    { from: '#fbbf24', to: '#ca8a04' },
+    { from: '#38bdf8', to: '#0284c7' },
+    { from: '#94a3b8', to: '#64748b' },
+    { from: '#c084fc', to: '#9333ea' }
+];
+
+function getSortedGoalCategories() {
+    const baseCategories = userCategories.length ? userCategories : defaultCategories;
+    const goalCats = focusGoals.map(goal => ({ name: goal.category, icon: 'fa-bullseye' }));
+    const merged = [...baseCategories, ...goalCats]
+        .filter(cat => cat && cat.name && cat.name !== 'Livre')
+        .reduce((acc, cat) => {
+            if (!acc.some(item => item.name === cat.name)) acc.push(cat);
+            return acc;
+        }, []);
+
+    return merged.sort((a, b) => a.name.localeCompare(b.name, 'pt-BR'));
+}
+
+function getCategoryPalette(category, index = 0) {
+    const known = {
+        'Trabalho': categoryPalette[0],
+        'Livre': categoryPalette[3],
+        'Estudos': categoryPalette[1],
+        'Hobbies': categoryPalette[2],
+        'Leitura': categoryPalette[6],
+        'Projetos': categoryPalette[4],
+        'Exercício': categoryPalette[5],
+        'Outros': categoryPalette[10]
+    };
+
+    if (category && known[category]) return known[category];
+    if (index >= 0) return categoryPalette[index % categoryPalette.length];
+
+    let hash = 0;
+    for (let i = 0; i < (category || '').length; i++) {
+        hash = ((hash << 5) - hash) + category.charCodeAt(i);
+        hash |= 0;
     }
+
+    return categoryPalette[Math.abs(hash) % categoryPalette.length];
+}
+
+function getPeriodDateRange(period) {
+    const end = new Date();
+    end.setHours(23, 59, 59, 999);
+
+    const start = new Date(end);
+    if (period === 'day') {
+        start.setHours(0, 0, 0, 0);
+    } else if (period === 'month') {
+        start.setDate(start.getDate() - 29);
+        start.setHours(0, 0, 0, 0);
+    } else {
+        start.setDate(start.getDate() - 6);
+        start.setHours(0, 0, 0, 0);
+    }
+
+    return { start, end };
+}
+
+function enumeratePeriodDates(period) {
+    const { start, end } = getPeriodDateRange(period);
+    const dates = [];
+    const cursor = new Date(start);
+
+    while (cursor <= end) {
+        dates.push(new Date(cursor));
+        cursor.setDate(cursor.getDate() + 1);
+    }
+
+    return dates;
+}
+
+function isGoalApplicableOnDate(goal, date) {
+    if (!goal || !date) return false;
+    const dayOfWeek = date.getDay();
+    if (goal.schedule === 'everyday') return true;
+    return dayOfWeek >= 1 && dayOfWeek <= 5;
+}
+
+function getActiveGoals() {
+    return focusGoals.filter(goal => goal && goal.active !== false && goal.category && Number(goal.dailyMinutes) > 0);
+}
+
+function getGoalSummaries(period) {
+    const activeGoals = getActiveGoals();
+    const dates = enumeratePeriodDates(period);
+    const actualByCategory = {};
+
+    filterHistoryByPeriod(focusHistory, period).forEach(entry => {
+        const category = entry.category || 'Livre';
+        actualByCategory[category] = (actualByCategory[category] || 0) + (Number(entry.durationMinutes) || 0);
+    });
+
+    return activeGoals.map((goal, index) => {
+        const targetMinutes = dates.reduce((sum, date) => {
+            return sum + (isGoalApplicableOnDate(goal, date) ? Number(goal.dailyMinutes) || 0 : 0);
+        }, 0);
+        const actualMinutes = actualByCategory[goal.category] || 0;
+        const percent = targetMinutes > 0 ? Math.round((actualMinutes / targetMinutes) * 100) : 0;
+        return {
+            ...goal,
+            index,
+            targetMinutes,
+            actualMinutes,
+            remainingMinutes: Math.max(0, targetMinutes - actualMinutes),
+            percent,
+            palette: getCategoryPalette(goal.category, index)
+        };
+    }).sort((a, b) => {
+        if (b.percent !== a.percent) return b.percent - a.percent;
+        return b.actualMinutes - a.actualMinutes;
+    });
+}
+
+function getDailyGoalOutcome(date) {
+    const activeGoals = getActiveGoals();
+    let targetMinutes = 0;
+    let actualMinutes = 0;
+    let activeCategories = 0;
+    let hitCategories = 0;
+    const dateStr = date.toISOString().split('T')[0];
+    const actualByCategory = {};
+
+    focusHistory
+        .filter(entry => entry.date === dateStr)
+        .forEach(entry => {
+            const category = entry.category || 'Livre';
+            actualByCategory[category] = (actualByCategory[category] || 0) + (Number(entry.durationMinutes) || 0);
+        });
+
+    activeGoals.forEach(goal => {
+        if (!isGoalApplicableOnDate(goal, date)) return;
+        const target = Number(goal.dailyMinutes) || 0;
+        const actual = actualByCategory[goal.category] || 0;
+        targetMinutes += target;
+        actualMinutes += actual;
+        activeCategories++;
+        if (actual >= target) hitCategories++;
+    });
+
+    return {
+        targetMinutes,
+        actualMinutes,
+        activeCategories,
+        hitCategories,
+        hitAll: activeCategories > 0 && hitCategories === activeCategories
+    };
+}
+
+function getGoalStreak() {
+    let streak = 0;
+    const cursor = new Date();
+    cursor.setHours(0, 0, 0, 0);
+
+    for (let i = 0; i < 90; i++) {
+        const outcome = getDailyGoalOutcome(cursor);
+        if (outcome.activeCategories === 0) {
+            cursor.setDate(cursor.getDate() - 1);
+            continue;
+        }
+        if (!outcome.hitAll) break;
+        streak++;
+        cursor.setDate(cursor.getDate() - 1);
+    }
+
+    return streak;
+}
+
+function getGoalOverview(period) {
+    const summaries = getGoalSummaries(period);
+    const activeCount = summaries.length;
+    const hitCount = summaries.filter(item => item.actualMinutes >= item.targetMinutes && item.targetMinutes > 0).length;
+    const totalTarget = summaries.reduce((sum, item) => sum + item.targetMinutes, 0);
+    const totalActual = summaries.reduce((sum, item) => sum + item.actualMinutes, 0);
+    const averageProgress = totalTarget > 0 ? Math.round((totalActual / totalTarget) * 100) : 0;
+    const bestCategory = summaries.length ? summaries.reduce((best, item) => {
+        if (!best) return item;
+        if (item.percent !== best.percent) return item.percent > best.percent ? item : best;
+        return item.actualMinutes > best.actualMinutes ? item : best;
+    }, null) : null;
+
+    return {
+        summaries,
+        activeCount,
+        hitCount,
+        totalTarget,
+        totalActual,
+        averageProgress,
+        bestCategory,
+        streak: getGoalStreak()
+    };
+}
+
+function getPeriodLabel(period) {
+    return {
+        day: 'Hoje',
+        week: 'Semana atual',
+        month: 'Ultimos 30 dias'
+    }[period] || 'Semana atual';
+}
+
+function getGoalMomentum(overview) {
+    if (!overview.activeCount) {
+        return {
+            badge: 'Sem metas ativas',
+            headline: 'Crie metas por categoria para acompanhar seu ritmo real de foco.',
+            caption: 'Assim que houver metas, este painel compara o planejado com o realizado.',
+            encouragement: 'Configure suas primeiras metas e transforme foco em rotina.',
+            nextAction: 'Comece com 1 ou 2 categorias principais para criar consistencia sem friccao.'
+        };
+    }
+
+    if (overview.averageProgress >= 100) {
+        return {
+            badge: 'Meta batida',
+            headline: 'Voce esta entregando acima do planejado neste periodo.',
+            caption: `Excelente ritmo: ${overview.hitCount} de ${overview.activeCount} categorias ja bateram a meta.`,
+            encouragement: 'Voce esta construindo consistencia real. Tente manter esse padrao ate o fim do periodo.',
+            nextAction: 'Se continuar assim, vale subir um pouco a meta da categoria mais estavel.'
+        };
+    }
+
+    if (overview.averageProgress >= 80) {
+        return {
+            badge: 'Quase la',
+            headline: 'Falta pouco para transformar seu planejamento em meta cumprida.',
+            caption: `Voce ja percorreu ${overview.averageProgress}% do caminho planejado neste periodo.`,
+            encouragement: 'Seu ritmo esta forte. Um ultimo bloco bem usado pode virar varias metas em verde.',
+            nextAction: 'Priorize primeiro a categoria mais perto de 100% para ganhar tracao.'
+        };
+    }
+
+    if (overview.totalActual > 0) {
+        return {
+            badge: 'Em movimento',
+            headline: 'O foco ja comecou. Agora vale alinhar melhor energia e prioridade.',
+            caption: `Voce entregou ${formatMinsToHours(overview.totalActual)} de ${formatMinsToHours(overview.totalTarget)} planejados.`,
+            encouragement: 'Mesmo longe do alvo, cada bloco concluido reduz a distancia ate a meta.',
+            nextAction: 'Concentre o proximo ciclo na categoria mais importante do seu dia.'
+        };
+    }
+
+    return {
+        badge: 'Hora de iniciar',
+        headline: 'Ainda nao houve foco registrado para as metas deste periodo.',
+        caption: 'Um unico bloco iniciado ja comeca a dar forma para sua semana.',
+        encouragement: 'Nao precisa esperar motivacao perfeita. Comece pequeno e deixe o ritmo aparecer.',
+        nextAction: 'Escolha a categoria mais critica e faça um primeiro bloco de foco agora.'
+    };
+}
+
+function renderGoalCategoryOptions() {
+    const select = document.getElementById('goalCategorySelect');
+    if (!select) return;
+
+    const categories = getSortedGoalCategories();
+    const currentValue = editingGoalId
+        ? (focusGoals.find(goal => goal.id === editingGoalId)?.category || categories[0]?.name || '')
+        : (select.value || categories[0]?.name || '');
+
+    select.innerHTML = '';
+    categories.forEach(category => {
+        const option = document.createElement('option');
+        option.value = category.name;
+        option.textContent = category.name;
+        select.appendChild(option);
+    });
+
+    if (categories.length) {
+        select.value = categories.some(cat => cat.name === currentValue) ? currentValue : categories[0].name;
+    }
+}
+
+function resetGoalForm() {
+    editingGoalId = null;
+    const minutesInput = document.getElementById('goalDailyMinutesInput');
+    const scheduleInput = document.getElementById('goalScheduleInput');
+    const cancelBtn = document.getElementById('btnCancelGoalEdit');
+
+    renderGoalCategoryOptions();
+    if (minutesInput) minutesInput.value = 1;
+    if (scheduleInput) scheduleInput.value = 'weekdays';
+    document.querySelectorAll('.goal-schedule-btn').forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.schedule === 'weekdays');
+    });
+    if (cancelBtn) cancelBtn.classList.add('hidden');
+    updateGoalHoursDisplay(1);
+}
+
+function populateGoalForm(goalId) {
+    const goal = focusGoals.find(item => item.id === goalId);
+    if (!goal) return;
+
+    editingGoalId = goal.id;
+    renderGoalCategoryOptions();
+    document.getElementById('goalCategorySelect').value = goal.category;
+    document.getElementById('goalDailyMinutesInput').value = ((Number(goal.dailyMinutes) || 0) / 60).toString();
+    document.getElementById('goalScheduleInput').value = goal.schedule || 'weekdays';
+    document.querySelectorAll('.goal-schedule-btn').forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.schedule === (goal.schedule || 'weekdays'));
+    });
+    document.getElementById('btnCancelGoalEdit')?.classList.remove('hidden');
+    updateGoalHoursDisplay(goal.dailyMinutes / 60);
+}
+
+function normalizeGoalHours(value) {
+    const safeValue = Number.isFinite(value) ? value : 1;
+    const stepped = Math.round(Math.max(0.5, safeValue) * 2) / 2;
+    return stepped;
+}
+
+function updateGoalHoursDisplay(hours) {
+    const normalizedHours = normalizeGoalHours(hours);
+    const input = document.getElementById('goalDailyMinutesInput');
+    const label = document.getElementById('goalHoursValue');
+    if (input) input.value = normalizedHours.toString();
+    if (label) label.textContent = `${normalizedHours.toFixed(1).replace('.0', '').replace('.', ',')}h`;
+}
+
+function saveGoalEntry({ goalId = null, category, dailyMinutes, schedule }) {
+    if (!category) {
+        return { ok: false, message: 'Selecione uma categoria para criar a meta.' };
+    }
+
+    if (!dailyMinutes || dailyMinutes <= 0) {
+        return { ok: false, message: 'Informe uma meta diária válida em horas.' };
+    }
+
+    const duplicateGoal = focusGoals.find(goal => goal.category === category && goal.id !== goalId);
+    if (duplicateGoal) {
+        return { ok: false, message: 'Essa categoria ja possui uma meta. Edite a existente ou escolha outra.' };
+    }
+
+    if (goalId) {
+        focusGoals = focusGoals.map(goal => goal.id === goalId
+            ? { ...goal, category, dailyMinutes, schedule, active: true }
+            : goal
+        );
+    } else {
+        focusGoals.push({
+            id: Date.now(),
+            category,
+            dailyMinutes,
+            schedule,
+            active: true
+        });
+    }
+
+    saveFocusGoals();
+    renderStatsGoalsSummary(window._statsPeriod || 'week');
+    window.compileGoalsData?.();
+
+    return {
+        ok: true,
+        message: goalId ? 'Meta atualizada.' : 'Meta criada.'
+    };
+}
+
+function openGoalEditModal(goalId) {
+    const goal = focusGoals.find(item => item.id === goalId);
+    if (!goal) return;
+
+    const categories = getSortedGoalCategories();
+    const overlay = document.createElement('div');
+    overlay.className = 'modal-overlay active custom-popup goal-edit-modal';
+    overlay.innerHTML = `
+        <div class="elegant-popup goal-edit-popup">
+            <div class="elegant-icon" style="background: linear-gradient(135deg, var(--accent-primary), var(--accent-secondary));">
+                <i class="fas fa-pen"></i>
+            </div>
+            <h3 class="elegant-title">Editar meta</h3>
+            <p class="elegant-message">Ajuste a categoria, a carga diaria e os dias em que essa meta vale.</p>
+            <div class="goal-form-grid">
+                <div class="form-group goal-field goal-field-category">
+                    <label for="goalEditCategorySelect"><i class="fas fa-tag"></i> Categoria</label>
+                    <select id="goalEditCategorySelect" class="glass-select">
+                        ${categories.map(category => `<option value="${category.name}">${category.name}</option>`).join('')}
+                    </select>
+                </div>
+                <div class="form-group goal-field goal-field-hours">
+                    <label><i class="fas fa-clock"></i> Horas por dia</label>
+                    <div class="goal-hours-stepper">
+                        <button class="goal-hours-btn" type="button" data-goal-edit-step="-0.5" aria-label="Diminuir horas"><i class="fas fa-minus"></i></button>
+                        <div class="goal-hours-display">
+                            <span id="goalEditHoursValue">1h</span>
+                            <small>por dia</small>
+                        </div>
+                        <button class="goal-hours-btn" type="button" data-goal-edit-step="0.5" aria-label="Aumentar horas"><i class="fas fa-plus"></i></button>
+                    </div>
+                </div>
+            </div>
+            <div class="form-group">
+                <label><i class="fas fa-calendar-week"></i> Aplicar em</label>
+                <div class="stats-period-selector goal-schedule-selector">
+                    <button class="stats-period-btn goal-edit-schedule-btn" data-schedule="weekdays" type="button">Dias uteis</button>
+                    <button class="stats-period-btn goal-edit-schedule-btn" data-schedule="everyday" type="button">Semana inteira</button>
+                </div>
+            </div>
+            <div class="goal-form-actions">
+                <button class="btn-modal secondary btn-goal-edit-cancel" type="button">Cancelar</button>
+                <button class="btn-modal primary btn-goal-edit-save" type="button"><i class="fas fa-save"></i>Salvar alteracoes</button>
+            </div>
+        </div>
+    `;
+    document.body.appendChild(overlay);
+
+    const select = overlay.querySelector('#goalEditCategorySelect');
+    const valueLabel = overlay.querySelector('#goalEditHoursValue');
+    const scheduleButtons = overlay.querySelectorAll('.goal-edit-schedule-btn');
+    let currentHours = normalizeGoalHours((Number(goal.dailyMinutes) || 0) / 60);
+    let currentSchedule = goal.schedule || 'weekdays';
+
+    if (select) select.value = goal.category;
+
+    const syncModalHours = () => {
+        if (valueLabel) {
+            valueLabel.textContent = `${currentHours.toFixed(1).replace('.0', '').replace('.', ',')}h`;
+        }
+    };
+
+    syncModalHours();
+    scheduleButtons.forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.schedule === currentSchedule);
+        btn.addEventListener('click', () => {
+            currentSchedule = btn.dataset.schedule;
+            scheduleButtons.forEach(item => item.classList.toggle('active', item === btn));
+        });
+    });
+
+    overlay.querySelectorAll('[data-goal-edit-step]').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const step = parseFloat(btn.dataset.goalEditStep || '0');
+            currentHours = normalizeGoalHours(currentHours + step);
+            syncModalHours();
+        });
+    });
+
+    overlay.querySelector('.btn-goal-edit-cancel')?.addEventListener('click', () => overlay.remove());
+    overlay.addEventListener('click', (event) => {
+        if (event.target === overlay) overlay.remove();
+    });
+
+    overlay.querySelector('.btn-goal-edit-save')?.addEventListener('click', () => {
+        const category = select?.value || '';
+        const dailyMinutes = Math.round(currentHours * 60);
+        const result = saveGoalEntry({
+            goalId: goal.id,
+            category,
+            dailyMinutes,
+            schedule: currentSchedule
+        });
+
+        if (!result.ok) {
+            showGlassToast(result.message);
+            return;
+        }
+
+        overlay.remove();
+        resetGoalForm();
+        showGlassToast(result.message);
+    });
+}
+
+function injectFakeDataIfNeeded() {
+    return;
 }
 
 window.compileDashboardData = function() {
@@ -2496,7 +3003,7 @@ window.compileDashboardData = function() {
     document.getElementById('statsStreak').innerHTML = `<i class="fas fa-fire glow-icon-primary"></i>${currentStreak} Dias`;
     document.getElementById('statsStreakPercent').textContent = `Melhor: ${maxStreak}`;
     
-    // 4. Taxa de Conclusão
+    // 4. Taxa de Conclusao
     const totalT = tasks.length;
     const compT = tasks.filter(t => t.completed).length;
     let rate = 0;
@@ -2509,25 +3016,25 @@ window.compileDashboardData = function() {
     
     document.getElementById('statsCompletion').innerHTML = `${rate}% <span style="font-size:1rem;font-weight:400;color:var(--text-secondary);margin-left:8px;">de foco</span>`;
 
-    // Render all 3 visualizations using selected period
+    // Render dashboard visualizations using selected period
     const period = window._statsPeriod || 'week';
     const filtered = filterHistoryByPeriod(focusHistory, period);
     renderCategoriesChart(filtered);
     renderPeriodBarChart(focusHistory, period);
-    renderTimeline(focusHistory);
+    renderStatsGoalsSummary(period);
     
     // Bind period selector buttons (once)
     if (!window._statsPeriodBound) {
         window._statsPeriodBound = true;
-        document.querySelectorAll('.stats-period-btn').forEach(btn => {
+        document.querySelectorAll('#statsPeriodSelector .stats-period-btn').forEach(btn => {
             btn.addEventListener('click', () => {
-                document.querySelectorAll('.stats-period-btn').forEach(b => b.classList.remove('active'));
+                document.querySelectorAll('#statsPeriodSelector .stats-period-btn').forEach(b => b.classList.remove('active'));
                 btn.classList.add('active');
                 window._statsPeriod = btn.dataset.period;
                 const filt = filterHistoryByPeriod(focusHistory, btn.dataset.period);
                 renderCategoriesChart(filt);
                 renderPeriodBarChart(focusHistory, btn.dataset.period);
-                renderTimeline(focusHistory);
+                renderStatsGoalsSummary(btn.dataset.period);
             });
         });
         
@@ -2580,6 +3087,7 @@ const chartShadowPlugin = {
 
 function renderCategoriesChart(allHistory) {
     const canvas = document.getElementById('categoriesChart');
+    const legend = document.getElementById('categoriesLegend');
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
     
@@ -2592,15 +3100,6 @@ function renderCategoriesChart(allHistory) {
     const data = Object.values(catMap);
     const total = data.reduce((a,b) => a+b, 0);
     
-    const radialColors = [
-        { from: '#a78bfa', to: '#7c3aed' },
-        { from: '#60a5fa', to: '#2563eb' },
-        { from: '#34d399', to: '#059669' },
-        { from: '#fbbf24', to: '#d97706' },
-        { from: '#f472b6', to: '#db2777' },
-        { from: '#a5b4fc', to: '#6366f1' }
-    ];
-
     if (chartCatInstance) { chartCatInstance.destroy(); chartCatInstance = null; }
     if (window._radialAnimFrame) cancelAnimationFrame(window._radialAnimFrame);
     
@@ -2614,15 +3113,54 @@ function renderCategoriesChart(allHistory) {
     canvas.style.height = containerH + 'px';
     ctx.scale(dpr, dpr);
     
-    const cx = containerW * 0.35;
+    const cx = containerW / 2;
     const cy = containerH / 2;
     const maxRadius = Math.min(cx, cy) - 12;
-    const ringCount = labels.length || 1;
-    const ringWidth = Math.min(18, Math.max(10, (maxRadius - 16) / ringCount));
-    const ringGap = 5;
     
-    const sortedEntries = labels.map((l, i) => ({ label: l, value: data[i], color: radialColors[i % radialColors.length] }))
+    let sortedEntries = labels.map((l, i) => ({ label: l, value: data[i], color: getCategoryPalette(l, i) }))
         .sort((a, b) => b.value - a.value);
+
+    if (sortedEntries.length > 4) {
+        const topEntries = sortedEntries.slice(0, 4);
+        const otherValue = sortedEntries.slice(4).reduce((sum, entry) => sum + entry.value, 0);
+        if (otherValue > 0) {
+            topEntries.push({
+                label: 'Outros',
+                value: otherValue,
+                color: getCategoryPalette('Outros', 5)
+            });
+        }
+        sortedEntries = topEntries;
+    }
+
+    sortedEntries = sortedEntries.map((entry, index) => ({
+        ...entry,
+        color: getCategoryPalette(entry.label, index)
+    }));
+
+    const ringCount = sortedEntries.length || 1;
+    const ringWidth = Math.min(18, Math.max(11, (maxRadius - 18) / ringCount));
+    const ringGap = 6;
+
+    if (legend) {
+        if (!sortedEntries.length || total === 0) {
+            legend.innerHTML = '<div class="stats-legend-empty">Ainda nao ha foco suficiente neste periodo para distribuir por categoria.</div>';
+        } else {
+            legend.innerHTML = sortedEntries.map(entry => {
+                const pct = total > 0 ? Math.round((entry.value / total) * 100) : 0;
+                return `
+                    <div class="stats-legend-item">
+                        <span class="stats-legend-dot" style="color:${entry.color.from}; background:${entry.color.from};"></span>
+                        <div class="stats-legend-main">
+                            <span class="stats-legend-name">${entry.label}</span>
+                            <span class="stats-legend-meta">${pct}% do foco no periodo</span>
+                        </div>
+                        <span class="stats-legend-value">${formatMinsToHours(entry.value)}</span>
+                    </div>
+                `;
+            }).join('');
+        }
+    }
     
     let animProgress = 0;
     const animDuration = 900;
@@ -2666,8 +3204,6 @@ function renderCategoriesChart(allHistory) {
         
         if (animProgress < 1) {
             window._radialAnimFrame = requestAnimationFrame(drawFrame);
-        } else {
-            drawArrowLabels(ctx, sortedEntries, total, cx, cy, maxRadius, ringWidth, ringGap, containerW, containerH);
         }
     }
     
@@ -2738,6 +3274,301 @@ function drawArrowLabels(ctx, entries, total, cx, cy, maxRadius, ringWidth, ring
         ctx.fillText(`${pctVal}% · ${formatMinsToHours(entry.value)}`, labelX + nameWidth + 6, targetY);
     });
     ctx.restore();
+}
+
+function renderStatsGoalsSummary(period) {
+    const periodLabel = document.getElementById('statsGoalsPeriodLabel');
+    const badgeEl = document.getElementById('statsGoalsStatusBadge');
+    const headlineEl = document.getElementById('statsGoalsHeadline');
+    const captionEl = document.getElementById('statsGoalsCaption');
+    const listEl = document.getElementById('statsGoalsSummaryList');
+    if (!badgeEl || !headlineEl || !captionEl || !listEl) return;
+
+    const overview = getGoalOverview(period);
+    const momentum = getGoalMomentum(overview);
+
+    if (periodLabel) periodLabel.textContent = getPeriodLabel(period);
+    badgeEl.textContent = momentum.badge;
+    headlineEl.textContent = momentum.headline;
+    captionEl.textContent = momentum.caption;
+
+    if (!overview.summaries.length) {
+        listEl.innerHTML = '<div class="goals-empty-state">Defina metas na aba Metas para ver o comparativo por categoria aqui.</div>';
+        return;
+    }
+
+    listEl.innerHTML = overview.summaries.map(item => {
+        const maxValue = Math.max(item.targetMinutes, item.actualMinutes, 1);
+        const actualWidth = Math.min(100, (item.actualMinutes / maxValue) * 100);
+        const targetOffset = Math.min(100, (item.targetMinutes / maxValue) * 100);
+        return `
+            <div class="goals-compact-row">
+                <div class="goals-compact-meta">
+                    <span class="goals-category-dot" style="color:${item.palette.from}; background:${item.palette.from};"></span>
+                    <span class="goals-category-name">${item.category}</span>
+                </div>
+                <div class="goals-progress-wrap">
+                    <div class="goals-progress-top">
+                        <span>Realizado ${formatMinsToHours(item.actualMinutes)}</span>
+                        <span>Meta ${formatMinsToHours(item.targetMinutes)}</span>
+                    </div>
+                    <div class="goals-progress-rail">
+                        <div class="goals-progress-actual" style="width:${actualWidth}%; background:${item.palette.from}; color:${item.palette.from};"></div>
+                        <div class="goals-progress-target-marker" style="left:calc(${targetOffset}% - 1px);"></div>
+                    </div>
+                </div>
+                <div class="goals-progress-label">${Math.max(0, item.percent)}%</div>
+            </div>
+        `;
+    }).join('');
+}
+
+function renderGoalsComparisonChart(period) {
+    const listEl = document.getElementById('goalsComparisonList');
+    if (!listEl) return;
+
+    const overview = getGoalOverview(period);
+    const titleEl = document.getElementById('goalsChartSubtitle');
+    const pillEl = document.getElementById('goalsMomentumPill');
+    const momentum = getGoalMomentum(overview);
+
+    if (titleEl) titleEl.textContent = `${formatMinsToHours(overview.totalActual)} entregues de ${formatMinsToHours(overview.totalTarget)} planejados.`;
+    if (pillEl) pillEl.textContent = momentum.badge;
+
+    if (!overview.summaries.length) {
+        listEl.innerHTML = '<div class="goals-empty-state">Ainda nao ha metas ativas para comparar neste periodo.</div>';
+        return;
+    }
+
+    const maxHours = Math.max(
+        ...overview.summaries.flatMap(item => [item.targetMinutes / 60, item.actualMinutes / 60]),
+        1
+    );
+
+    listEl.innerHTML = overview.summaries.map(item => {
+        const actualHours = item.actualMinutes / 60;
+        const targetHours = item.targetMinutes / 60;
+        const actualWidth = Math.min(100, (actualHours / maxHours) * 100);
+        const fillWidth = item.actualMinutes > 0 ? Math.max(actualWidth, 6) : 0;
+        const targetOffset = Math.min(100, (targetHours / maxHours) * 100);
+        const deltaMinutes = item.actualMinutes - item.targetMinutes;
+        const deltaText = deltaMinutes === 0
+            ? 'Meta atingida'
+            : deltaMinutes > 0
+                ? `Passou ${formatMinsToHours(Math.abs(deltaMinutes))}`
+                : `Faltam ${formatMinsToHours(Math.abs(deltaMinutes))}`;
+        const percentLabel = `${Math.max(0, item.percent)}%`;
+        const actualLabelLeft = fillWidth > 0 ? Math.min(96, fillWidth) : 0;
+        const actualAlignClass = fillWidth > 86 ? 'end' : 'after-fill';
+        const targetAlignClass = targetOffset < 14 ? 'start' : (targetOffset > 86 ? 'end' : '');
+        const actualLabelMarkup = item.actualMinutes > 0
+            ? `<span class="goals-track-label actual ${actualAlignClass}" style="left:${actualLabelLeft}%;">Realizado ${formatMinsToHours(item.actualMinutes)}</span>`
+            : '';
+
+        return `
+            <div class="goals-comparison-row">
+                <div class="goals-comparison-head">
+                    <div class="goals-comparison-title-wrap">
+                        <div class="goals-comparison-name">${item.category}</div>
+                        <span class="goals-comparison-percent">${percentLabel}</span>
+                    </div>
+                    <span class="goals-comparison-status">${deltaText}</span>
+                </div>
+                <div class="goals-comparison-track-wrap">
+                    <div class="goals-comparison-track">
+                        <div class="goals-comparison-fill" style="width:${fillWidth}%; background:${item.palette.from}; color:${item.palette.from};"></div>
+                        ${actualLabelMarkup}
+                        <div class="goals-comparison-target" style="left:calc(${targetOffset}% - 1px);"></div>
+                    </div>
+                    <div class="goals-comparison-footer">
+                        <span class="goals-track-label target ${targetAlignClass}" style="left:${targetOffset}%;">Meta ${formatMinsToHours(item.targetMinutes)}</span>
+                    </div>
+                </div>
+            </div>
+        `;
+    }).join('');
+}
+
+function renderGoalsListLegacy() {
+    const listEl = document.getElementById('goalsList');
+    if (!listEl) return;
+
+    if (!focusGoals.length) {
+        listEl.innerHTML = '<div class="goals-empty-state">Nenhuma meta criada ainda. Comece com uma categoria que voce quer priorizar todos os dias.</div>';
+        return;
+    }
+
+    listEl.innerHTML = focusGoals
+        .slice()
+        .sort((a, b) => a.category.localeCompare(b.category, 'pt-BR'))
+        .map(goal => {
+            const palette = getCategoryPalette(goal.category);
+            const scheduleLabel = goal.schedule === 'everyday' ? 'Semana inteira' : 'Dias úteis';
+            return `
+                <div class="goal-item">
+                    <div class="goal-item-meta">
+                        <div class="goals-compact-meta">
+                            <span class="goals-category-dot" style="color:${palette.from}; background:${palette.from};"></span>
+                            <span class="goals-category-name">${goal.category}</span>
+                        </div>
+                        <span class="goal-item-subline">${formatMinsToHours(goal.dailyMinutes)} por dia - ${scheduleLabel}</span>
+                    </div>
+                    <div class="goals-progress-wrap">
+                        <div class="goals-progress-top">
+                            <span>Meta diária</span>
+                            <span>${goal.schedule === 'everyday' ? '7 dias' : 'Seg a sex'}</span>
+                        </div>
+                        <div class="goals-progress-rail">
+                            <div class="goals-progress-actual" style="width:100%; background:${palette.from}; color:${palette.from};"></div>
+                        </div>
+                    </div>
+                    <div class="goal-item-actions">
+                        <button class="goal-item-btn" type="button" data-action="edit-goal" data-goal-id="${goal.id}" title="Editar meta"><i class="fas fa-pen"></i></button>
+                        <button class="goal-item-btn danger" type="button" data-action="delete-goal" data-goal-id="${goal.id}" title="Remover meta"><i class="fas fa-trash"></i></button>
+                    </div>
+                </div>
+            `;
+        }).join('');
+}
+
+window.compileGoalsData = function() {
+    const period = window._goalsPeriod || 'week';
+    const overview = getGoalOverview(period);
+    const bestLabel = overview.bestCategory
+        ? `${overview.bestCategory.category} ${Math.max(0, overview.bestCategory.percent)}%`
+        : 'Sem dados';
+
+    document.getElementById('goalsHitRate').textContent = `${overview.hitCount}/${overview.activeCount}`;
+    document.getElementById('goalsAverageProgress').textContent = `${Math.max(0, overview.averageProgress)}%`;
+    document.getElementById('goalsStreakValue').textContent = `${overview.streak} dias`;
+    document.getElementById('goalsBestCategory').textContent = bestLabel;
+
+    renderGoalCategoryOptions();
+    renderGoalsComparisonChart(period);
+    renderGoalsList();
+
+    if (!window._goalsPeriodBound) {
+        window._goalsPeriodBound = true;
+        document.querySelectorAll('#goalsPeriodSelector .goals-period-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                document.querySelectorAll('#goalsPeriodSelector .goals-period-btn').forEach(item => item.classList.remove('active'));
+                btn.classList.add('active');
+                window._goalsPeriod = btn.dataset.period;
+                window.compileGoalsData();
+            });
+        });
+
+        document.querySelectorAll('.goal-schedule-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                document.querySelectorAll('.goal-schedule-btn').forEach(item => item.classList.remove('active'));
+                btn.classList.add('active');
+                document.getElementById('goalScheduleInput').value = btn.dataset.schedule;
+            });
+        });
+
+        document.getElementById('goalHoursDecrease')?.addEventListener('click', () => {
+            const currentHours = parseFloat(document.getElementById('goalDailyMinutesInput')?.value || '1');
+            updateGoalHoursDisplay(currentHours - 0.5);
+        });
+
+        document.getElementById('goalHoursIncrease')?.addEventListener('click', () => {
+            const currentHours = parseFloat(document.getElementById('goalDailyMinutesInput')?.value || '1');
+            updateGoalHoursDisplay(currentHours + 0.5);
+        });
+
+        document.getElementById('btnSaveGoal')?.addEventListener('click', () => {
+            const category = document.getElementById('goalCategorySelect')?.value;
+            const dailyHours = parseFloat(document.getElementById('goalDailyMinutesInput')?.value);
+            const dailyMinutes = Math.round((dailyHours || 0) * 60);
+            const schedule = document.getElementById('goalScheduleInput')?.value || 'weekdays';
+            const result = saveGoalEntry({ category, dailyMinutes, schedule });
+            if (!result.ok) {
+                showGlassToast(result.message);
+                return;
+            }
+
+            resetGoalForm();
+            showGlassToast(result.message);
+        });
+
+        document.getElementById('btnCancelGoalEdit')?.addEventListener('click', () => {
+            resetGoalForm();
+        });
+
+        document.getElementById('btnRefreshGoals')?.addEventListener('click', () => {
+            const icon = document.getElementById('goalsRefreshIcon');
+            if (icon) {
+                icon.classList.add('spin');
+                setTimeout(() => icon.classList.remove('spin'), 700);
+            }
+            window.compileGoalsData();
+        });
+    }
+};
+
+window.editGoalItem = function(goalId) {
+    openGoalEditModal(goalId);
+};
+
+window.deleteGoalItem = function(goalId) {
+    const goal = focusGoals.find(item => item.id === goalId);
+    if (!goal) return;
+
+    customConfirm(
+        'Excluir Meta',
+        `Deseja excluir a meta da categoria "${goal.category}"?`,
+        () => {
+            focusGoals = focusGoals.filter(item => item.id !== goalId);
+            saveFocusGoals();
+            if (editingGoalId === goalId) resetGoalForm();
+            renderStatsGoalsSummary(window._statsPeriod || 'week');
+            window.compileGoalsData();
+            showGlassToast('Meta removida');
+        }
+    );
+};
+
+function renderGoalsList() {
+    const listEl = document.getElementById('goalsList');
+    if (!listEl) return;
+
+    if (!focusGoals.length) {
+        listEl.innerHTML = '<div class="goals-empty-state">Nenhuma meta criada ainda. Comece com uma categoria que voce quer priorizar todos os dias.</div>';
+        return;
+    }
+
+    listEl.innerHTML = focusGoals
+        .slice()
+        .sort((a, b) => a.category.localeCompare(b.category, 'pt-BR'))
+        .map(goal => {
+            const palette = getCategoryPalette(goal.category);
+            const scheduleLabel = goal.schedule === 'everyday' ? 'Semana inteira' : 'Dias uteis';
+            const dailyHours = ((Number(goal.dailyMinutes) || 0) / 60).toFixed(1).replace('.0', '').replace('.', ',');
+            return `
+                <div class="goal-item">
+                    <div class="goal-item-meta">
+                        <div class="goals-compact-meta">
+                            <span class="goals-category-dot" style="color:${palette.from}; background:${palette.from};"></span>
+                            <span class="goals-category-name">${goal.category}</span>
+                        </div>
+                        <span class="goal-item-subline">${dailyHours}h por dia - ${scheduleLabel}</span>
+                    </div>
+                    <div class="goals-progress-wrap">
+                        <div class="goals-progress-top">
+                            <span>Meta diaria</span>
+                            <span>${goal.schedule === 'everyday' ? '7 dias' : 'Seg a sex'}</span>
+                        </div>
+                        <div class="goals-progress-rail">
+                            <div class="goals-progress-actual" style="width:100%; background:${palette.from}; color:${palette.from};"></div>
+                        </div>
+                    </div>
+                    <div class="goal-item-actions">
+                        <button class="goal-item-btn" type="button" onclick="window.editGoalItem(${goal.id})" title="Editar meta"><i class="fas fa-pen"></i></button>
+                        <button class="goal-item-btn danger" type="button" onclick="window.deleteGoalItem(${goal.id})" title="Remover meta"><i class="fas fa-trash"></i></button>
+                    </div>
+                </div>
+            `;
+        }).join('');
 }
 
 function getAccentColor() {
@@ -2878,8 +3709,8 @@ function renderTimeline(allHistory) {
     if (summaryEl) {
         const totalMins = todaySessions.reduce((sum, s) => sum + s.durationMinutes, 0);
         summaryEl.textContent = todaySessions.length > 0
-            ? `${todaySessions.length} sessões · ${formatMinsToHours(totalMins)} hoje`
-            : 'Nenhuma sessão hoje';
+            ? `${todaySessions.length} sessoes · ${formatMinsToHours(totalMins)} hoje`
+            : 'Nenhuma sessao hoje';
     }
 
     // Hour markers background (0-23)
@@ -2994,14 +3825,14 @@ document.addEventListener('DOMContentLoaded', () => {
 // ========== UPDATE SYSTEM ==========
 function setupUpdateListeners() {
     if (!window.electronAPI) {
-        console.warn('electronAPI não disponível - sistema de atualização desabilitado');
+        console.warn('electronAPI nao disponivel - sistema de atualizacao desabilitado');
         return;
     }
     
     // Listen for update downloaded
     if (window.electronAPI.onUpdateDownloaded) {
         window.electronAPI.onUpdateDownloaded((info) => {
-            console.log('Atualização baixada:', info);
+            console.log('Atualizacao baixada:', info);
             document.getElementById('updateDownloadBanner')?.remove();
             document.getElementById('updateInlineProgress')?.remove();
             if (window._manualUpdateTriggered) {
@@ -3029,7 +3860,7 @@ function setupUpdateListeners() {
                 banner.innerHTML = `
                     <div style="display:flex;align-items:center;gap:12px;margin-bottom:10px;">
                         <i class="fas fa-download" style="color:var(--accent-primary);"></i>
-                        <span style="font-weight:600;font-size:0.9rem;">Baixando atualização...</span>
+                        <span style="font-weight:600;font-size:0.9rem;">Baixando atualizacao...</span>
                         <span id="updateDownloadPct" style="margin-left:auto;font-size:0.85rem;color:var(--text-secondary);">0%</span>
                     </div>
                     <div style="background:rgba(255,255,255,0.1);border-radius:99px;height:4px;overflow:hidden;">
@@ -3045,7 +3876,7 @@ function setupUpdateListeners() {
     // Listen for manual update check results
     if (window.electronAPI.onUpdateCheckResult) {
         window.electronAPI.onUpdateCheckResult((result) => {
-            console.log('Resultado da verificação de atualização:', result);
+            console.log('Resultado da verificacao de atualizacao:', result);
             handleUpdateCheckResult(result);
         });
     }
@@ -3066,8 +3897,8 @@ function showUpdateNotification(info) {
             <div class="elegant-icon" style="background: linear-gradient(135deg, var(--accent-primary), var(--accent-secondary)); width: 70px; height: 70px; margin: 0 auto 20px;">
                 <i class="fas fa-download" style="font-size: 2rem;"></i>
             </div>
-            <h2 class="elegant-title" style="font-size: 1.6rem; margin-bottom: 12px;">Nova Versão Disponível! 🎉</h2>
-            <p class="elegant-message" style="font-size: 1.1rem; margin-bottom: 8px;">Versão <strong>${info.version}</strong> foi baixada</p>
+            <h2 class="elegant-title" style="font-size: 1.6rem; margin-bottom: 12px;">Nova Versao Disponivel!</h2>
+            <p class="elegant-message" style="font-size: 1.1rem; margin-bottom: 8px;">Versao <strong>${info.version}</strong> foi baixada</p>
             <div style="background: rgba(0,0,0,0.3); border-radius: 12px; padding: 16px; margin: 20px 0; text-align: left; max-height: 200px; overflow-y: auto;">
                 <div style="font-size: 0.75rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 1px; margin-bottom: 8px; font-weight: 700;">
                     <i class="fas fa-list-ul"></i> O QUE HÁ DE NOVO
@@ -3141,7 +3972,7 @@ async function checkForChangelog() {
             try {
                 changelog = await window.electronAPI.getChangelogForVersion(updatedVersion);
             } catch(e) {
-                console.error('Erro ao ler changelog para versão:', e);
+                console.error('Erro ao ler changelog para versao:', e);
             }
         }
 
@@ -3165,11 +3996,11 @@ function showChangelogModal(version, notes) {
             <div class="elegant-icon" style="background: linear-gradient(135deg, #10b981, #059669); width: 70px; height: 70px; margin: 0 auto 20px;">
                 <i class="fas fa-check-circle" style="font-size: 2rem;"></i>
             </div>
-            <h2 class="elegant-title" style="font-size: 1.7rem; margin-bottom: 12px;">Atualização Concluída! ✨</h2>
-            <p class="elegant-message" style="font-size: 1rem; margin-bottom: 8px;">Agora você está usando a versão <strong>${version}</strong></p>
+            <h2 class="elegant-title" style="font-size: 1.7rem; margin-bottom: 12px;">Atualizacao Concluida!</h2>
+            <p class="elegant-message" style="font-size: 1rem; margin-bottom: 8px;">Agora voce esta usando a versao <strong>${version}</strong></p>
             <div style="background: rgba(0,0,0,0.3); border-radius: 12px; padding: 16px; margin: 20px 0; text-align: left; max-height: 250px; overflow-y: auto;">
                 <div style="font-size: 0.75rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 1px; margin-bottom: 10px; font-weight: 700;">
-                    <i class="fas fa-sparkles"></i> NOVIDADES DESTA VERSÃO
+                    <i class="fas fa-sparkles"></i> NOVIDADES DESTA VERSoO
                 </div>
                 <div style="color: var(--text-secondary); font-size: 0.9rem; line-height: 1.6;">
                     ${formatReleaseNotes(notes)}
@@ -3208,7 +4039,7 @@ async function initSobreSection() {
                 sobreChangelogEl.innerHTML = '<span style="color:var(--text-secondary);font-size:0.9rem;">Erro ao carregar histórico de versões.</span>';
             }
         } else {
-            sobreChangelogEl.innerHTML = '<span style="color:var(--text-secondary);font-size:0.9rem;">Histórico de versões não disponível.</span>';
+            sobreChangelogEl.innerHTML = '<span style="color:var(--text-secondary);font-size:0.9rem;">Historico de versoes nao disponivel.</span>';
         }
     }
 }
@@ -3224,7 +4055,7 @@ function formatFullChangelog(markdown) {
         .replace(/^## \[([^\]]+)\] - (.+)$/gm, '<div style="margin-top:24px;margin-bottom:12px;padding-bottom:8px;border-bottom:1px solid rgba(255,255,255,0.1);"><span style="font-size:1.1rem;font-weight:700;color:var(--accent-primary);">v$1</span><span style="margin-left:10px;font-size:0.85rem;color:var(--text-secondary);">$2</span></div>')
         // Category headers (### Adicionado, ### Corrigido, etc)
         .replace(/^### (.+)$/gm, '<div style="margin-top:16px;margin-bottom:8px;font-size:0.75rem;font-weight:700;color:var(--text-secondary);text-transform:uppercase;letter-spacing:1px;"><i class="fas fa-chevron-right" style="font-size:0.6rem;margin-right:6px;"></i>$1</div>')
-        // Sub-category headers (#### 🎯 Sistema de Foco)
+        // Sub-category headers (#### Sistema de Foco)
         .replace(/^#### (.+)$/gm, '<div style="margin-top:14px;margin-bottom:8px;font-size:0.9rem;font-weight:600;color:white;">$1</div>')
         // Bullet points
         .replace(/^- (.+)$/gm, '<div style="display:flex;align-items:flex-start;gap:8px;margin-bottom:6px;padding-left:12px;"><i class="fas fa-check" style="color:var(--accent-primary);font-size:0.7rem;margin-top:4px;flex-shrink:0;"></i><span style="font-size:0.9rem;line-height:1.6;">$1</span></div>')
@@ -3286,7 +4117,7 @@ function handleUpdateCheckResult(result) {
                     <i class="fas fa-check-circle"></i>
                 </div>
                 <h2 class="elegant-title">Tudo Atualizado!</h2>
-                <p class="elegant-message">${result.message || 'Você já está na versão mais recente.'}</p>
+                <p class="elegant-message">${result.message || 'Voce ja esta na versao mais recente.'}</p>
                 <button class="btn-modal primary" onclick="this.closest('.modal-overlay').remove()" style="background: linear-gradient(135deg, #10b981, #059669); display: block; margin: 0 auto;">Fechar</button>
             </div>
         `;
@@ -3299,7 +4130,7 @@ function handleUpdateCheckResult(result) {
 window.testChangelog = function() {
     const testChangelog = `### Corrigido
 - Scroll nas configurações agora funciona corretamente
-- Seções de configuração não são mais cortadas na parte inferior
+- Secoes de configuracao nao sao mais cortadas na parte inferior
 - Layout da view de estatísticas também ajustado para scroll adequado
 
 ### Adicionado

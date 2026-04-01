@@ -58,6 +58,7 @@
             <div class="sidebar-menu" id="sidebarMenu">
                 <a class="sidebar-item active" data-view="view-home"><i class="fas fa-home"></i><span>Home</span></a>
                 <a class="sidebar-item" data-view="view-stats"><i class="fas fa-chart-pie"></i><span>Estatísticas</span></a>
+                <a class="sidebar-item" data-view="view-goals"><i class="fas fa-bullseye"></i><span>Metas</span></a>
                 <a class="sidebar-item" data-view="view-settings"><i class="fas fa-cog"></i><span>Configurações</span></a>
             </div>
             
@@ -81,7 +82,6 @@
                     <header class="app-header" style="justify-content: flex-end;">
                         <div class="header-controls">
                             <div id="nowPlaying" class="now-playing"><i class="fas fa-music"></i><span>Nenhum som selecionado</span></div>
-                            <button id="btnTasks" class="btn-tasks"><i class="fas fa-list"></i><span id="headerTaskCount" class="badge">0</span></button>
                             <button id="btnNewTaskHeader" class="btn-new-task-header"><i class="fas fa-plus"></i><span>Nova Tarefa</span></button>
                             
                             <button id="btnEnterPip" class="btn-new-task-header secondary-btn btn-pip-trigger" title="Modo PIP (Picture in Picture)">
@@ -259,8 +259,11 @@
                     <!-- Nível 2: Charts -->
                     <div class="bento-panel bento-donut" style="grid-column: span 2;">
                         <h3 class="bento-panel-title">DISTRIBUIÇÃO DE FOCO</h3>
-                        <div class="bento-chart-container donut-container">
-                            <canvas id="categoriesChart"></canvas>
+                        <div class="bento-chart-container donut-container donut-layout">
+                            <div class="donut-canvas-wrap">
+                                <canvas id="categoriesChart"></canvas>
+                            </div>
+                            <div id="categoriesLegend" class="stats-legend"></div>
                         </div>
                     </div>
                     <div class="bento-panel bento-bar" style="grid-column: span 2;">
@@ -270,84 +273,150 @@
                         </div>
                     </div>
 
-                    <!-- Nível 3: Histórico do Dia -->
                     <div class="bento-panel" style="grid-column: span 4;">
                         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
-                            <h3 class="bento-panel-title" style="margin-bottom: 0;"><i class="fas fa-history" style="margin-right:8px; color: var(--accent-primary);"></i>HISTÓRICO DO DIA</h3>
-                            <div id="sessionHistoryDate" style="font-size: 0.75rem; color: rgba(255,255,255,0.45);">Sexta-feira, 28 de Março</div>
+                            <h3 class="bento-panel-title" style="margin-bottom: 0;"><i class="fas fa-bullseye" style="margin-right:8px; color: var(--accent-primary);"></i>METAS X REALIZADO</h3>
+                            <div id="statsGoalsPeriodLabel" style="font-size: 0.75rem; color: rgba(255,255,255,0.45);">Semana atual</div>
                         </div>
-                        <div class="session-history-table" id="sessionHistoryTable">
-
-                            <!-- MANHÃ -->
-                            <div class="session-period-row">
-                                <div class="session-period-info">
-                                    <div class="session-period-name"><span class="session-period-emoji">🌅</span> Manhã</div>
-                                    <div class="session-period-range">06:00 – 12:00</div>
+                        <div class="goals-summary-panel" id="statsGoalsSummary">
+                            <div class="goals-summary-header">
+                                <div>
+                                    <div class="goals-summary-badge" id="statsGoalsStatusBadge">Sem metas ativas</div>
+                                    <div class="goals-summary-headline" id="statsGoalsHeadline">Crie metas por categoria para acompanhar seu ritmo real de foco.</div>
                                 </div>
-                                <div class="session-period-cats">
-                                    <div class="session-cat-row">
-                                        <span class="session-cat-dot" style="background:#6366f1;"></span>
-                                        <span class="session-cat-name">Estudos</span>
-                                        <div class="session-cat-bar-wrap"><div class="session-cat-bar" style="width:67%;background:#6366f1;"></div></div>
-                                        <span class="session-cat-dur">1h 30m</span>
-                                    </div>
-                                    <div class="session-cat-row">
-                                        <span class="session-cat-dot" style="background:#10b981;"></span>
-                                        <span class="session-cat-name">Trabalho</span>
-                                        <div class="session-cat-bar-wrap"><div class="session-cat-bar" style="width:33%;background:#10b981;"></div></div>
-                                        <span class="session-cat-dur">45m</span>
-                                    </div>
-                                </div>
-                                <div class="session-period-total">2h 15m</div>
+                                <div class="goals-summary-caption" id="statsGoalsCaption">Assim que houver metas, este painel compara o planejado com o realizado.</div>
                             </div>
-
-                            <!-- TARDE -->
-                            <div class="session-period-row">
-                                <div class="session-period-info">
-                                    <div class="session-period-name"><span class="session-period-emoji">☀️</span> Tarde</div>
-                                    <div class="session-period-range">12:00 – 18:00</div>
-                                </div>
-                                <div class="session-period-cats">
-                                    <div class="session-cat-row">
-                                        <span class="session-cat-dot" style="background:#10b981;"></span>
-                                        <span class="session-cat-name">Trabalho</span>
-                                        <div class="session-cat-bar-wrap"><div class="session-cat-bar" style="width:69%;background:#10b981;"></div></div>
-                                        <span class="session-cat-dur">2h 15m</span>
-                                    </div>
-                                    <div class="session-cat-row">
-                                        <span class="session-cat-dot" style="background:#f59e0b;"></span>
-                                        <span class="session-cat-name">Projetos</span>
-                                        <div class="session-cat-bar-wrap"><div class="session-cat-bar" style="width:31%;background:#f59e0b;"></div></div>
-                                        <span class="session-cat-dur">1h</span>
-                                    </div>
-                                </div>
-                                <div class="session-period-total">3h 15m</div>
-                            </div>
-
-                            <!-- NOITE -->
-                            <div class="session-period-row">
-                                <div class="session-period-info">
-                                    <div class="session-period-name"><span class="session-period-emoji">🌙</span> Noite</div>
-                                    <div class="session-period-range">18:00 – 00:00</div>
-                                </div>
-                                <div class="session-period-cats">
-                                    <div class="session-cat-row">
-                                        <span class="session-cat-dot" style="background:#ec4899;"></span>
-                                        <span class="session-cat-name">Hobbies</span>
-                                        <div class="session-cat-bar-wrap"><div class="session-cat-bar" style="width:67%;background:#ec4899;"></div></div>
-                                        <span class="session-cat-dur">1h</span>
-                                    </div>
-                                    <div class="session-cat-row">
-                                        <span class="session-cat-dot" style="background:#6366f1;"></span>
-                                        <span class="session-cat-name">Estudos</span>
-                                        <div class="session-cat-bar-wrap"><div class="session-cat-bar" style="width:33%;background:#6366f1;"></div></div>
-                                        <span class="session-cat-dur">30m</span>
-                                    </div>
-                                </div>
-                                <div class="session-period-total">1h 30m</div>
-                            </div>
-
+                            <div class="goals-compact-list" id="statsGoalsSummaryList"></div>
                         </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- GOALS VIEW -->
+        <div id="view-goals" class="view-container goals-view">
+            <div class="vpa-topbar">
+                <div class="vpa-pill">
+                    <button class="btn-master-play-icon" id="goalsPlayerPlayBtn"><i class="fas fa-play"></i></button>
+                    <button class="btn-master-play-icon" id="goalsPlayerMuteBtn"><i class="fas fa-volume-up"></i></button>
+                    <input type="range" id="goalsPlayerVolumeSlider" min="0" max="100" value="70" class="header-vol-slider">
+                    <span id="goalsPlayerVolumeValue" class="header-vol-value">70%</span>
+                </div>
+                <div class="vpa-sound-trigger" id="goalsPlayerSoundTrigger">
+                    <i class="fas fa-music"></i>
+                    <span id="goalsPlayerSoundName">Nenhum som</span>
+                    <i class="fas fa-chevron-down vpa-trigger-arrow"></i>
+                    <div class="vpa-sounds" id="goalsPlayerSounds"></div>
+                </div>
+            </div>
+            <div class="app-container" style="padding-top: 20px; max-width: 1200px; margin: 0 auto; height: auto; min-height: unset; padding-bottom: 60px;">
+                <div style="margin-bottom: 20px; display: flex; justify-content: space-between; align-items: flex-end; gap: 16px; flex-wrap: wrap;">
+                    <div>
+                        <h2 style="font-size: 1rem; font-weight: 700; margin-bottom: 2px; color: var(--text-secondary); letter-spacing: 3px; text-transform: uppercase;">Metas /</h2>
+                        <h1 style="font-size: 2.5rem; font-weight: 800; color: white;">Planeje por categoria</h1>
+                        <p style="color: var(--text-secondary); font-size: 1rem; margin-top: 3px;">Defina metas diárias e acompanhe o quanto você realmente entregou.</p>
+                    </div>
+                    <div style="display: flex; gap: 8px; align-items: center; margin-bottom: 12px;">
+                        <div class="stats-period-selector" id="goalsPeriodSelector">
+                            <button class="stats-period-btn goals-period-btn active" data-period="week">Semana</button>
+                            <button class="stats-period-btn goals-period-btn" data-period="day">Hoje</button>
+                            <button class="stats-period-btn goals-period-btn" data-period="month">Mês</button>
+                        </div>
+                        <button id="btnRefreshGoals" class="stats-refresh-btn" title="Atualizar metas">
+                            <i class="fas fa-sync-alt" id="goalsRefreshIcon"></i>
+                        </button>
+                    </div>
+                </div>
+
+                <div class="bento-grid-dashboard">
+                    <div class="bento-card bento-glow-primary">
+                        <div class="bento-card-header">
+                            <span style="font-size:0.8rem;font-weight:600;letter-spacing:1px;color:var(--text-secondary);"><i class="fas fa-bullseye" style="color:var(--accent-primary);margin-right:6px;"></i> METAS BATIDAS</span>
+                            <span class="metric-info" data-tooltip="Quantidade de categorias que bateram a meta no período selecionado."><i class="fas fa-info-circle"></i></span>
+                        </div>
+                        <h2 id="goalsHitRate">0/0</h2>
+                    </div>
+                    <div class="bento-card bento-glow-primary">
+                        <div class="bento-card-header">
+                            <span style="font-size:0.8rem;font-weight:600;letter-spacing:1px;color:var(--text-secondary);"><i class="fas fa-chart-line" style="color:var(--accent-primary);margin-right:6px;"></i> PROGRESSO MÉDIO</span>
+                            <span class="metric-info" data-tooltip="Percentual entre o total realizado e o total planejado para todas as metas ativas neste período."><i class="fas fa-info-circle"></i></span>
+                        </div>
+                        <h2 id="goalsAverageProgress">0%</h2>
+                    </div>
+                    <div class="bento-card bento-glow-primary">
+                        <div class="bento-card-header">
+                            <span style="font-size:0.8rem;font-weight:600;letter-spacing:1px;color:var(--text-secondary);"><i class="fas fa-fire" style="color:var(--accent-primary);margin-right:6px;"></i> SEQUÊNCIA</span>
+                            <span class="metric-info" data-tooltip="Dias consecutivos em que todas as metas aplicáveis do dia foram cumpridas."><i class="fas fa-info-circle"></i></span>
+                        </div>
+                        <h2 id="goalsStreakValue">0 dias</h2>
+                    </div>
+                    <div class="bento-card bento-glow-primary">
+                        <div class="bento-card-header">
+                            <span style="font-size:0.8rem;font-weight:600;letter-spacing:1px;color:var(--text-secondary);"><i class="fas fa-award" style="color:var(--accent-primary);margin-right:6px;"></i> DESTAQUE</span>
+                            <span class="metric-info" data-tooltip="Categoria com melhor percentual de execução em relação à meta no período selecionado."><i class="fas fa-info-circle"></i></span>
+                        </div>
+                        <h2 id="goalsBestCategory">Sem dados</h2>
+                    </div>
+
+                    <div class="bento-panel" style="grid-column: span 4;">
+                        <div class="goals-panel-header">
+                            <div>
+                                <h3 class="bento-panel-title" style="margin-bottom: 4px;">COMPARATIVO POR CATEGORIA</h3>
+                                <p class="goals-panel-subtitle" id="goalsChartSubtitle">Barra = realizado. Traço = meta do período.</p>
+                            </div>
+                            <div class="goals-status-pill" id="goalsMomentumPill">Sem metas ativas</div>
+                        </div>
+                        <div class="goals-chart-container">
+                            <div id="goalsComparisonList" class="goals-comparison-list"></div>
+                        </div>
+                    </div>
+
+                    <div class="bento-panel" style="grid-column: span 2;">
+                        <div class="goals-panel-header">
+                            <div>
+                                <h3 class="bento-panel-title" style="margin-bottom: 4px;">CONFIGURAR META</h3>
+                                <p class="goals-panel-subtitle">Defina uma base diária e o app expande para semana e mês.</p>
+                            </div>
+                        </div>
+                        <div class="goal-form-grid">
+                            <div class="form-group goal-field goal-field-category">
+                                <label for="goalCategorySelect"><i class="fas fa-tag"></i> Categoria</label>
+                                <select id="goalCategorySelect" class="glass-select"></select>
+                            </div>
+                            <div class="form-group goal-field goal-field-hours">
+                                <label for="goalDailyMinutesInput"><i class="fas fa-clock"></i> Horas por dia</label>
+                                <div class="goal-hours-stepper">
+                                    <button id="goalHoursDecrease" class="goal-hours-btn" type="button" aria-label="Diminuir horas"><i class="fas fa-minus"></i></button>
+                                    <div class="goal-hours-display">
+                                        <span id="goalHoursValue">1h</span>
+                                        <small>por dia</small>
+                                    </div>
+                                    <button id="goalHoursIncrease" class="goal-hours-btn" type="button" aria-label="Aumentar horas"><i class="fas fa-plus"></i></button>
+                                </div>
+                                <input type="hidden" id="goalDailyMinutesInput" value="1">
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label><i class="fas fa-calendar-week"></i> Aplicar em</label>
+                            <div class="stats-period-selector goal-schedule-selector" id="goalScheduleSelector">
+                                <button class="stats-period-btn goal-schedule-btn active" data-schedule="weekdays" type="button">Dias úteis</button>
+                                <button class="stats-period-btn goal-schedule-btn" data-schedule="everyday" type="button">Semana inteira</button>
+                            </div>
+                            <input type="hidden" id="goalScheduleInput" value="weekdays">
+                        </div>
+                        <div class="modal-actions goal-form-actions">
+                            <button id="btnSaveGoal" class="btn-modal primary"><i class="fas fa-save"></i>Salvar meta</button>
+                        </div>
+                    </div>
+
+                    <div class="bento-panel" style="grid-column: span 2;">
+                        <div class="goals-panel-header">
+                            <div>
+                                <h3 class="bento-panel-title" style="margin-bottom: 4px;">METAS ATIVAS</h3>
+                                <p class="goals-panel-subtitle">Edite, remova ou acompanhe as categorias que vão puxar seu foco.</p>
+                            </div>
+                        </div>
+                        <div class="goals-list" id="goalsList"></div>
                     </div>
                 </div>
             </div>
