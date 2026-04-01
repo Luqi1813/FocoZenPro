@@ -689,6 +689,52 @@
 
     <div id="appToast" class="glass-toast" role="status" aria-live="polite"></div>
 
+    <div id="assistantBackdrop" class="assistant-backdrop"></div>
+
+    <button id="assistantFab" class="assistant-fab" type="button" title="Abrir assistente">
+        <i class="fas fa-brain"></i>
+        <span>Assistente</span>
+    </button>
+
+    <aside id="assistantDock" class="assistant-dock" aria-hidden="true">
+        <div class="assistant-dock-header">
+            <div class="assistant-dock-title">
+                <div class="assistant-dock-icon"><i class="fas fa-brain"></i></div>
+                <div>
+                    <strong>Assistente</strong>
+                    <span id="assistantContextLabel">Copiloto do app</span>
+                </div>
+            </div>
+            <div class="assistant-header-actions">
+                <button id="assistantClearBtn" class="assistant-clear-btn" type="button" aria-label="Limpar conversa">
+                    <i class="fas fa-broom"></i>
+                    <span>Limpar</span>
+                </button>
+                <button id="assistantCloseBtn" class="assistant-close-btn" type="button" aria-label="Fechar assistente">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+        </div>
+
+        <div class="assistant-panel-note">
+            Pergunte de forma natural sobre metas, historico, foco, categorias e desempenho.
+        </div>
+
+        <div id="assistantMessages" class="assistant-messages" aria-live="polite"></div>
+
+        <div class="assistant-suggestions-block">
+            <div class="assistant-suggestions-label">Sugestoes</div>
+            <div id="assistantSuggestions" class="assistant-suggestions"></div>
+        </div>
+
+        <form id="assistantComposer" class="assistant-composer">
+            <textarea id="assistantInput" rows="1" placeholder="Ex: quanto foquei esta semana? ou crie uma meta de 2h por dia para Estudos"></textarea>
+            <button id="assistantSendBtn" class="assistant-send-btn" type="submit">
+                <i class="fas fa-paper-plane"></i>
+            </button>
+        </form>
+    </aside>
+
     <script src="./node_modules/chart.js/dist/chart.umd.js"></script>
     <script src="renderer.js"></script>
 </body>

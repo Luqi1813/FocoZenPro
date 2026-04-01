@@ -86,6 +86,10 @@ let testMode = false;
 let pendingCompletionType = null;
 let pendingTaskResolution = null;
 let feedbackPopupTimer = null;
+let assistantMessages = [];
+let assistantSuggestions = [];
+let isAssistantOpen = false;
+let assistantConversationState = null;
 
 const motivationalRestartMessages = [
     'Pausar nao e desistir. Voce pode recomecar com mais clareza depois.',
@@ -183,6 +187,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     try { initTaskForm(); } catch(e) { console.error('Erro Formulário:', e); }
     try { initSidebarControls(); } catch(e) { console.error('Erro Sidebar:', e); }
     try { initPipIntegration(); } catch(e) { console.error('Erro PIP:', e); }
+    try { initAssistant(); } catch(e) { console.error('Erro Assistente:', e); }
 
     // ATUALIZACAO FORCADA DAS LISTAS PARA CORRIGIR O BUG "NENHUMA TAREFA"
     try {
@@ -456,6 +461,8 @@ function switchView(viewId) {
         const input = document.getElementById('settingsNameInput');
         if (input) input.value = username;
     }
+
+    if (window.updateAssistantContext) window.updateAssistantContext();
 }
 
 function initNavigation() {
@@ -1736,6 +1743,7 @@ function renderTasksSidebar() {
     const list = document.getElementById('tasksListSidebar');
     const empty = document.getElementById('emptyStateSidebar');
     if (!list) return; list.innerHTML = '';
+    document.body.classList.toggle('bulk-delete-mode', !!isDeleteMode);
 
     if (tasks.length === 0) {
         if (empty) empty.style.setProperty('display', 'flex', 'important');
@@ -1797,7 +1805,7 @@ function renderTasksSidebar() {
         item.innerHTML = `
             <div class="task-info-area" onclick="${isDeleteMode ? `window.toggleTaskSelectionWrap(${task.id})` : `window.selectTask(${task.id})`}">
                 <div class="task-sidebar-header">
-                    <div style="display:flex; flex-direction:column;">
+                    <div class="task-sidebar-title-block">
                         <span class="task-sidebar-name">${task.name}</span>
                         <span class="task-sidebar-cat"><i class="fas fa-tag"></i> ${task.category || 'Livre'}</span>
                     </div>
@@ -4124,6 +4132,2242 @@ function handleUpdateCheckResult(result) {
     }
     
     document.body.appendChild(overlay);
+}
+
+// ==========================================
+// ASSISTENTE GLOBAL
+// ==========================================
+function getAssistantStorageKey() {
+    return 'focozen_assistant_messages';
+}
+
+function persistAssistantMessages() {
+    writeJsonStorage(getAssistantStorageKey(), assistantMessages.slice(-24));
+}
+
+function escapeHtml(value) {
+    return String(value || '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+}
+
+function formatAssistantContent(text) {
+    return escapeHtml(text)
+        .replace(/\n/g, '<br>')
+        .replace(/&#39;/g, "'");
+}
+
+function normalizeAssistantText(value = '') {
+    return value
+        .toLowerCase()
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .replace(/[^\w\s]/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim();
+}
+
+function includesAny(text, terms) {
+    return terms.some(term => text.includes(term));
+}
+
+function hasWholeToken(text, terms) {
+    const tokens = new Set(text.split(' ').filter(Boolean));
+    return terms.some(term => tokens.has(term));
+}
+
+function getCurrentViewId() {
+    return document.querySelector('.view-container.active')?.id || 'view-home';
+}
+
+function getAssistantViewLabel(viewId = getCurrentViewId()) {
+    return {
+        'view-home': 'Home',
+        'view-stats': 'Estatísticas',
+        'view-goals': 'Metas',
+        'view-settings': 'Configurações'
+    }[viewId] || 'App';
+}
+
+function getAssistantDefaultSuggestions(viewId = getCurrentViewId()) {
+    const suggestionsByView = {
+        'view-home': [
+            'Quanto foquei hoje?',
+            'O que focar agora?',
+            'Crie uma meta de 2h por dia para Estudos'
+        ],
+        'view-stats': [
+            'Qual categoria recebeu mais foco esta semana?',
+            'Resuma meu mês',
+            'Quantas sessões de foco tive hoje?'
+        ],
+        'view-goals': [
+            'Crie uma meta de 3h por dia para Trabalho em dias úteis',
+            'Quais metas bati esta semana?',
+            'Como estou em Estudos?'
+        ],
+        'view-settings': [
+            'Quais metas estão ativas?',
+            'Quanto foquei esta semana?',
+            'O que focar agora?'
+        ]
+    };
+
+    return suggestionsByView[viewId] || suggestionsByView['view-home'];
+}
+
+function setAssistantSuggestions(list) {
+    assistantSuggestions = Array.isArray(list) && list.length ? list.slice(0, 4) : getAssistantDefaultSuggestions();
+    renderAssistantSuggestions();
+}
+
+function createAssistantWelcomeMessage() {
+    const firstName = (username || 'Mestre').split(' ')[0];
+    const insight = buildAssistantOpenInsight();
+    return {
+        id: Date.now(),
+        role: 'assistant',
+        content: `Oi, ${firstName}. Eu fico de olho no que acontece no app e posso conversar com você sobre metas, histórico, categorias, foco e próximos passos. Se quiser, posso tanto responder quanto agir por aqui.`,
+        actions: [
+            { type: 'prompt', value: 'Quanto foquei hoje?', label: 'Resumo de hoje' },
+            { type: 'prompt', value: 'O que focar agora?', label: 'Próximo foco' }
+        ]
+    };
+}
+
+function syncAssistantWelcomeMessage() {
+    if (!assistantMessages.length || assistantMessages[0]?.role !== 'assistant') return;
+    const firstName = (username || 'Mestre').split(' ')[0];
+    const insight = buildAssistantOpenInsight();
+    assistantMessages[0] = {
+        id: assistantMessages[0].id || Date.now(),
+        role: 'assistant',
+        content: `Oi, ${firstName}. Eu fico de olho no que acontece no app e posso conversar com voc\u00ea sobre metas, hist\u00f3rico, categorias, foco e pr\u00f3ximos passos. Se quiser, posso tanto responder quanto agir por aqui.\n\n${insight}`,
+        actions: [
+            { type: 'prompt', value: 'Quanto foquei hoje?', label: 'Resumo de hoje' },
+            { type: 'prompt', value: 'O que focar agora?', label: 'Pr\u00f3ximo foco' }
+        ]
+    };
+    persistAssistantMessages();
+}
+
+function pushAssistantMessage(role, content, actions = []) {
+    assistantMessages.push({
+        id: Date.now() + Math.floor(Math.random() * 1000),
+        role,
+        content,
+        actions
+    });
+    assistantMessages = assistantMessages.slice(-24);
+    persistAssistantMessages();
+    renderAssistantMessages();
+}
+
+function renderAssistantMessages() {
+    const container = document.getElementById('assistantMessages');
+    if (!container) return;
+
+    const typingMarkup = window._assistantTyping
+        ? `
+            <div class="assistant-message assistant typing">
+                <span class="assistant-dot"></span>
+                <span class="assistant-dot"></span>
+                <span class="assistant-dot"></span>
+            </div>
+        `
+        : '';
+
+    container.innerHTML = assistantMessages.map(message => {
+        const actionsMarkup = Array.isArray(message.actions) && message.actions.length
+            ? `
+                <div class="assistant-message-actions">
+                    ${message.actions.map(action => `
+                        <button
+                            class="assistant-message-action"
+                            type="button"
+                            data-assistant-action-type="${escapeHtml(action.type)}"
+                            data-assistant-action-value="${encodeURIComponent(action.value || '')}">
+                            ${escapeHtml(action.label)}
+                        </button>
+                    `).join('')}
+                </div>
+            `
+            : '';
+
+        const metaMarkup = message.role === 'assistant'
+            ? `<div class="assistant-message-meta"><i class="fas fa-brain"></i><span>Assistente</span></div>`
+            : `<div class="assistant-message-meta"><i class="fas fa-user"></i><span>${escapeHtml((username || 'Você').split(' ')[0])}</span></div>`;
+
+        return `
+            <div class="assistant-message ${message.role}">
+                ${metaMarkup}
+                <div>${formatAssistantContent(message.content)}</div>
+                ${actionsMarkup}
+            </div>
+        `;
+    }).join('') + typingMarkup;
+
+    container.scrollTop = container.scrollHeight;
+}
+
+function renderAssistantSuggestions() {
+    const container = document.getElementById('assistantSuggestions');
+    if (!container) return;
+
+    container.innerHTML = assistantSuggestions.map(item => `
+        <button
+            class="assistant-suggestion-btn"
+            type="button"
+            data-assistant-prompt="${encodeURIComponent(item)}">
+            ${escapeHtml(item)}
+        </button>
+    `).join('');
+}
+
+function setAssistantOpen(open) {
+    isAssistantOpen = !!open;
+    document.body.classList.toggle('assistant-open', isAssistantOpen);
+    const dock = document.getElementById('assistantDock');
+    if (dock) dock.setAttribute('aria-hidden', String(!isAssistantOpen));
+    if (isAssistantOpen) {
+        document.getElementById('assistantInput')?.focus();
+        renderAssistantMessages();
+    }
+}
+
+function switchViewFromAssistant(viewId, closeAfter = true) {
+    switchView(viewId);
+    if (closeAfter) {
+        requestAnimationFrame(() => setAssistantOpen(false));
+    }
+}
+
+function autoResizeAssistantInput() {
+    const input = document.getElementById('assistantInput');
+    if (!input) return;
+    input.style.height = 'auto';
+    input.style.height = `${Math.min(input.scrollHeight, 140)}px`;
+}
+
+function updateAssistantContext() {
+    const label = document.getElementById('assistantContextLabel');
+    if (label) label.textContent = `${getAssistantViewLabel()} · respostas com base nos seus dados`;
+
+    if (!assistantMessages.length) {
+        assistantMessages = [createAssistantWelcomeMessage()];
+    }
+
+    syncAssistantWelcomeMessage();
+    renderAssistantMessages();
+
+    if (!window._assistantPinnedSuggestions) {
+        setAssistantSuggestions(getAssistantDefaultSuggestions());
+    }
+}
+
+window.updateAssistantContext = updateAssistantContext;
+
+function resetAssistantChat() {
+    assistantConversationState = null;
+    assistantMessages = [createAssistantWelcomeMessage()];
+    syncAssistantWelcomeMessage();
+    renderAssistantMessages();
+    setAssistantSuggestions(getAssistantDefaultSuggestions());
+}
+
+function initAssistant() {
+    const storedMessages = readJsonStorage(getAssistantStorageKey(), []);
+    assistantMessages = Array.isArray(storedMessages) && storedMessages.length
+        ? storedMessages
+        : [createAssistantWelcomeMessage()];
+
+    syncAssistantWelcomeMessage();
+    setAssistantSuggestions(getAssistantDefaultSuggestions());
+    renderAssistantMessages();
+    updateAssistantContext();
+
+    const fab = document.getElementById('assistantFab');
+    const backdrop = document.getElementById('assistantBackdrop');
+    const closeBtn = document.getElementById('assistantCloseBtn');
+    const clearBtn = document.getElementById('assistantClearBtn');
+    const form = document.getElementById('assistantComposer');
+    const input = document.getElementById('assistantInput');
+    const messages = document.getElementById('assistantMessages');
+    const suggestions = document.getElementById('assistantSuggestions');
+
+    fab?.addEventListener('click', () => setAssistantOpen(true));
+    closeBtn?.addEventListener('click', () => setAssistantOpen(false));
+    backdrop?.addEventListener('click', () => setAssistantOpen(false));
+    clearBtn?.addEventListener('click', (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        customConfirm('Limpar conversa', 'Deseja limpar o histórico desta conversa com o assistente?', () => {
+            resetAssistantChat();
+        });
+    });
+
+    form?.addEventListener('submit', (event) => {
+        event.preventDefault();
+        handleAssistantSubmit();
+    });
+
+    input?.addEventListener('input', autoResizeAssistantInput);
+    input?.addEventListener('keydown', (event) => {
+        if (event.key === 'Enter' && !event.shiftKey) {
+            event.preventDefault();
+            handleAssistantSubmit();
+        }
+        if (event.key === 'Escape' && isAssistantOpen) {
+            setAssistantOpen(false);
+        }
+    });
+
+    suggestions?.addEventListener('click', (event) => {
+        const button = event.target.closest('[data-assistant-prompt]');
+        if (!button) return;
+        const prompt = decodeURIComponent(button.dataset.assistantPrompt || '');
+        if (!prompt) return;
+        input.value = prompt;
+        autoResizeAssistantInput();
+        handleAssistantSubmit();
+    });
+
+    messages?.addEventListener('click', (event) => {
+        const button = event.target.closest('[data-assistant-action-type]');
+        if (!button) return;
+        const type = button.dataset.assistantActionType;
+        const value = decodeURIComponent(button.dataset.assistantActionValue || '');
+        if (type === 'view' && value) {
+            switchViewFromAssistant(value, true);
+            return;
+        }
+        if (type === 'prompt' && value) {
+            input.value = value;
+            autoResizeAssistantInput();
+            handleAssistantSubmit();
+        }
+    });
+
+    document.addEventListener('keydown', (event) => {
+        if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'j') {
+            event.preventDefault();
+            setAssistantOpen(!isAssistantOpen);
+        }
+    });
+
+    autoResizeAssistantInput();
+}
+
+function handleAssistantSubmit() {
+    const input = document.getElementById('assistantInput');
+    if (!input) return;
+
+    const rawText = input.value.trim();
+    if (!rawText) return;
+
+    setAssistantOpen(true);
+    pushAssistantMessage('user', rawText);
+    input.value = '';
+    autoResizeAssistantInput();
+    window._assistantTyping = true;
+    renderAssistantMessages();
+
+    setTimeout(() => {
+        const expandedText = expandAssistantFollowUp(rawText);
+        const reply = personalizeAssistantReply(buildAssistantReply(expandedText, rawText));
+        window._assistantTyping = false;
+        if (reply.context) assistantConversationState = reply.context;
+        pushAssistantMessage('assistant', reply.content, reply.actions || []);
+        setAssistantSuggestions(reply.suggestions || getAssistantDefaultSuggestions());
+        if (reply.autoClose) {
+            requestAnimationFrame(() => setAssistantOpen(false));
+        }
+    }, 240);
+}
+
+function getAssistantDefaultPeriod() {
+    const currentView = getCurrentViewId();
+    if (currentView === 'view-stats') return window._statsPeriod || 'day';
+    if (currentView === 'view-goals') return window._goalsPeriod || 'day';
+    return 'day';
+}
+
+function detectAssistantTemporalContext(text, fallback = null) {
+    const normalized = normalizeAssistantText(text);
+
+    if (includesAny(normalized, ['ontem'])) return { period: 'day', previous: true };
+    if (includesAny(normalized, ['semana passada', 'na semana passada'])) return { period: 'week', previous: true };
+    if (includesAny(normalized, ['mes passado', 'no mes passado', 'mês passado'])) return { period: 'month', previous: true };
+
+    if (includesAny(normalized, ['mes', 'mensal', 'ultimos 30 dias', 'ultimo mes'])) return { period: 'month', previous: false };
+    if (includesAny(normalized, ['semana', 'semanal', 'ultimos 7 dias'])) return { period: 'week', previous: false };
+    if (includesAny(normalized, ['hoje', 'agora', 'dia', 'diario'])) return { period: 'day', previous: false };
+
+    return fallback || { period: getAssistantDefaultPeriod(), previous: false };
+}
+
+function detectAssistantPeriod(text) {
+    return detectAssistantTemporalContext(text).period;
+}
+
+function getPeriodNarration(period, previous = false) {
+    if (previous) {
+        return {
+            day: 'ontem',
+            week: 'na semana passada',
+            month: 'no mês passado'
+        }[period] || 'no período anterior';
+    }
+
+    return {
+        day: 'hoje',
+        week: 'na semana atual',
+        month: 'nos ultimos 30 dias'
+    }[period] || 'neste periodo';
+}
+
+function getPeriodPromptPhrase(period, previous = false) {
+    if (previous) {
+        return {
+            day: 'ontem',
+            week: 'na semana passada',
+            month: 'no mês passado'
+        }[period] || 'no período anterior';
+    }
+
+    return {
+        day: 'hoje',
+        week: 'esta semana',
+        month: 'neste mês'
+    }[period] || 'neste período';
+}
+
+function getAllAssistantCategories() {
+    const merged = [...defaultCategories, ...userCategories, ...focusGoals.map(goal => ({ name: goal.category }))];
+    const seen = new Set();
+    return merged
+        .map(item => item?.name)
+        .filter(Boolean)
+        .filter(name => {
+            const key = normalizeAssistantText(name);
+            if (seen.has(key)) return false;
+            seen.add(key);
+            return true;
+        });
+}
+
+function detectAssistantCategory(text) {
+    const normalized = normalizeAssistantText(text);
+    const categories = getAllAssistantCategories()
+        .slice()
+        .sort((a, b) => b.length - a.length);
+
+    const aliases = {
+        'trabalho': 'Trabalho',
+        'estudo': 'Estudos',
+        'estudos': 'Estudos',
+        'estudar': 'Estudos',
+        'projeto': 'Projetos',
+        'projetos': 'Projetos',
+        'leitura': 'Leitura',
+        'ler': 'Leitura',
+        'livro': 'Leitura',
+        'hobby': 'Hobbies',
+        'hobbies': 'Hobbies',
+        'lazer': 'Hobbies',
+        'livre': 'Livre'
+    };
+
+    for (const category of categories) {
+        const key = normalizeAssistantText(category);
+        if (normalized.includes(key)) return category;
+    }
+
+    for (const [alias, category] of Object.entries(aliases)) {
+        if (normalized.includes(alias)) {
+            const matched = categories.find(item => normalizeAssistantText(item) === normalizeAssistantText(category));
+            return matched || category;
+        }
+    }
+
+    return null;
+}
+
+function detectAssistantDurationMinutes(text) {
+    const normalized = normalizeAssistantText(text).replace(/,/g, '.');
+    let minutes = 0;
+    let matched = false;
+
+    const hourMatch = normalized.match(/(\d+(?:\.\d+)?)\s*h(?:ora|oras)?/);
+    if (hourMatch) {
+        minutes += Math.round(parseFloat(hourMatch[1]) * 60);
+        matched = true;
+    }
+
+    const minuteMatch = normalized.match(/(\d+)\s*min(?:uto|utos)?/);
+    if (minuteMatch) {
+        minutes += parseInt(minuteMatch[1], 10);
+        matched = true;
+    }
+
+    if (!matched) {
+        const pomodoroMatch = normalized.match(/(\d+)\s*(pomodoro|pomodoros|bloco|blocos)/);
+        if (pomodoroMatch) {
+            minutes += parseInt(pomodoroMatch[1], 10) * POMODORO_MINUTES;
+            matched = true;
+        }
+    }
+
+    return matched && minutes > 0 ? minutes : null;
+}
+
+function detectAssistantSchedule(text) {
+    const normalized = normalizeAssistantText(text);
+    if (includesAny(normalized, ['todo dia', 'todos os dias', 'semana inteira', 'todos os dias da semana'])) return 'everyday';
+    if (includesAny(normalized, ['dias uteis', 'segunda a sexta', 'seg a sex', 'dias da semana'])) return 'weekdays';
+    return null;
+}
+
+function escapeAssistantRegex(value) {
+    return String(value || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function prettifyAssistantTaskName(name) {
+    const cleaned = String(name || '')
+        .replace(/\s+/g, ' ')
+        .replace(/^[\s,.:;-]+|[\s,.:;-]+$/g, '')
+        .trim();
+
+    if (!cleaned) return '';
+    return cleaned.charAt(0).toUpperCase() + cleaned.slice(1);
+}
+
+function extractAssistantTaskName(text, category = null) {
+    let normalized = normalizeAssistantText(text)
+        .replace(/^(me ajuda a|me ajude a|pode|por favor)\s+/, '')
+        .replace(/^(pode ser pra|pode ser para|ser pra|ser para)\s+/, '')
+        .replace(/^(iniciar|inicie|comecar|comece|criar|crie|adicionar|adicione|abrir|abra|fazer|faca|montar|monte)\s+(uma\s+|nova\s+|uma\s+nova\s+)?tarefa\b/, '')
+        .replace(/\btarefa\b/, '')
+        .trim();
+
+    normalized = normalized
+        .replace(/\bde\s+\d+(?:\.\d+)?\s*h(?:ora|oras)?\b/g, ' ')
+        .replace(/\b\d+(?:\.\d+)?\s*h(?:ora|oras)?\b/g, ' ')
+        .replace(/\bde\s+\d+\s*min(?:uto|utos)?\b/g, ' ')
+        .replace(/\b\d+\s*min(?:uto|utos)?\b/g, ' ')
+        .replace(/\b\d+\s*(pomodoro|pomodoros|bloco|blocos)\b/g, ' ');
+
+    if (category) {
+        const categoryNorm = normalizeAssistantText(category);
+        const categoryPattern = escapeAssistantRegex(categoryNorm);
+        normalized = normalized
+            .replace(new RegExp(`\\bna categoria\\s+${categoryPattern}\\b`, 'g'), ' ')
+            .replace(new RegExp(`\\bcategoria\\s+${categoryPattern}\\b`, 'g'), ' ')
+            .replace(new RegExp(`\\bem\\s+${categoryPattern}\\b`, 'g'), ' ');
+    }
+
+    normalized = normalized
+        .replace(/\b(chamada|chamado|nome|com nome)\b/g, ' ')
+        .replace(/^(pra|para)\s+/, '')
+        .replace(/^(de|da|do|para|pra|em|na|no)\s+/, '')
+        .replace(/\s+/g, ' ')
+        .trim();
+
+    return prettifyAssistantTaskName(normalized);
+}
+
+function extractAssistantTaskDraft(text, baseDraft = null) {
+    const seed = baseDraft ? { ...baseDraft } : {};
+    const category = detectAssistantCategory(text) || seed.category || null;
+    const durationMinutes = detectAssistantDurationMinutes(text) || seed.durationMinutes || null;
+    const existingTask = findAssistantTaskByText(text);
+
+    let name = extractAssistantTaskName(text, category);
+    if (!name && seed.name) name = seed.name;
+
+    return {
+        name: name || '',
+        category,
+        durationMinutes,
+        existingTask: existingTask || seed.existingTask || null
+    };
+}
+
+function getAssistantMissingTaskFields(draft) {
+    const missing = [];
+    if (!draft?.name) missing.push('nome');
+    if (!draft?.category) missing.push('categoria');
+    if (!draft?.durationMinutes) missing.push('duracao');
+    return missing;
+}
+
+function createTaskFromAssistant(draft, startNow = true) {
+    const safeName = prettifyAssistantTaskName(draft?.name || '');
+    const safeCategory = draft?.category || 'Livre';
+    const safeMinutes = Math.max(1, Math.round(Number(draft?.durationMinutes) || 25));
+    const task = {
+        id: Date.now(),
+        name: safeName,
+        estimatedMinutes: safeMinutes,
+        pomodoros: Math.max(1, Math.ceil(safeMinutes / POMODORO_MINUTES)),
+        category: safeCategory,
+        completedPomodoros: 0,
+        completed: false,
+        subtasks: [],
+        createdAt: new Date().toISOString()
+    };
+
+    tasks.push(task);
+    saveTasks();
+    renderTasksList();
+    renderTasksSidebar();
+    renderProgress();
+    updateHeaderTaskCount();
+    syncStateToPip();
+
+    if (startNow) {
+        startTask(task.id);
+    }
+
+    return task;
+}
+
+function applyAssistantFreeFocus(durationMinutes = null, category = null) {
+    switchView('view-home');
+    if (isTimerRunning) pauseTimer();
+    if (currentTask) deselectTask();
+
+    const resolvedMinutes = Math.max(1, Math.round(Number(durationMinutes) || FOCUS_TIME));
+    const resolvedCategory = category || document.getElementById('globalCategorySelect')?.value || 'Livre';
+    const globalCategorySelect = document.getElementById('globalCategorySelect');
+    if (globalCategorySelect) {
+        globalCategorySelect.value = resolvedCategory;
+        if (window.updateCustomDropdownUI) window.updateCustomDropdownUI(resolvedCategory);
+    }
+
+    currentMode = 'focus';
+    totalTimerTime = resolvedMinutes * 60;
+    timeLeft = totalTimerTime;
+    document.getElementById('timeLabel').textContent = 'Periodo de Foco';
+    document.querySelectorAll('.mode-btn').forEach(button => button.classList.remove('active'));
+    document.querySelector('.mode-btn[data-mode="focus"]')?.classList.add('active');
+    updateTimerDisplay();
+    updateProgressBar();
+    renderProgress();
+    renderTasksSidebar();
+    syncStateToPip();
+
+    if (!isTimerRunning) toggleTimer();
+}
+
+function buildAssistantOpenInsight() {
+    if (currentTask && currentMode === 'focus') {
+        return `Agora, eu manteria o foco em ${currentTask.category || 'Livre'} para fechar a tarefa "${currentTask.name}".`;
+    }
+
+    const lagging = getLaggingGoalSummary(getAssistantDefaultPeriod(), false);
+    if (lagging) {
+        return `Agora, o ponto que mais pede atencao e ${lagging.category}. Faltam ${formatMinsToHours(lagging.remainingMinutes)} para fechar essa meta neste recorte.`;
+    }
+
+    const overview = getAssistantGoalOverview(getAssistantDefaultPeriod(), false);
+    if (overview.activeCount) {
+        return `Agora, seu plano esta em ${overview.averageProgress}% do combinado. Posso te ajudar a decidir a proxima sessao.`;
+    }
+
+    return 'Agora, posso te ajudar a criar metas, iniciar foco, montar tarefas e resumir o que esta acontecendo no app.';
+}
+
+function getHistoryTotalsByCategory(period, previous = false) {
+    const totals = {};
+    filterHistoryByAssistantPeriod(period, previous).forEach(entry => {
+        const category = entry.category || 'Livre';
+        totals[category] = (totals[category] || 0) + (Number(entry.durationMinutes) || 0);
+    });
+
+    return Object.entries(totals)
+        .map(([category, minutes]) => ({ category, minutes }))
+        .sort((a, b) => b.minutes - a.minutes);
+}
+
+function getHistoryPeriodRange(period, previous = false) {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    let start = new Date(today);
+    let end = new Date(today);
+
+    if (period === 'day') {
+        if (previous) {
+            start.setDate(start.getDate() - 1);
+            end = new Date(start);
+        }
+        return { start, end };
+    }
+
+    const span = period === 'month' ? 30 : 7;
+    start.setDate(start.getDate() - (span - 1));
+    if (previous) {
+        end = new Date(start);
+        end.setDate(end.getDate() - 1);
+        start = new Date(end);
+        start.setDate(start.getDate() - (span - 1));
+    }
+
+    return { start, end: previous ? end : new Date(today) };
+}
+
+function filterHistoryBetween(start, end) {
+    return focusHistory.filter(entry => {
+        const date = new Date(`${entry.date}T00:00:00`);
+        return date >= start && date <= end;
+    });
+}
+
+function getAssistantDateRange(period, previous = false) {
+    return getHistoryPeriodRange(period, previous);
+}
+
+function enumerateDatesBetween(start, end) {
+    const dates = [];
+    const cursor = new Date(start);
+    cursor.setHours(0, 0, 0, 0);
+
+    while (cursor <= end) {
+        dates.push(new Date(cursor));
+        cursor.setDate(cursor.getDate() + 1);
+    }
+
+    return dates;
+}
+
+function filterHistoryByAssistantPeriod(period, previous = false) {
+    const range = getAssistantDateRange(period, previous);
+    return filterHistoryBetween(range.start, range.end);
+}
+
+function getTotalFocusForPeriod(period, category = null, previous = false) {
+    const categoryKey = category ? normalizeAssistantText(category) : null;
+    return filterHistoryByAssistantPeriod(period, previous)
+        .filter(entry => !categoryKey || normalizeAssistantText(entry.category || 'Livre') === categoryKey)
+        .reduce((sum, entry) => sum + (Number(entry.durationMinutes) || 0), 0);
+}
+
+function getSessionsCountForPeriod(period, category = null, previous = false) {
+    const categoryKey = category ? normalizeAssistantText(category) : null;
+    return filterHistoryByAssistantPeriod(period, previous)
+        .filter(entry => !categoryKey || normalizeAssistantText(entry.category || 'Livre') === categoryKey)
+        .length;
+}
+
+function getAssistantGoalSummaries(period, previous = false) {
+    const activeGoals = getActiveGoals();
+    const range = getAssistantDateRange(period, previous);
+    const dates = enumerateDatesBetween(range.start, range.end);
+    const actualByCategory = {};
+
+    filterHistoryByAssistantPeriod(period, previous).forEach(entry => {
+        const category = entry.category || 'Livre';
+        actualByCategory[category] = (actualByCategory[category] || 0) + (Number(entry.durationMinutes) || 0);
+    });
+
+    return activeGoals.map((goal, index) => {
+        const targetMinutes = dates.reduce((sum, date) => {
+            return sum + (isGoalApplicableOnDate(goal, date) ? Number(goal.dailyMinutes) || 0 : 0);
+        }, 0);
+        const actualMinutes = actualByCategory[goal.category] || 0;
+        const percent = targetMinutes > 0 ? Math.round((actualMinutes / targetMinutes) * 100) : 0;
+        return {
+            ...goal,
+            index,
+            targetMinutes,
+            actualMinutes,
+            remainingMinutes: Math.max(0, targetMinutes - actualMinutes),
+            percent,
+            palette: getCategoryPalette(goal.category, index)
+        };
+    }).sort((a, b) => {
+        if (b.percent !== a.percent) return b.percent - a.percent;
+        return b.actualMinutes - a.actualMinutes;
+    });
+}
+
+function getAssistantGoalOverview(period, previous = false) {
+    const summaries = getAssistantGoalSummaries(period, previous);
+    const activeCount = summaries.length;
+    const hitCount = summaries.filter(item => item.actualMinutes >= item.targetMinutes && item.targetMinutes > 0).length;
+    const totalTarget = summaries.reduce((sum, item) => sum + item.targetMinutes, 0);
+    const totalActual = summaries.reduce((sum, item) => sum + item.actualMinutes, 0);
+    const averageProgress = totalTarget > 0 ? Math.round((totalActual / totalTarget) * 100) : 0;
+    const bestCategory = summaries.length ? summaries.reduce((best, item) => {
+        if (!best) return item;
+        if (item.percent !== best.percent) return item.percent > best.percent ? item : best;
+        return item.actualMinutes > best.actualMinutes ? item : best;
+    }, null) : null;
+
+    return {
+        summaries,
+        activeCount,
+        hitCount,
+        totalTarget,
+        totalActual,
+        averageProgress,
+        bestCategory,
+        streak: getGoalStreak()
+    };
+}
+
+function getAssistantTaskSummary() {
+    const openTasks = tasks.filter(task => !task.completed);
+    const doneTasks = tasks.filter(task => task.completed);
+    const currentTaskName = currentTask?.name || null;
+
+    if (!tasks.length) {
+        return 'Você ainda não tem tarefas criadas no app.';
+    }
+
+    const lines = [
+        `${openTasks.length} tarefa(s) em aberto e ${doneTasks.length} concluída(s).`
+    ];
+
+    if (currentTaskName) {
+        lines.push(`Tarefa atual: ${currentTaskName}.`);
+    } else {
+        lines.push('No momento você está em Sessão Livre.');
+    }
+
+    return lines.join('\n');
+}
+
+function findAssistantTaskByText(text) {
+    const normalized = normalizeAssistantText(text);
+    const activeTasks = tasks.filter(task => !task.completed);
+    if (!activeTasks.length) return null;
+
+    const explicitPrefixes = [
+        'iniciar tarefa',
+        'inicie a tarefa',
+        'comecar tarefa',
+        'comece a tarefa',
+        'abrir tarefa',
+        'abra a tarefa',
+        'selecionar tarefa',
+        'seleciona a tarefa',
+        'iniciar',
+        'inicie',
+        'comecar',
+        'comece',
+        'abrir',
+        'abra'
+    ];
+
+    let remainder = normalized;
+    for (const prefix of explicitPrefixes) {
+        if (normalized.startsWith(prefix)) {
+            remainder = normalized.slice(prefix.length).trim();
+            break;
+        }
+    }
+
+    const scored = activeTasks.map(task => {
+        const nameNorm = normalizeAssistantText(task.name);
+        let score = 0;
+        if (remainder && nameNorm === remainder) score += 100;
+        if (remainder && nameNorm.includes(remainder)) score += 70;
+        if (remainder && remainder.includes(nameNorm)) score += 55;
+        if (normalized.includes(nameNorm)) score += 40;
+        return { task, score };
+    }).sort((a, b) => b.score - a.score);
+
+    return scored[0]?.score > 0 ? scored[0].task : null;
+}
+
+function formatAssistantGoalStatus(goalSummary) {
+    if (!goalSummary) return '';
+    const delta = goalSummary.actualMinutes - goalSummary.targetMinutes;
+    if (goalSummary.targetMinutes <= 0) return 'Sem meta aplicável neste período.';
+    if (delta >= 0) return `Meta batida com ${formatMinsToHours(delta)} de folga.`;
+    return `Faltam ${formatMinsToHours(Math.abs(delta))} para bater a meta.`;
+}
+
+function getFocusNowSuggestion() {
+    const overview = getGoalOverview(getAssistantDefaultPeriod());
+    if (!overview.activeCount) {
+        if (currentTask) {
+            return `Sua melhor aposta agora é continuar em ${currentTask.category || 'Livre'} e fechar a tarefa "${currentTask.name}".`;
+        }
+        return 'Você ainda não tem metas ativas. Eu começaria pela categoria mais importante do dia e criaria uma meta simples para ganhar consistência.';
+    }
+
+    const candidate = overview.summaries
+        .filter(item => item.remainingMinutes > 0)
+        .sort((a, b) => {
+            if (b.remainingMinutes !== a.remainingMinutes) return b.remainingMinutes - a.remainingMinutes;
+            return a.percent - b.percent;
+        })[0];
+
+    if (!candidate) {
+        return 'Você já bateu as metas ativas deste período. Se quiser, dá para usar o próximo bloco em uma categoria livre ou revisar uma tarefa importante.';
+    }
+
+    return `Eu priorizaria ${candidate.category}. Faltam ${formatMinsToHours(candidate.remainingMinutes)} para fechar a meta ${getPeriodNarration(getAssistantDefaultPeriod())}.`;
+}
+
+function expandAssistantFollowUp(text) {
+    const normalized = normalizeAssistantText(text);
+    if (!assistantConversationState) return text;
+
+    const looksLikeFollowUp =
+        normalized.startsWith('e ') ||
+        normalized.startsWith('e em ') ||
+        normalized.startsWith('e no ') ||
+        normalized.startsWith('e na ') ||
+        normalized.startsWith('e pra ') ||
+        normalized.startsWith('e para ');
+
+    if (!looksLikeFollowUp) return text;
+
+    const temporal = detectAssistantTemporalContext(text, {
+        period: assistantConversationState.period || getAssistantDefaultPeriod(),
+        previous: assistantConversationState.previous || false
+    });
+
+    const category = detectAssistantCategory(text) || assistantConversationState.category || null;
+    let intent = assistantConversationState.intent || 'summary';
+
+    if (intent === 'top_category' && category) intent = 'focus_total';
+    if (category && ['summary', 'planned_vs_actual', 'goal_hits', 'lagging_goal', 'trend'].includes(intent)) {
+        intent = 'category_status';
+    }
+
+    const phrase = getPeriodPromptPhrase(temporal.period, temporal.previous);
+
+    switch (intent) {
+        case 'focus_total':
+            return `quanto foquei ${category ? `em ${category} ` : ''}${phrase}`.trim();
+        case 'category_status':
+            return `como estou em ${category || 'Estudos'} ${phrase}`.trim();
+        case 'top_category':
+            return `qual categoria recebeu mais foco ${phrase}`.trim();
+        case 'goal_hits':
+            return `quais metas bati ${phrase}`.trim();
+        case 'planned_vs_actual':
+            return `como esta meu plano ${phrase}`.trim();
+        case 'lagging_goal':
+            return `qual meta esta mais atrasada ${phrase}`.trim();
+        case 'summary':
+            return `resuma meu desempenho ${phrase}`.trim();
+        case 'trend':
+            return `estou melhorando ${phrase}`.trim();
+        case 'pomodoros':
+            return `quantos pomodoros ${phrase}`.trim();
+        default:
+            return text;
+    }
+}
+
+function getLaggingGoalSummary(period, previous = false) {
+    const summaries = getAssistantGoalSummaries(period, previous)
+        .filter(item => item.targetMinutes > 0 && item.remainingMinutes > 0)
+        .sort((a, b) => {
+            if (b.remainingMinutes !== a.remainingMinutes) return b.remainingMinutes - a.remainingMinutes;
+            return a.percent - b.percent;
+        });
+
+    return summaries[0] || null;
+}
+
+function getCategoriesWithoutGoals() {
+    const goalKeys = new Set(getActiveGoals().map(goal => normalizeAssistantText(goal.category)));
+    return getAllAssistantCategories()
+        .filter(category => normalizeAssistantText(category) !== normalizeAssistantText('Livre'))
+        .filter(category => !goalKeys.has(normalizeAssistantText(category)));
+}
+
+function getCategoryRecentStats(category, days = 21) {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const start = new Date(today);
+    start.setDate(start.getDate() - (days - 1));
+    const key = normalizeAssistantText(category);
+
+    const entries = focusHistory.filter(entry => {
+        const entryDate = new Date(`${entry.date}T00:00:00`);
+        return entryDate >= start && entryDate <= today && normalizeAssistantText(entry.category || 'Livre') === key;
+    });
+
+    const totalMinutes = entries.reduce((sum, entry) => sum + (Number(entry.durationMinutes) || 0), 0);
+    const activeDaysSet = new Set(entries.map(entry => entry.date));
+    const activeDays = activeDaysSet.size;
+    const averagePerDay = days > 0 ? totalMinutes / days : 0;
+    const averagePerActiveDay = activeDays > 0 ? totalMinutes / activeDays : 0;
+
+    return {
+        totalMinutes,
+        activeDays,
+        averagePerDay,
+        averagePerActiveDay,
+        days
+    };
+}
+
+function assessGoalRealism(goal) {
+    if (!goal) return null;
+    const recent = getCategoryRecentStats(goal.category, 21);
+    const targetDaily = Number(goal.dailyMinutes) || 0;
+    const baseline = recent.averagePerDay;
+
+    if (baseline <= 0) {
+        return {
+            tone: 'unknown',
+            message: `Ainda não existe histórico suficiente em ${goal.category} para eu dizer se essa meta está realista com segurança.`
+        };
+    }
+
+    const ratio = targetDaily / baseline;
+    if (ratio >= 1.45) {
+        return {
+            tone: 'aggressive',
+            message: `Hoje essa meta está bem agressiva. Seu ritmo recente em ${goal.category} gira em torno de ${formatMinsToHours(Math.round(baseline))} por dia, enquanto a meta pede ${formatMinsToHours(targetDaily)}.`
+        };
+    }
+
+    if (ratio <= 0.7) {
+        return {
+            tone: 'conservative',
+            message: `Essa meta parece conservadora. Seu ritmo recente em ${goal.category} está perto de ${formatMinsToHours(Math.round(baseline))} por dia, acima da meta atual de ${formatMinsToHours(targetDaily)}.`
+        };
+    }
+
+    return {
+        tone: 'balanced',
+        message: `Ela parece realista. Seu ritmo recente em ${goal.category} está por volta de ${formatMinsToHours(Math.round(baseline))} por dia, bem perto da meta atual de ${formatMinsToHours(targetDaily)}.`
+    };
+}
+
+function removeAllGoalsFromAssistant() {
+    if (!focusGoals.length) {
+        return {
+            content: 'Você não tem metas ativas para apagar.',
+            suggestions: getAssistantDefaultSuggestions('view-goals')
+        };
+    }
+
+    customConfirm(
+        'Excluir todas as metas',
+        `Isso vai remover ${focusGoals.length} meta(s) ativa(s). Deseja continuar?`,
+        () => {
+            focusGoals = [];
+            saveFocusGoals();
+            resetGoalForm();
+            renderStatsGoalsSummary(window._statsPeriod || 'day');
+            window.compileGoalsData?.();
+            showGlassToast('Todas as metas foram removidas');
+            pushAssistantMessage('assistant', 'Pronto. Removi todas as metas ativas do app.', [
+                { type: 'view', value: 'view-goals', label: 'Abrir Metas' }
+            ]);
+            setAssistantSuggestions([
+                'Crie uma meta de 2h por dia para Estudos',
+                'Quais categorias estão sem meta?',
+                'O que focar agora?'
+            ]);
+        }
+    );
+
+    return {
+        content: 'Abri uma confirmação para apagar todas as metas ativas. Assim eu evito apagar tudo por acidente.',
+        actions: [{ type: 'view', value: 'view-goals', label: 'Abrir Metas' }],
+        suggestions: [
+            'Quais metas estão ativas?',
+            'Quais categorias estão sem meta?',
+            'O que focar agora?'
+        ]
+    };
+}
+
+function personalizeAssistantReply(reply) {
+    if (!reply || !reply.content) return reply;
+
+    const introByIntent = {
+        focus_total: ['Olhei aqui rapidinho.', 'Acabei de conferir.'],
+        top_category: ['Puxei seu histórico.', 'Dando uma olhada no seu foco.'],
+        category_status: ['Fui checar essa categoria.', 'Olhei como ela está agora.'],
+        planned_vs_actual: ['Comparei o que você planejou com o que entregou.', 'Coloquei seu planejado lado a lado com o realizado.'],
+        goal_hits: ['Dei uma passada nas suas metas.', 'Chequei suas metas deste recorte.'],
+        summary: ['Fechei um resumão para você.', 'Organizei um panorama rápido.'],
+        lagging_goal: ['Encontrei o ponto que mais está pedindo atenção.', 'Olhei onde está o maior atraso.'],
+        goal_count: ['Conferi isso para você.', 'Olhei suas metas ativas.'],
+        categories_without_goal: ['Aqui está o que ficou sem meta.', 'Separei as categorias ainda sem meta.'],
+        timer_control: ['Feito.', 'Pronto.'],
+        tasks: ['Olhei suas tarefas.', 'Puxei a visão atual das suas tarefas.'],
+        trend: ['Comparei com o recorte anterior.', 'Olhei a evolução entre os períodos.'],
+        pomodoros: ['Conferi seu histórico recente.', 'Puxei esse número para você.'],
+        focus_now: ['Se eu fosse você, iria por aqui.', 'Minha leitura agora é esta.']
+    };
+
+    const intent = reply.context?.intent;
+    const pool = introByIntent[intent] || [];
+    if (!pool.length) return reply;
+
+    const seed = (reply.content.length + (intent || '').length) % pool.length;
+    const intro = pool[seed];
+    return {
+        ...reply,
+        content: `${intro}\n${reply.content}`
+    };
+}
+
+function answerFocusTotal(text) {
+    const temporal = detectAssistantTemporalContext(text, assistantConversationState ? {
+        period: assistantConversationState.period,
+        previous: assistantConversationState.previous
+    } : null);
+    const { period, previous } = temporal;
+    const category = detectAssistantCategory(text);
+    const totalMinutes = getTotalFocusForPeriod(period, category, previous);
+    const sessions = getSessionsCountForPeriod(period, category, previous);
+
+    if (!totalMinutes) {
+        return {
+            content: category
+                ? `Ainda não encontrei foco registrado em ${category} ${getPeriodNarration(period, previous)}.`
+                : `Ainda não há foco registrado ${getPeriodNarration(period, previous)}.`,
+            suggestions: getAssistantDefaultSuggestions(),
+            context: { intent: 'focus_total', period, previous, category }
+        };
+    }
+
+    return {
+        content: [
+            category
+                ? `Você registrou ${formatMinsToHours(totalMinutes)} em ${category} ${getPeriodNarration(period, previous)}.`
+                : `Você registrou ${formatMinsToHours(totalMinutes)} de foco ${getPeriodNarration(period, previous)}.`,
+            `${sessions} sessão(ões) contabilizadas nesse recorte.`
+        ].join('\n'),
+        actions: [{ type: 'view', value: 'view-stats', label: 'Abrir Estatísticas' }],
+        suggestions: [
+            `Qual categoria recebeu mais foco ${period === 'day' ? 'hoje' : period === 'week' ? 'esta semana' : 'neste mês'}?`,
+            'O que focar agora?',
+            'Quais metas bati neste período?'
+        ],
+        context: { intent: 'focus_total', period, previous, category }
+    };
+}
+
+function answerTopCategory(text) {
+    const temporal = detectAssistantTemporalContext(text, assistantConversationState ? {
+        period: assistantConversationState.period,
+        previous: assistantConversationState.previous
+    } : null);
+    const { period, previous } = temporal;
+    const totals = getHistoryTotalsByCategory(period, previous);
+
+    if (!totals.length) {
+        return {
+            content: `Ainda não há histórico suficiente ${getPeriodNarration(period, previous)} para apontar uma categoria líder.`,
+            suggestions: getAssistantDefaultSuggestions(),
+            context: { intent: 'top_category', period, previous, category: null }
+        };
+    }
+
+    const top = totals[0];
+    const totalMinutes = totals.reduce((sum, item) => sum + item.minutes, 0);
+    const percent = totalMinutes > 0 ? Math.round((top.minutes / totalMinutes) * 100) : 0;
+    const next = totals[1];
+
+    return {
+        content: [
+            `${top.category} lidera ${getPeriodNarration(period, previous)} com ${formatMinsToHours(top.minutes)} de foco.`,
+            `Isso representa ${percent}% do total registrado${next ? `, à frente de ${next.category} por ${formatMinsToHours(top.minutes - next.minutes)}.` : '.'}`
+        ].join('\n'),
+        actions: [{ type: 'view', value: 'view-stats', label: 'Ver distribuição' }],
+        suggestions: [
+            `Quanto foquei em ${top.category} ${period === 'day' ? 'hoje' : period === 'week' ? 'esta semana' : 'neste mês'}?`,
+            'Resuma meu desempenho',
+            'O que focar agora?'
+        ],
+        context: { intent: 'top_category', period, previous, category: top.category }
+    };
+}
+
+function answerGoalHits(text) {
+    const temporal = detectAssistantTemporalContext(text, assistantConversationState ? {
+        period: assistantConversationState.period,
+        previous: assistantConversationState.previous
+    } : null);
+    const { period, previous } = temporal;
+    const overview = getAssistantGoalOverview(period, previous);
+
+    if (!overview.activeCount) {
+        return {
+            content: 'Você ainda não tem metas ativas para eu verificar nesse período.',
+            actions: [{ type: 'view', value: 'view-goals', label: 'Abrir Metas' }],
+            suggestions: [
+                'Crie uma meta de 2h por dia para Estudos',
+                'Quais metas estão ativas?',
+                'O que focar agora?'
+            ],
+            context: { intent: 'goal_hits', period, previous, category: null }
+        };
+    }
+
+    const hitGoals = overview.summaries.filter(item => item.targetMinutes > 0 && item.actualMinutes >= item.targetMinutes);
+    if (!hitGoals.length) {
+        return {
+            content: `Ainda não houve meta batida ${getPeriodNarration(period, previous)}. A melhor categoria até agora é ${overview.bestCategory?.category || 'sem destaque'} com ${overview.bestCategory?.percent || 0}% da meta.`,
+            actions: [{ type: 'view', value: 'view-goals', label: 'Abrir Metas' }],
+            suggestions: [
+                'Como estou em Estudos?',
+                'Quanto falta para minhas metas?',
+                'O que focar agora?'
+            ],
+            context: { intent: 'goal_hits', period, previous, category: overview.bestCategory?.category || null }
+        };
+    }
+
+    return {
+        content: [
+            `${hitGoals.length} de ${overview.activeCount} meta(s) foram batidas ${getPeriodNarration(period, previous)}.`,
+            hitGoals.map(item => `• ${item.category}: ${formatMinsToHours(item.actualMinutes)} de ${formatMinsToHours(item.targetMinutes)}`).join('\n')
+        ].join('\n'),
+        actions: [{ type: 'view', value: 'view-goals', label: 'Abrir Metas' }],
+        suggestions: [
+            'Quais metas estão mais atrasadas?',
+            'Como estou em Trabalho?',
+            'Resuma meu desempenho'
+        ],
+        context: { intent: 'goal_hits', period, previous, category: hitGoals[0]?.category || null }
+    };
+}
+
+function answerGoalList() {
+    if (!focusGoals.length) {
+        return {
+            content: 'Você ainda não tem metas ativas. Se quiser, eu posso criar uma agora em linguagem natural.',
+            suggestions: [
+                'Crie uma meta de 2h por dia para Estudos',
+                'Crie uma meta de 3h para Trabalho em dias úteis',
+                'O que focar agora?'
+            ]
+        };
+    }
+
+    const lines = focusGoals
+        .slice()
+        .sort((a, b) => a.category.localeCompare(b.category, 'pt-BR'))
+        .map(goal => {
+            const scheduleLabel = goal.schedule === 'everyday' ? 'semana inteira' : 'dias úteis';
+            return `• ${goal.category}: ${formatMinsToHours(goal.dailyMinutes)} por dia (${scheduleLabel})`;
+        });
+
+    return {
+        content: ['Metas ativas no momento:', ...lines].join('\n'),
+        actions: [{ type: 'view', value: 'view-goals', label: 'Abrir Metas' }],
+        suggestions: [
+            'Como estou em Estudos?',
+            'Quais metas bati esta semana?',
+            'Ajuste a meta de Trabalho para 4h por dia'
+        ]
+    };
+}
+
+function answerCategoryStatus(text) {
+    const category = detectAssistantCategory(text);
+    const temporal = detectAssistantTemporalContext(text, assistantConversationState ? {
+        period: assistantConversationState.period,
+        previous: assistantConversationState.previous
+    } : null);
+    const { period, previous } = temporal;
+
+    if (!category) {
+        return {
+            content: 'Me diga a categoria que você quer analisar e eu te conto como ela está. Exemplo: "Como estou em Estudos esta semana?"',
+            suggestions: getAssistantDefaultSuggestions(),
+            context: { intent: 'category_status', period, previous, category: null }
+        };
+    }
+
+    const summary = getAssistantGoalSummaries(period, previous).find(item => normalizeAssistantText(item.category) === normalizeAssistantText(category));
+    const actualMinutes = getTotalFocusForPeriod(period, category, previous);
+
+    if (!summary) {
+        if (!actualMinutes) {
+            return {
+                content: `Ainda não encontrei foco registrado em ${category} ${getPeriodNarration(period, previous)} e também não há meta ativa dessa categoria.`,
+                suggestions: [
+                    `Crie uma meta de 2h por dia para ${category}`,
+                    `Quanto foquei em ${category} ${period === 'day' ? 'hoje' : period === 'week' ? 'esta semana' : 'neste mês'}?`,
+                    'Quais metas estão ativas?'
+                ],
+                context: { intent: 'category_status', period, previous, category }
+            };
+        }
+
+        return {
+            content: `Você registrou ${formatMinsToHours(actualMinutes)} em ${category} ${getPeriodNarration(period, previous)}. Hoje essa categoria não tem meta ativa para comparação.`,
+            suggestions: [
+                `Crie uma meta de 2h por dia para ${category}`,
+                'Quais metas estão ativas?',
+                'O que focar agora?'
+            ],
+            context: { intent: 'category_status', period, previous, category }
+        };
+    }
+
+    return {
+        content: [
+            `${summary.category} ${getPeriodNarration(period, previous)}: ${formatMinsToHours(summary.actualMinutes)} realizados de ${formatMinsToHours(summary.targetMinutes)} planejados.`,
+            `${summary.percent}% da meta concluída. ${formatAssistantGoalStatus(summary)}`
+        ].join('\n'),
+        actions: [{ type: 'view', value: 'view-goals', label: 'Abrir Metas' }],
+        suggestions: [
+            `Ajuste a meta de ${summary.category} para ${Math.max(1, Math.round((summary.dailyMinutes || 60) / 60))}h por dia`,
+            'Quais metas bati esta semana?',
+            'O que focar agora?'
+        ],
+        context: { intent: 'category_status', period, previous, category: summary.category }
+    };
+}
+
+function answerPlannedVsActual(text) {
+    const temporal = detectAssistantTemporalContext(text, assistantConversationState ? {
+        period: assistantConversationState.period,
+        previous: assistantConversationState.previous
+    } : null);
+    const { period, previous } = temporal;
+    const overview = getAssistantGoalOverview(period, previous);
+
+    if (!overview.activeCount) {
+        return {
+            content: `Ainda não há metas ativas ${getPeriodNarration(period, previous)} para comparar planejado e realizado.`,
+            actions: [{ type: 'view', value: 'view-goals', label: 'Abrir Metas' }],
+            suggestions: getAssistantDefaultSuggestions('view-goals'),
+            context: { intent: 'planned_vs_actual', period, previous, category: null }
+        };
+    }
+
+    return {
+        content: [
+            `${getPeriodLabel(period)}: ${formatMinsToHours(overview.totalActual)} realizados de ${formatMinsToHours(overview.totalTarget)} planejados.`,
+            `${overview.averageProgress}% do plano cumprido e ${overview.hitCount} de ${overview.activeCount} meta(s) batidas.`
+        ].join('\n'),
+        actions: [{ type: 'view', value: 'view-goals', label: 'Abrir Metas' }],
+        suggestions: [
+            'Quais metas estão mais atrasadas?',
+            'O que focar agora?',
+            'Resuma meu desempenho'
+        ],
+        context: { intent: 'planned_vs_actual', period, previous, category: null }
+    };
+}
+
+function answerPomodoros(text) {
+    const temporal = detectAssistantTemporalContext(text, assistantConversationState ? {
+        period: assistantConversationState.period,
+        previous: assistantConversationState.previous
+    } : null);
+    const { period, previous } = temporal;
+    if (period === 'day') {
+        return {
+            content: `${previous ? 'Ontem' : 'Hoje'} você ${previous ? 'registrou' : 'concluiu'} ${previous ? `${getSessionsCountForPeriod('day', null, true)} sessão(ões) de foco` : `${totalPomodorosToday} pomodoro(s) completos`} e ${previous ? 'teve foco registrado no histórico.' : `${getSessionsCountForPeriod('day')} sessão(ões) de foco no histórico.`}`,
+            suggestions: [
+                'Quanto foquei hoje?',
+                'Qual categoria recebeu mais foco hoje?',
+                'O que focar agora?'
+            ],
+            context: { intent: 'pomodoros', period, previous, category: null }
+        };
+    }
+
+    const sessions = getSessionsCountForPeriod(period, null, previous);
+    return {
+        content: `Para ${getPeriodLabel(period).toLowerCase()}, eu tenho ${sessions} sessão(ões) de foco registradas no histórico. O contador exato de pomodoros completos hoje está em ${totalPomodorosToday}.`,
+        suggestions: [
+            'Resuma meu desempenho',
+            'Qual categoria recebeu mais foco esta semana?',
+            'Quais metas bati neste período?'
+        ],
+        context: { intent: 'pomodoros', period, previous, category: null }
+    };
+}
+
+function answerTrend(text) {
+    const temporal = detectAssistantTemporalContext(text, assistantConversationState ? {
+        period: assistantConversationState.period,
+        previous: assistantConversationState.previous
+    } : null);
+    const { period, previous } = temporal;
+    const currentRange = getHistoryPeriodRange(period, previous);
+    const previousRange = getHistoryPeriodRange(period, !previous);
+    const currentMinutes = filterHistoryBetween(currentRange.start, currentRange.end).reduce((sum, entry) => sum + (Number(entry.durationMinutes) || 0), 0);
+    const previousMinutes = filterHistoryBetween(previousRange.start, previousRange.end).reduce((sum, entry) => sum + (Number(entry.durationMinutes) || 0), 0);
+    const delta = currentMinutes - previousMinutes;
+
+    if (!currentMinutes && !previousMinutes) {
+        return {
+            content: 'Ainda não há histórico suficiente para eu comparar sua evolução.',
+            suggestions: getAssistantDefaultSuggestions(),
+            context: { intent: 'trend', period, previous, category: null }
+        };
+    }
+
+    if (delta === 0) {
+        return {
+            content: `Seu foco está estável ${getPeriodNarration(period, previous)} em comparação com o recorte anterior: ${formatMinsToHours(currentMinutes)} em ambos os períodos.`,
+            suggestions: [
+                'Qual categoria recebeu mais foco esta semana?',
+                'O que focar agora?',
+                'Quais metas bati neste período?'
+            ],
+            context: { intent: 'trend', period, previous, category: null }
+        };
+    }
+
+    return {
+        content: delta > 0
+            ? `Você está melhorando ${getPeriodNarration(period, previous)}. Foram ${formatMinsToHours(currentMinutes)} agora, contra ${formatMinsToHours(previousMinutes)} no recorte anterior, uma alta de ${formatMinsToHours(delta)}.`
+            : `Seu foco caiu ${getPeriodNarration(period, previous)}. Foram ${formatMinsToHours(currentMinutes)} agora, contra ${formatMinsToHours(previousMinutes)} no recorte anterior, uma queda de ${formatMinsToHours(Math.abs(delta))}.`,
+        suggestions: [
+            'Qual categoria ficou mais para trás?',
+            'O que focar agora?',
+            'Resuma meu desempenho'
+        ],
+        context: { intent: 'trend', period, previous, category: null }
+    };
+}
+
+function answerSummary(text) {
+    const temporal = detectAssistantTemporalContext(text, assistantConversationState ? {
+        period: assistantConversationState.period,
+        previous: assistantConversationState.previous
+    } : null);
+    const { period, previous } = temporal;
+    const totalMinutes = getTotalFocusForPeriod(period, null, previous);
+    const topCategory = getHistoryTotalsByCategory(period, previous)[0];
+    const overview = getAssistantGoalOverview(period, previous);
+    const lines = [
+        `Resumo ${getPeriodNarration(period, previous)}:`,
+        `• Foco total: ${formatMinsToHours(totalMinutes)}`,
+        `• Categoria líder: ${topCategory ? `${topCategory.category} (${formatMinsToHours(topCategory.minutes)})` : 'sem registros'}`,
+        `• Metas batidas: ${overview.hitCount}/${overview.activeCount}`,
+        `• Próximo melhor passo: ${getFocusNowSuggestion()}`
+    ];
+
+    return {
+        content: lines.join('\n'),
+        actions: [{ type: 'view', value: 'view-stats', label: 'Abrir Estatísticas' }],
+        suggestions: [
+            'Quais metas estão mais atrasadas?',
+            'Como estou em Estudos?',
+            'O que focar agora?'
+        ],
+        context: { intent: 'summary', period, previous, category: topCategory?.category || null }
+    };
+}
+
+function answerFocusNow() {
+    return {
+        content: getFocusNowSuggestion(),
+        actions: [{ type: 'view', value: 'view-goals', label: 'Abrir Metas' }],
+        suggestions: [
+            'Crie uma meta de 2h por dia para Estudos',
+            'Como estou em Trabalho?',
+            'Resuma meu desempenho'
+        ],
+        context: { intent: 'focus_now', period: getAssistantDefaultPeriod(), previous: false, category: null }
+    };
+}
+
+function answerTasks() {
+    return {
+        content: getAssistantTaskSummary(),
+        actions: [{ type: 'view', value: 'view-home', label: 'Abrir Home' }],
+        suggestions: [
+            'Qual categoria recebeu mais foco hoje?',
+            'O que focar agora?',
+            'Crie uma meta de 2h por dia para Estudos'
+        ],
+        context: { intent: 'tasks', period: getAssistantDefaultPeriod(), previous: false, category: currentTask?.category || null }
+    };
+}
+
+function answerLaggingGoal(text) {
+    const temporal = detectAssistantTemporalContext(text, assistantConversationState ? {
+        period: assistantConversationState.period,
+        previous: assistantConversationState.previous
+    } : null);
+    const { period, previous } = temporal;
+    const lagging = getLaggingGoalSummary(period, previous);
+
+    if (!lagging) {
+        return {
+            content: `Não encontrei metas atrasadas ${getPeriodNarration(period, previous)}. Ou você já bateu tudo, ou ainda não há metas ativas nesse recorte.`,
+            suggestions: [
+                'Quais metas bati neste período?',
+                'O que focar agora?',
+                'Quais metas estão ativas?'
+            ],
+            context: { intent: 'lagging_goal', period, previous, category: null }
+        };
+    }
+
+    return {
+        content: `${lagging.category} é a meta mais atrasada ${getPeriodNarration(period, previous)}. Foram ${formatMinsToHours(lagging.actualMinutes)} realizados de ${formatMinsToHours(lagging.targetMinutes)} planejados, e faltam ${formatMinsToHours(lagging.remainingMinutes)}.`,
+        actions: [{ type: 'view', value: 'view-goals', label: 'Abrir Metas' }],
+        suggestions: [
+            `Como estou em ${lagging.category}?`,
+            'O que focar agora?',
+            'Quais categorias estão sem meta?'
+        ],
+        context: { intent: 'lagging_goal', period, previous, category: lagging.category }
+    };
+}
+
+function answerGoalCount() {
+    const activeGoals = getActiveGoals();
+    if (!activeGoals.length) {
+        return {
+            content: 'Você não tem metas ativas no momento.',
+            suggestions: [
+                'Crie uma meta de 2h por dia para Estudos',
+                'Quais categorias estão sem meta?',
+                'O que focar agora?'
+            ],
+            context: { intent: 'goal_count', period: getAssistantDefaultPeriod(), previous: false, category: null }
+        };
+    }
+
+    return {
+        content: `Hoje você tem ${activeGoals.length} meta(s) ativa(s) no app.`,
+        suggestions: [
+            'Quais metas estão ativas?',
+            'Quais categorias estão sem meta?',
+            'Quais metas bati esta semana?'
+        ],
+        context: { intent: 'goal_count', period: getAssistantDefaultPeriod(), previous: false, category: null }
+    };
+}
+
+function answerCategoriesWithoutGoal() {
+    const withoutGoals = getCategoriesWithoutGoals();
+    if (!withoutGoals.length) {
+        return {
+            content: 'Todas as categorias principais já têm meta ativa.',
+            suggestions: [
+                'Quais metas estão ativas?',
+                'Quais metas estão mais atrasadas?',
+                'O que focar agora?'
+            ],
+            context: { intent: 'categories_without_goal', period: getAssistantDefaultPeriod(), previous: false, category: null }
+        };
+    }
+
+    return {
+        content: `As categorias sem meta no momento são: ${withoutGoals.join(', ')}.`,
+        actions: [{ type: 'view', value: 'view-goals', label: 'Abrir Metas' }],
+        suggestions: [
+            `Crie uma meta de 1h por dia para ${withoutGoals[0]}`,
+            'Quais metas estão ativas?',
+            'O que focar agora?'
+        ],
+        context: { intent: 'categories_without_goal', period: getAssistantDefaultPeriod(), previous: false, category: withoutGoals[0] }
+    };
+}
+
+function answerTimerControl(text) {
+    const normalized = normalizeAssistantText(text);
+    const durationMinutes = detectAssistantDurationMinutes(text);
+    const category = detectAssistantCategory(text);
+
+    if (includesAny(normalized, ['pausar timer', 'pause o timer', 'pausar foco', 'pare o timer', 'para o timer'])) {
+        if (!isTimerRunning) {
+            return {
+                content: 'O temporizador já está pausado.',
+                suggestions: ['Inicie o foco', 'O que focar agora?', 'Quanto foquei hoje?'],
+                context: { intent: 'timer_control', period: getAssistantDefaultPeriod(), previous: false, category: currentTask?.category || null }
+            };
+        }
+        switchView('view-home');
+        pauseTimer();
+        renderProgress();
+        renderTasksSidebar();
+        syncStateToPip();
+        return {
+            content: 'Pausei o temporizador atual.',
+            suggestions: ['Inicie o foco', 'O que focar agora?', 'Quanto foquei hoje?'],
+            context: { intent: 'timer_control', period: getAssistantDefaultPeriod(), previous: false, category: category || currentTask?.category || null },
+            autoClose: true
+        };
+    }
+
+    if (includesAny(normalized, ['reinicie o timer', 'resetar timer', 'zerar timer', 'reiniciar foco'])) {
+        switchView('view-home');
+        resetTimer();
+        return {
+            content: 'Reiniciei o temporizador da sessão atual.',
+            suggestions: ['Inicie o foco', 'O que focar agora?', 'Quanto foquei hoje?'],
+            context: { intent: 'timer_control', period: getAssistantDefaultPeriod(), previous: false, category: currentTask?.category || null },
+            autoClose: true
+        };
+    }
+
+    if (includesAny(normalized, ['inicie o foco', 'iniciar foco', 'comece o foco', 'inicie o timer', 'iniciar timer', 'continue o foco'])) {
+        if (durationMinutes || category) {
+            applyAssistantFreeFocus(durationMinutes, category);
+        } else {
+            switchView('view-home');
+            if (currentMode !== 'focus') {
+                setTimerMode('focus');
+            }
+            if (!isTimerRunning) toggleTimer();
+        }
+        return {
+            content: 'Iniciei o foco para você.',
+            actions: [{ type: 'view', value: 'view-home', label: 'Abrir Home' }],
+            suggestions: ['O que focar agora?', 'Quanto foquei hoje?', 'Qual categoria recebeu mais foco esta semana?'],
+            context: { intent: 'timer_control', period: getAssistantDefaultPeriod(), previous: false, category: currentTask?.category || null },
+            autoClose: true
+        };
+    }
+
+    return null;
+}
+
+function answerPerformanceAssessment(text) {
+    const temporal = detectAssistantTemporalContext(text, assistantConversationState ? {
+        period: assistantConversationState.period,
+        previous: assistantConversationState.previous
+    } : null);
+    const { period, previous } = temporal;
+    const overview = getAssistantGoalOverview(period, previous);
+    const totalMinutes = getTotalFocusForPeriod(period, null, previous);
+
+    if (!overview.activeCount) {
+        if (!totalMinutes) {
+            return {
+                content: `Ainda não tenho foco nem metas suficientes ${getPeriodNarration(period, previous)} para dizer se você está indo bem ou mal.`,
+                suggestions: ['Quanto foquei hoje?', 'Crie uma meta de 2h por dia para Estudos', 'O que focar agora?'],
+                context: { intent: 'performance_assessment', period, previous, category: null }
+            };
+        }
+
+        return {
+            content: `Sem metas ativas eu não cravaria que você está indo mal. O que eu sei é que você registrou ${formatMinsToHours(totalMinutes)} ${getPeriodNarration(period, previous)}. Se quiser, eu posso te ajudar a transformar isso em metas mais claras.`,
+            suggestions: ['Crie uma meta de 2h por dia para Estudos', 'Resuma meu desempenho', 'O que focar agora?'],
+            context: { intent: 'performance_assessment', period, previous, category: null }
+        };
+    }
+
+    if (overview.averageProgress >= 100) {
+        return {
+            content: `Você está indo muito bem ${getPeriodNarration(period, previous)}. Já bateu ${overview.hitCount} de ${overview.activeCount} metas e entregou ${overview.averageProgress}% do planejado.`,
+            suggestions: ['Quais metas bati neste período?', 'O que você mudaria nas minhas metas?', 'O que focar agora?'],
+            context: { intent: 'performance_assessment', period, previous, category: overview.bestCategory?.category || null }
+        };
+    }
+
+    if (overview.averageProgress >= 75) {
+        return {
+            content: `Você está indo bem ${getPeriodNarration(period, previous)}, mas ainda com espaço para consolidar. O plano está em ${overview.averageProgress}% e uma ou duas sessões bem colocadas já podem virar várias metas.`,
+            suggestions: ['Qual meta está mais atrasada?', 'O que focar agora?', 'Minha meta de Estudos está realista?'],
+            context: { intent: 'performance_assessment', period, previous, category: overview.bestCategory?.category || null }
+        };
+    }
+
+    return {
+        content: `Eu diria que ${getPeriodNarration(period, previous)} você está abaixo do que planejou, mas não "mal". O ponto principal é que o plano está em ${overview.averageProgress}% e a meta mais atrasada merece mais atenção agora.`,
+        suggestions: ['Qual meta está mais atrasada?', 'O que focar agora?', 'O que você mudaria nas minhas metas?'],
+        context: { intent: 'performance_assessment', period, previous, category: null }
+    };
+}
+
+function answerGoalRealism(text) {
+    const category = detectAssistantCategory(text) || assistantConversationState?.category || null;
+    if (!category) {
+        return {
+            content: 'Consigo avaliar isso, mas preciso da categoria. Exemplo: "Minha meta de Estudos está realista?"',
+            suggestions: ['Minha meta de Estudos está realista?', 'Minha meta de Trabalho está muito alta?', 'O que você mudaria nas minhas metas?'],
+            context: { intent: 'goal_realism', period: getAssistantDefaultPeriod(), previous: false, category: null }
+        };
+    }
+
+    const goal = getActiveGoals().find(item => normalizeAssistantText(item.category) === normalizeAssistantText(category));
+    if (!goal) {
+        return {
+            content: `Hoje ${category} não tem meta ativa, então eu não consigo avaliar o realismo dela.`,
+            suggestions: [`Crie uma meta de 2h por dia para ${category}`, 'Quais metas estão ativas?', 'O que você mudaria nas minhas metas?'],
+            context: { intent: 'goal_realism', period: getAssistantDefaultPeriod(), previous: false, category }
+        };
+    }
+
+    const realism = assessGoalRealism(goal);
+    return {
+        content: realism.message,
+        suggestions: [
+            realism.tone === 'aggressive'
+                ? `Ajuste a meta de ${category} para ${Math.max(1, Math.round(getCategoryRecentStats(category, 21).averagePerDay / 60))}h por dia`
+                : `Como estou em ${category}?`,
+            'O que você mudaria nas minhas metas?',
+            'O que focar agora?'
+        ],
+        context: { intent: 'goal_realism', period: getAssistantDefaultPeriod(), previous: false, category }
+    };
+}
+
+function answerGoalAdjustmentAdvice() {
+    const goals = getActiveGoals();
+    if (!goals.length) {
+        return {
+            content: 'Sem metas ativas eu não tenho o que ajustar ainda. Se quiser, posso te ajudar a montar as primeiras com base no que você já faz.',
+            suggestions: ['Crie uma meta de 2h por dia para Estudos', 'Quais categorias estão sem meta?', 'Quanto foquei esta semana?'],
+            context: { intent: 'goal_adjustment', period: getAssistantDefaultPeriod(), previous: false, category: null }
+        };
+    }
+
+    const advice = goals.map(goal => {
+        const realism = assessGoalRealism(goal);
+        return { goal, realism };
+    });
+
+    const aggressive = advice.filter(item => item.realism?.tone === 'aggressive');
+    const conservative = advice.filter(item => item.realism?.tone === 'conservative');
+
+    let content = '';
+    if (aggressive.length) {
+        const first = aggressive[0];
+        content += `Eu começaria suavizando ${first.goal.category}. ${first.realism.message}\n`;
+    } else if (conservative.length) {
+        const first = conservative[0];
+        content += `Se fosse para ajustar algo agora, eu subiria um pouco ${first.goal.category}. ${first.realism.message}\n`;
+    } else {
+        content += 'No geral, suas metas parecem relativamente coerentes com o histórico recente.\n';
+    }
+
+    const lagging = getLaggingGoalSummary(getAssistantDefaultPeriod(), false);
+    if (lagging) {
+        content += `Hoje eu também prestaria atenção em ${lagging.category}, porque ela é a que mais está pedindo recuperação neste recorte.`;
+    } else {
+        content += 'No curto prazo, eu manteria as metas como estão e ajustaria só depois de mais alguns dias de uso.';
+    }
+
+    return {
+        content,
+        suggestions: [
+            aggressive.length ? `Minha meta de ${aggressive[0].goal.category} está realista?` : 'Qual meta está mais atrasada?',
+            'O que focar agora?',
+            'Quais metas bati esta semana?'
+        ],
+        context: { intent: 'goal_adjustment', period: getAssistantDefaultPeriod(), previous: false, category: aggressive[0]?.goal.category || lagging?.category || null }
+    };
+}
+
+function answerCategoryChangeAdvice(text) {
+    const category = detectAssistantCategory(text) || assistantConversationState?.category || null;
+    if (!category) {
+        return {
+            content: 'Se você me disser a categoria, eu consigo opinar melhor. Exemplo: "Faz sentido eu reduzir Trabalho esta semana?"',
+            suggestions: ['Faz sentido eu reduzir Trabalho esta semana?', 'Minha meta de Estudos está realista?', 'O que você mudaria nas minhas metas?'],
+            context: { intent: 'category_change_advice', period: getAssistantDefaultPeriod(), previous: false, category: null }
+        };
+    }
+
+    const goal = getActiveGoals().find(item => normalizeAssistantText(item.category) === normalizeAssistantText(category));
+    if (!goal) {
+        return {
+            content: `Hoje ${category} nem tem meta ativa, então eu só reduziria se ela realmente deixou de ser prioridade nesta semana.`,
+            suggestions: [`Crie uma meta de 2h por dia para ${category}`, 'O que focar agora?', 'O que você mudaria nas minhas metas?'],
+            context: { intent: 'category_change_advice', period: getAssistantDefaultPeriod(), previous: false, category }
+        };
+    }
+
+    const realism = assessGoalRealism(goal);
+    const lagging = getLaggingGoalSummary(getAssistantDefaultPeriod(), false);
+    const isReduceIntent = includesAny(normalizeAssistantText(text), ['reduzir', 'baixar', 'diminuir']);
+
+    let content = '';
+    if (isReduceIntent) {
+        if (realism.tone === 'aggressive') {
+            content = `Sim, faz sentido considerar uma redução em ${category} por enquanto. ${realism.message}`;
+        } else {
+            content = `Eu só reduziria ${category} se sua prioridade da semana realmente mudou. ${realism.message}`;
+        }
+    } else {
+        content = realism.message;
+    }
+
+    if (lagging && normalizeAssistantText(lagging.category) !== normalizeAssistantText(category)) {
+        content += ` Hoje o maior atraso está em ${lagging.category}, então eu equilibraria isso antes de mexer muito em ${category}.`;
+    }
+
+    return {
+        content,
+        suggestions: [
+            `Como estou em ${category}?`,
+            'O que você mudaria nas minhas metas?',
+            'O que focar agora?'
+        ],
+        context: { intent: 'category_change_advice', period: getAssistantDefaultPeriod(), previous: false, category }
+    };
+}
+
+function buildAssistantTaskPrompt(missing, draft) {
+    const parts = [];
+    if (missing.includes('nome')) parts.push('o nome');
+    if (missing.includes('categoria')) parts.push('a categoria');
+    if (missing.includes('duracao')) parts.push('a dura\u00e7\u00e3o');
+
+    const collected = [];
+    if (draft?.name) collected.push(`nome: ${draft.name}`);
+    if (draft?.category) collected.push(`categoria: ${draft.category}`);
+    if (draft?.durationMinutes) collected.push(`dura\u00e7\u00e3o: ${draft.durationMinutes} min`);
+
+    const collectedText = collected.length ? ` At\u00e9 agora eu peguei ${collected.join(', ')}.` : '';
+    return `Consigo montar essa tarefa, mas ainda preciso de ${parts.join(' e ')}.${collectedText}`;
+}
+
+function answerTaskCreateOrStart(text) {
+    const baseDraft = assistantConversationState?.intent === 'task_creation_pending'
+        ? assistantConversationState.taskDraft
+        : null;
+    const draft = extractAssistantTaskDraft(text, baseDraft);
+    const normalized = normalizeAssistantText(text);
+
+    if (draft.existingTask && !draft.durationMinutes && !draft.category && (!draft.name || normalizeAssistantText(draft.name) === normalizeAssistantText(draft.existingTask.name))) {
+        switchView('view-home');
+        startTask(draft.existingTask.id);
+        return {
+            content: `Feito. Iniciei a tarefa "${draft.existingTask.name}" e te levei para a Home para acompanhar o timer.`,
+            actions: [{ type: 'view', value: 'view-home', label: 'Abrir Home' }],
+            suggestions: ['Pause o timer', 'Quanto foquei hoje?', 'O que focar agora?'],
+            autoClose: true,
+            context: { intent: 'start_task', period: getAssistantDefaultPeriod(), previous: false, category: draft.existingTask.category || null }
+        };
+    }
+
+    const missing = getAssistantMissingTaskFields(draft);
+    const askedOnlyToStartTask = includesAny(normalized, ['iniciar tarefa', 'inicie a tarefa', 'comecar tarefa', 'comece a tarefa']) && missing.length > 0;
+
+    if (missing.length) {
+        return {
+            content: buildAssistantTaskPrompt(missing, draft),
+            suggestions: [
+                'Tarefa revisao de contratos em Trabalho por 45 minutos',
+                'Matematica financeira em Estudos por 20 minutos',
+                'Escreva proposta em Trabalho por 1 hora'
+            ],
+            context: {
+                intent: 'task_creation_pending',
+                period: getAssistantDefaultPeriod(),
+                previous: false,
+                category: draft.category || null,
+                taskDraft: draft,
+                askedOnlyToStartTask
+            }
+        };
+    }
+
+    const createdTask = createTaskFromAssistant(draft, true);
+    switchView('view-home');
+    return {
+        content: `Pronto. Criei e iniciei a tarefa "${createdTask.name}" em ${createdTask.category} com ${createdTask.estimatedMinutes} minuto(s).`,
+        actions: [{ type: 'view', value: 'view-home', label: 'Abrir Home' }],
+        suggestions: ['Pause o timer', 'Quanto foquei hoje?', `Como estou em ${createdTask.category}?`],
+        autoClose: true,
+        context: { intent: 'start_task', period: getAssistantDefaultPeriod(), previous: false, category: createdTask.category || null }
+    };
+}
+
+function answerStartTask(text) {
+    const task = findAssistantTaskByText(text);
+
+    if (!tasks.length) {
+        return {
+            content: 'Você ainda não tem tarefas criadas. Se quiser, primeiro crie uma tarefa e depois eu consigo iniciar por aqui.',
+            actions: [{ type: 'view', value: 'view-home', label: 'Abrir Home' }],
+            suggestions: ['Nova tarefa', 'Crie uma meta de 2h por dia para Estudos', 'O que focar agora?'],
+            context: { intent: 'start_task', period: getAssistantDefaultPeriod(), previous: false, category: null }
+        };
+    }
+
+    if (!task) {
+        const openTasks = tasks.filter(item => !item.completed).slice(0, 3).map(item => item.name);
+        return {
+            content: openTasks.length
+                ? `Não consegui identificar qual tarefa você quer iniciar. Tente citar o nome dela, por exemplo: "iniciar tarefa ${openTasks[0]}".`
+                : 'No momento não encontrei tarefas em aberto para iniciar.',
+            suggestions: openTasks.length
+                ? openTasks.map(name => `Iniciar tarefa ${name}`)
+                : ['Abrir Home', 'Quanto foquei hoje?', 'O que focar agora?'],
+            context: { intent: 'start_task', period: getAssistantDefaultPeriod(), previous: false, category: null }
+        };
+    }
+
+    switchView('view-home');
+    startTask(task.id);
+
+    return {
+        content: `Feito. Iniciei a tarefa "${task.name}" e te levei para a Home para você já acompanhar o timer.`,
+        actions: [{ type: 'view', value: 'view-home', label: 'Abrir Home' }],
+        suggestions: ['Pause o timer', 'Quanto foquei hoje?', 'O que focar agora?'],
+        autoClose: true,
+        context: { intent: 'start_task', period: getAssistantDefaultPeriod(), previous: false, category: task.category || null }
+    };
+}
+
+function saveGoalFromAssistant(text) {
+    const category = detectAssistantCategory(text);
+    const dailyMinutes = detectAssistantDurationMinutes(text);
+    const schedule = detectAssistantSchedule(text);
+
+    if (!category && !dailyMinutes) {
+        return {
+            content: 'Eu consigo criar a meta, mas preciso de categoria e duração. Exemplo: "Crie uma meta de 2h por dia para Estudos em dias úteis."',
+            suggestions: getAssistantDefaultSuggestions('view-goals')
+        };
+    }
+
+    if (!category) {
+        return {
+            content: 'Me diga a categoria da meta. Exemplo: "Defina 2h por dia para Trabalho."',
+            suggestions: getAssistantDefaultSuggestions('view-goals')
+        };
+    }
+
+    if (!dailyMinutes) {
+        return {
+            content: `Entendi a categoria ${category}, mas ainda preciso da duração. Exemplo: "Ajuste ${category} para 1h30 por dia."`,
+            suggestions: getAssistantDefaultSuggestions('view-goals')
+        };
+    }
+
+    const existingGoal = focusGoals.find(goal => normalizeAssistantText(goal.category) === normalizeAssistantText(category));
+    const result = saveGoalEntry({
+        goalId: existingGoal?.id || null,
+        category,
+        dailyMinutes,
+        schedule: schedule || existingGoal?.schedule || 'weekdays'
+    });
+
+    if (!result.ok) {
+        return {
+            content: result.message || 'Não consegui salvar essa meta.',
+            suggestions: getAssistantDefaultSuggestions('view-goals')
+        };
+    }
+
+    resetGoalForm();
+    renderGoalsList();
+    renderStatsGoalsSummary(window._statsPeriod || 'day');
+    window.compileGoalsData?.();
+
+    const scheduleLabel = (schedule || existingGoal?.schedule || 'weekdays') === 'everyday' ? 'semana inteira' : 'dias úteis';
+    return {
+        content: `${existingGoal ? 'Meta atualizada' : 'Meta criada'}: ${category} com ${formatMinsToHours(dailyMinutes)} por dia (${scheduleLabel}).`,
+        actions: [{ type: 'view', value: 'view-goals', label: 'Abrir Metas' }],
+        suggestions: [
+            `Como estou em ${category}?`,
+            'Quais metas bati esta semana?',
+            'O que focar agora?'
+        ]
+    };
+}
+
+function removeGoalFromAssistant(text) {
+    const category = detectAssistantCategory(text);
+    if (!category) {
+        return {
+            content: 'Qual meta você quer remover? Me diga a categoria. Exemplo: "Remova a meta de Leitura."',
+            suggestions: getAssistantDefaultSuggestions('view-goals')
+        };
+    }
+
+    const goal = focusGoals.find(item => normalizeAssistantText(item.category) === normalizeAssistantText(category));
+    if (!goal) {
+        return {
+            content: `Não encontrei uma meta ativa para ${category}.`,
+            suggestions: [
+                'Quais metas estão ativas?',
+                `Crie uma meta de 1h por dia para ${category}`,
+                'O que focar agora?'
+            ]
+        };
+    }
+
+    focusGoals = focusGoals.filter(item => item.id !== goal.id);
+    saveFocusGoals();
+    if (editingGoalId === goal.id) resetGoalForm();
+    renderStatsGoalsSummary(window._statsPeriod || 'day');
+    window.compileGoalsData?.();
+
+    return {
+        content: `Pronto. A meta de ${category} foi removida.`,
+        actions: [{ type: 'view', value: 'view-goals', label: 'Abrir Metas' }],
+        suggestions: [
+            'Quais metas estão ativas?',
+            'Crie uma meta de 2h por dia para Estudos',
+            'Resuma meu desempenho'
+        ]
+    };
+}
+
+function answerAssistantHelp() {
+    return {
+        content: [
+            'Pode falar comigo como falaria com outra pessoa.',
+            'Eu consigo, por exemplo:',
+            '• criar, ajustar e remover metas',
+            '• responder sobre foco hoje, semana e mês',
+            '• dizer qual categoria recebeu mais atenção',
+            '• comparar planejado e realizado',
+            '• sugerir no que vale focar agora'
+        ].join('\n'),
+        suggestions: getAssistantDefaultSuggestions()
+    };
+}
+
+function answerBroaderGuidance(text) {
+    const normalized = normalizeAssistantText(text);
+    const overview = getAssistantGoalOverview(getAssistantDefaultPeriod(), false);
+    const lagging = getLaggingGoalSummary(getAssistantDefaultPeriod(), false);
+    const currentSuggestion = getFocusNowSuggestion();
+
+    if (includesAny(normalized, ['oq vc pode fazer', 'o que vc pode fazer', 'o que voce pode fazer', 'oq voce pode fazer'])) {
+        return answerAssistantHelp();
+    }
+
+    if (includesAny(normalized, ['estou perdido', 'to perdido', 'nao sei por onde comecar', 'nao sei o que fazer', 'estou sobrecarregado', 'to sobrecarregado'])) {
+        return {
+            content: `Eu iria simplificar o proximo passo. ${currentSuggestion}`,
+            suggestions: ['O que focar agora?', 'Resuma meu desempenho', 'Quais metas estao mais atrasadas?'],
+            context: { intent: 'broader_guidance', period: getAssistantDefaultPeriod(), previous: false, category: lagging?.category || null }
+        };
+    }
+
+    if (includesAny(normalized, ['como posso melhorar', 'como melhorar', 'alguma sugestao', 'alguma dica', 'o que voce recomenda', 'qual seria o melhor plano'])) {
+        const advice = lagging
+            ? `Eu atacaria primeiro ${lagging.category}, porque faltam ${formatMinsToHours(lagging.remainingMinutes)} para fechar essa meta.`
+            : currentSuggestion;
+        return {
+            content: `${advice} Depois eu revisaria se suas metas estao proporcionais ao seu ritmo recente.`,
+            suggestions: ['Qual meta esta mais atrasada?', 'Minha meta de Estudos esta realista?', 'O que focar agora?'],
+            context: { intent: 'broader_guidance', period: getAssistantDefaultPeriod(), previous: false, category: lagging?.category || overview.bestCategory?.category || null }
+        };
+    }
+
+    if (includesAny(normalized, ['me ajuda a me organizar', 'me ajuda a organizar', 'como me organizo', 'como organizar meu foco', 'como organizar minha semana'])) {
+        return {
+            content: `Eu faria assim: primeiro olho o que esta atrasado, depois priorizo uma categoria por vez e fecho blocos curtos. ${currentSuggestion}`,
+            suggestions: ['O que focar agora?', 'Quais metas estao mais atrasadas?', 'Resuma meu desempenho'],
+            context: { intent: 'broader_guidance', period: getAssistantDefaultPeriod(), previous: false, category: lagging?.category || null }
+        };
+    }
+
+    return null;
+}
+
+function buildAssistantReply(text) {
+    const normalized = normalizeAssistantText(text);
+    const isTaskFollowUp = assistantConversationState?.intent === 'task_creation_pending' && (
+        !!detectAssistantCategory(text) ||
+        !!detectAssistantDurationMinutes(text) ||
+        includesAny(normalized, ['tarefa', 'categoria', 'minuto', 'minutos', 'hora', 'horas']) ||
+        normalized.split(/\s+/).filter(Boolean).length <= 6
+    );
+
+    if (!normalized) {
+        return {
+            content: 'Pode mandar sua pergunta ou comando por aqui.',
+            suggestions: getAssistantDefaultSuggestions()
+        };
+    }
+
+    if (hasWholeToken(normalized, ['oi', 'ola']) || includesAny(normalized, ['ajuda', 'o que voce faz', 'oq voce faz', 'o que vc pode fazer', 'oq vc pode fazer', 'como voce pode ajudar', 'como vc pode ajudar', 'voce consegue', 'vc consegue'])) {
+        return answerAssistantHelp();
+    }
+
+    const broaderGuidance = answerBroaderGuidance(text);
+    if (broaderGuidance) {
+        return broaderGuidance;
+    }
+
+    if (includesAny(normalized, ['abrir metas', 'va para metas', 'ir para metas'])) {
+        switchView('view-goals');
+        return {
+            content: 'Abri a tela de Metas para você.',
+            actions: [{ type: 'view', value: 'view-goals', label: 'Metas' }],
+            suggestions: getAssistantDefaultSuggestions('view-goals'),
+            autoClose: true,
+            context: { intent: 'navigation', period: getAssistantDefaultPeriod(), previous: false, category: null }
+        };
+    }
+
+    if (includesAny(normalized, ['abrir estatisticas', 'va para estatisticas', 'ir para estatisticas'])) {
+        switchView('view-stats');
+        return {
+            content: 'Abri a tela de Estatísticas para você.',
+            actions: [{ type: 'view', value: 'view-stats', label: 'Estatísticas' }],
+            suggestions: getAssistantDefaultSuggestions('view-stats'),
+            autoClose: true,
+            context: { intent: 'navigation', period: getAssistantDefaultPeriod(), previous: false, category: null }
+        };
+    }
+
+    if (includesAny(normalized, ['abrir home', 'ir para home', 'voltar para home'])) {
+        switchView('view-home');
+        return {
+            content: 'Voltei para a Home.',
+            actions: [{ type: 'view', value: 'view-home', label: 'Home' }],
+            suggestions: getAssistantDefaultSuggestions('view-home'),
+            autoClose: true,
+            context: { intent: 'navigation', period: getAssistantDefaultPeriod(), previous: false, category: null }
+        };
+    }
+
+    if (includesAny(normalized, ['quais metas', 'metas ativas', 'listar metas']) && !includesAny(normalized, ['bati', 'batidas'])) {
+        return answerGoalList();
+    }
+
+    if (
+        includesAny(normalized, [
+            'apague todas minhas metas',
+            'apague todas as metas',
+            'exclua todas as metas',
+            'remova todas as metas',
+            'delete todas as metas',
+            'limpe minhas metas',
+            'apagar minhas metas',
+            'apagar todas minhas metas',
+            'apagar todas as metas',
+            'remover minhas metas',
+            'excluir minhas metas',
+            'deletar minhas metas'
+        ]) ||
+        (includesAny(normalized, ['apagar', 'remover', 'excluir', 'deletar', 'limpar']) && includesAny(normalized, ['metas']) && !detectAssistantCategory(text))
+    ) {
+        return removeAllGoalsFromAssistant();
+    }
+
+    if (includesAny(normalized, ['remova a meta', 'remove a meta', 'remover meta', 'apague a meta', 'exclua a meta', 'deleta a meta', 'tira a meta'])) {
+        return removeGoalFromAssistant(text);
+    }
+
+    const looksLikeGoalCommand =
+        detectAssistantDurationMinutes(text) &&
+        detectAssistantCategory(text) &&
+        includesAny(normalized, ['meta', 'crie', 'criar', 'ajuste', 'ajustar', 'defina', 'definir', 'mude', 'altere', 'quero', 'planeje']);
+
+    if (looksLikeGoalCommand) {
+        return saveGoalFromAssistant(text);
+    }
+
+    if (includesAny(normalized, ['pausar timer', 'pause o timer', 'pausar foco', 'pare o timer', 'para o timer', 'reinicie o timer', 'resetar timer', 'zerar timer', 'reiniciar foco', 'inicie o foco', 'iniciar foco', 'comece o foco', 'inicie o timer', 'iniciar timer', 'continue o foco'])) {
+        const timerReply = answerTimerControl(text);
+        if (timerReply) return timerReply;
+    }
+
+    if (isTaskFollowUp) {
+        return answerTaskCreateOrStart(text);
+    }
+
+    if (includesAny(normalized, ['o que focar agora', 'oque focar agora', 'onde focar agora', 'qual categoria focar', 'o que priorizar'])) {
+        return answerFocusNow();
+    }
+
+    if (
+        includesAny(normalized, ['iniciar tarefa', 'inicie a tarefa', 'comecar tarefa', 'comece a tarefa', 'abrir tarefa', 'abra a tarefa', 'criar tarefa', 'crie uma tarefa', 'nova tarefa', 'adicionar tarefa']) ||
+        ((includesAny(normalized, ['iniciar', 'inicie', 'comecar', 'comece', 'abrir', 'abra']) && !!findAssistantTaskByText(text))) ||
+        (includesAny(normalized, ['tarefa']) && (!!detectAssistantDurationMinutes(text) || !!detectAssistantCategory(text)))
+    ) {
+        return answerTaskCreateOrStart(text);
+    }
+
+    if (includesAny(normalized, ['meta mais atrasada', 'metas mais atrasadas', 'qual meta esta mais atrasada', 'qual meta está mais atrasada', 'qual categoria esta mais atrasada', 'qual categoria está mais atrasada', 'quanto falta para a meta'])) {
+        return answerLaggingGoal(text);
+    }
+
+    if (includesAny(normalized, ['quais metas bati', 'bati alguma meta', 'metas batidas'])) {
+        return answerGoalHits(text);
+    }
+
+    if (includesAny(normalized, ['estou indo mal', 'estou indo bem', 'to indo mal', 'to indo bem', 'como eu estou indo', 'como estou indo', 'estou bem', 'estou mal'])) {
+        return answerPerformanceAssessment(text);
+    }
+
+    if (includesAny(normalized, ['meta realista', 'esta realista', 'está realista', 'meta muito alta', 'meta muito baixa', 'faz sentido essa meta'])) {
+        return answerGoalRealism(text);
+    }
+
+    if (includesAny(normalized, ['o que voce mudaria nas minhas metas', 'o que você mudaria nas minhas metas', 'o que mudaria nas minhas metas', 'como voce ajustaria minhas metas', 'como você ajustaria minhas metas'])) {
+        return answerGoalAdjustmentAdvice();
+    }
+
+    if (includesAny(normalized, ['faz sentido eu reduzir', 'vale a pena reduzir', 'devo reduzir', 'devo baixar', 'devo diminuir'])) {
+        return answerCategoryChangeAdvice(text);
+    }
+
+    if (includesAny(normalized, ['quantas metas', 'numero de metas', 'número de metas', 'quantas metas tenho'])) {
+        return answerGoalCount();
+    }
+
+    if (includesAny(normalized, ['categorias sem meta', 'quais categorias nao tem meta', 'quais categorias não tem meta', 'o que esta sem meta', 'o que está sem meta'])) {
+        return answerCategoriesWithoutGoal();
+    }
+
+    if (includesAny(normalized, ['como estou em', 'status de', 'andamento de']) && detectAssistantCategory(text)) {
+        return answerCategoryStatus(text);
+    }
+
+    if (includesAny(normalized, ['qual categoria', 'categoria que mais', 'mais foco', 'lider']) && includesAny(normalized, ['foco', 'foquei', 'tempo'])) {
+        return answerTopCategory(text);
+    }
+
+    if (includesAny(normalized, ['quantos pomodoros', 'quantas sessoes'])) {
+        return answerPomodoros(text);
+    }
+
+    if (includesAny(normalized, ['planejado', 'realizado', 'quanto falta para as metas', 'como esta meu plano'])) {
+        return answerPlannedVsActual(text);
+    }
+
+    if (includesAny(normalized, ['estou melhorando', 'estou piorando', 'compare', 'comparado', 'evoluindo', 'evolucao'])) {
+        return answerTrend(text);
+    }
+
+    if (includesAny(normalized, ['resumo', 'resuma', 'meu desempenho', 'como eu fui'])) {
+        return answerSummary(text);
+    }
+
+    if (includesAny(normalized, ['como foi meu foco', 'como esta meu foco', 'como tá meu foco', 'como ta meu foco'])) {
+        return answerFocusTotal(text);
+    }
+
+    if (includesAny(normalized, ['tarefas', 'tarefa atual', 'o que tenho para fazer'])) {
+        return answerTasks();
+    }
+
+    if (includesAny(normalized, ['quanto foquei', 'quanto tempo', 'quanto entreguei', 'quanto de foco'])) {
+        return answerFocusTotal(text);
+    }
+
+    if (detectAssistantCategory(text)) {
+        return answerCategoryStatus(text);
+    }
+
+    if (includesAny(normalized, ['foco', 'historico', 'histórico', 'desempenho'])) {
+        return answerSummary(text);
+    }
+
+    if (includesAny(normalized, ['meta', 'metas', 'planejamento', 'planejado'])) {
+        return answerGoalAdjustmentAdvice();
+    }
+
+    return {
+        content: 'Ainda não peguei exatamente o que você quis dizer, mas sigo com você nessa. Se quiser, reformula do seu jeito mesmo e eu tento de novo. Posso ajudar com metas, histórico, foco, categorias, tarefas e decisões de prioridade.',
+        suggestions: getAssistantDefaultSuggestions()
+    };
 }
 
 // TEST FUNCTION - Call from DevTools console: testChangelog()
