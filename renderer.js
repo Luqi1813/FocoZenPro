@@ -7,6 +7,8 @@ const timerCore = window.FocoZenTimerCore;
 const pipService = window.FocoZenPipService;
 const updateService = window.FocoZenUpdateService;
 const taskSessionService = window.FocoZenTaskSessionService;
+const legacyGoalsStats = window.FocoZenLegacyGoalsStats;
+const legacyTasks = window.FocoZenLegacyTasks;
 
 const storageKeys = storageService?.storageKeys ?? {
     TASKS: 'focozen_tasks',
@@ -384,6 +386,86 @@ function configureTaskSessionService() {
     });
 }
 
+function configureLegacyGoalsStatsModule() {
+    if (!legacyGoalsStats?.configure) return;
+
+    legacyGoalsStats.configure({
+        getFocusGoals: () => focusGoals,
+        getFocusHistory: () => focusHistory,
+        getTasks: () => tasks,
+        getUsername: () => username,
+        getCurrentStatsPeriod: () => window._statsPeriod || 'week',
+        getCurrentGoalsPeriod: () => window._goalsPeriod || 'week',
+        setCurrentStatsPeriod: (period) => { window._statsPeriod = period || 'week'; },
+        setCurrentGoalsPeriod: (period) => { window._goalsPeriod = period || 'week'; },
+        formatMinutesToHours,
+        getGoalOverviewData,
+        getGoalEvolutionSeriesData,
+        getGoalMomentumContent,
+        getFocusWindowSummaryData,
+        getFocusGreetingStateData,
+        getFocusStreakSummaryData,
+        filterHistoryForPeriod,
+        resolveCategoryPalette,
+        getPeriodLabel,
+        renderGoalCategoryOptions,
+        renderCategoriesChart,
+        renderPeriodBarChart,
+        compileDashboardData: () => window.compileDashboardData?.(),
+        updateGoalHoursDisplay,
+        saveGoalEntry,
+        resetGoalForm,
+        showGlassToast
+    });
+
+    legacyGoalsStats.bindGoalAndStatsInteractions?.();
+    window._statsPeriodBound = true;
+    window._goalsPeriodBound = true;
+}
+
+function configureLegacyTasksModule() {
+    if (!legacyTasks?.configure) return;
+
+    legacyTasks.configure({
+        getTasks: () => tasks,
+        getCurrentTask: () => currentTask,
+        getTimeLeft: () => timeLeft,
+        getTotalTimerTime: () => totalTimerTime,
+        getCurrentMode: () => currentMode,
+        getIsTimerRunning: () => isTimerRunning,
+        getTempSubtasks: () => tempSubtasks,
+        getEditingTaskId: () => editingTaskId,
+        getSelectedTasksForDelete: () => selectedTasksForDelete,
+        getIsDeleteMode: () => isDeleteMode,
+        getShowBubbleText: () => showBubbleText,
+        getTestMode: () => testMode,
+        setCurrentTask: (value) => { currentTask = value; },
+        setTimeLeft: (value) => { timeLeft = value; },
+        setTotalTimerTime: (value) => { totalTimerTime = value; },
+        setTempSubtasks: (value) => { tempSubtasks = value; },
+        setEditingTaskId: (value) => { editingTaskId = value; },
+        setIsDeleteMode: (value) => { isDeleteMode = !!value; },
+        saveTasks,
+        startTask: (taskId) => startTask(taskId),
+        toggleTaskComplete: (taskId) => toggleTaskComplete(taskId),
+        resetTimer,
+        pauseTimer,
+        deselectTask: () => deselectTask(),
+        syncStateToPip,
+        updateHeaderTaskCount,
+        updateTimerDisplay,
+        customAlert,
+        customConfirm,
+        renderTasksList: () => renderTasksList(),
+        renderTasksSidebar: () => renderTasksSidebar(),
+        renderProgress: () => renderProgress(),
+        toggleTimer,
+        getTaskFocusDurationSeconds,
+        formatMinutesToHours,
+        pomodoroMinutes: POMODORO_MINUTES
+    });
+}
+
 // INICIALIZACAO BLINDADA
 document.addEventListener('DOMContentLoaded', async () => {
     console.log("Iniciando FocoZen Pro...");
@@ -415,6 +497,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     try { initBreath(); } catch(e) { console.error('Erro Respiracao:', e); }
     try { initModals(); } catch(e) { console.error('Erro Modais:', e); }
     try { configureTaskSessionService(); } catch(e) { console.error('Erro Task Session:', e); }
+    try { configureLegacyGoalsStatsModule(); } catch(e) { console.error('Erro Goals/Stats Legacy:', e); }
+    try { configureLegacyTasksModule(); } catch(e) { console.error('Erro Tasks Legacy:', e); }
     try { initTaskForm(); } catch(e) { console.error('Erro Formulário:', e); }
     try { initSidebarControls(); } catch(e) { console.error('Erro Sidebar:', e); }
     try { initPipIntegration(); } catch(e) { console.error('Erro PIP:', e); }
@@ -2734,6 +2818,133 @@ function renderProgress() {
     if(percentageEl) percentageEl.textContent = `${Math.floor(percent)}%`;
 }
 
+const legacyUpdatePomodoroSuggestionImpl = updatePomodoroSuggestion;
+const legacyAddTempSubtaskImpl = addTempSubtask;
+const legacyRemoveTempSubtaskImpl = removeTempSubtask;
+const legacyRenderTempSubtasksImpl = renderTempSubtasks;
+const legacyCreateOrEditTaskImpl = criarOuEditarTarefa;
+const legacyRenderTasksListImpl = renderTasksList;
+const legacyRenderTasksSidebarImpl = renderTasksSidebar;
+const legacyRenderProgressImpl = renderProgress;
+const legacyEditTaskImpl = window.editTask;
+const legacyDeleteTaskImpl = window.deleteTask;
+const legacyToggleSubtaskImpl = window.toggleSubtask;
+const legacyToggleTaskSelectionImpl = window.toggleTaskSelection;
+const legacyToggleSelectAllTasksImpl = window.toggleSelectAllTasks;
+const legacyDeleteSelectedTasksImpl = window.deleteSelectedTasks;
+
+updatePomodoroSuggestion = function() {
+    if (legacyTasks?.updatePomodoroSuggestion) {
+        return legacyTasks.updatePomodoroSuggestion();
+    }
+
+    return legacyUpdatePomodoroSuggestionImpl();
+};
+
+addTempSubtask = function() {
+    if (legacyTasks?.addTempSubtask) {
+        return legacyTasks.addTempSubtask();
+    }
+
+    return legacyAddTempSubtaskImpl();
+};
+
+removeTempSubtask = function(id) {
+    if (legacyTasks?.removeTempSubtask) {
+        return legacyTasks.removeTempSubtask(id);
+    }
+
+    return legacyRemoveTempSubtaskImpl(id);
+};
+
+renderTempSubtasks = function() {
+    if (legacyTasks?.renderTempSubtasks) {
+        return legacyTasks.renderTempSubtasks();
+    }
+
+    return legacyRenderTempSubtasksImpl();
+};
+
+criarOuEditarTarefa = function() {
+    if (legacyTasks?.createOrEditTask) {
+        return legacyTasks.createOrEditTask();
+    }
+
+    return legacyCreateOrEditTaskImpl();
+};
+
+renderTasksList = function() {
+    if (legacyTasks?.renderTasksList) {
+        return legacyTasks.renderTasksList();
+    }
+
+    return legacyRenderTasksListImpl();
+};
+
+renderTasksSidebar = function() {
+    if (legacyTasks?.renderTasksSidebar) {
+        return legacyTasks.renderTasksSidebar();
+    }
+
+    return legacyRenderTasksSidebarImpl();
+};
+
+renderProgress = function() {
+    if (legacyTasks?.renderProgress) {
+        return legacyTasks.renderProgress();
+    }
+
+    return legacyRenderProgressImpl();
+};
+
+window.editTask = function(taskId) {
+    if (legacyTasks?.openTaskEdit) {
+        return legacyTasks.openTaskEdit(taskId);
+    }
+
+    return legacyEditTaskImpl?.(taskId);
+};
+
+window.deleteTask = function(taskId) {
+    if (legacyTasks?.deleteTask) {
+        return legacyTasks.deleteTask(taskId);
+    }
+
+    return legacyDeleteTaskImpl?.(taskId);
+};
+
+window.toggleSubtask = function(taskId, subtaskId) {
+    if (legacyTasks?.toggleSubtask) {
+        return legacyTasks.toggleSubtask(taskId, subtaskId);
+    }
+
+    return legacyToggleSubtaskImpl?.(taskId, subtaskId);
+};
+
+window.toggleTaskSelection = function(taskId, isChecked) {
+    if (legacyTasks?.toggleTaskSelection) {
+        return legacyTasks.toggleTaskSelection(taskId, isChecked);
+    }
+
+    return legacyToggleTaskSelectionImpl?.(taskId, isChecked);
+};
+
+window.toggleSelectAllTasks = function(isChecked) {
+    if (legacyTasks?.toggleSelectAllTasks) {
+        return legacyTasks.toggleSelectAllTasks(isChecked);
+    }
+
+    return legacyToggleSelectAllTasksImpl?.(isChecked);
+};
+
+window.deleteSelectedTasks = function() {
+    if (legacyTasks?.deleteSelectedTasks) {
+        return legacyTasks.deleteSelectedTasks();
+    }
+
+    return legacyDeleteSelectedTasksImpl?.();
+};
+
 function updateTaskBubbleProgress() {
     let percent = 0;
     if (currentTask && currentTask.pomodoros > 0) {
@@ -4147,6 +4358,43 @@ function renderGoalsList() {
             `;
         }).join('');
 }
+
+const legacyRenderStatsGoalsSummaryImpl = renderStatsGoalsSummary;
+const legacyRenderGoalsComparisonChartImpl = renderGoalsComparisonChart;
+const legacyRenderGoalsListImpl = renderGoalsList;
+const legacyCompileGoalsDataImpl = window.compileGoalsData;
+
+renderStatsGoalsSummary = function(period) {
+    if (legacyGoalsStats?.renderStatsGoalsSummary) {
+        return legacyGoalsStats.renderStatsGoalsSummary(period);
+    }
+
+    return legacyRenderStatsGoalsSummaryImpl(period);
+};
+
+renderGoalsComparisonChart = function(period) {
+    if (legacyGoalsStats?.renderGoalsComparisonChart) {
+        return legacyGoalsStats.renderGoalsComparisonChart(period);
+    }
+
+    return legacyRenderGoalsComparisonChartImpl(period);
+};
+
+renderGoalsList = function() {
+    if (legacyGoalsStats?.renderGoalsList) {
+        return legacyGoalsStats.renderGoalsList();
+    }
+
+    return legacyRenderGoalsListImpl();
+};
+
+window.compileGoalsData = function() {
+    if (legacyGoalsStats?.compileGoalsData) {
+        return legacyGoalsStats.compileGoalsData();
+    }
+
+    return legacyCompileGoalsDataImpl?.();
+};
 
 function getAccentColor() {
     // Read the CSS variable live so bars always match the user's current theme

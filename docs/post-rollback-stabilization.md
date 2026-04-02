@@ -13,12 +13,12 @@
 - `src/services/storage.js`
 - `src/services/pip.js`
 - `src/services/updates.js`
+- `src/services/task-session.js`
+- `src/legacy-renderer/goals-stats.js`
+- `src/legacy-renderer/tasks.js`
 
 ## Mantidos no repo, mas nao carregados agora
 - `src/core/assistant.js`
-- `src/services/task-session.js`
-- `src/legacy-renderer/tasks.js`
-- `src/legacy-renderer/goals-stats.js`
 - `src/legacy-renderer/assistant.js`
 
 ## Regra de reintroducao
