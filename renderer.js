@@ -1,4 +1,31 @@
-const soundsConfig = [
+const constantsService = window.FocoZenConstants;
+const storageService = window.FocoZenStorage;
+const utilsService = window.FocoZenUtils;
+const historyCore = window.FocoZenHistoryCore;
+const goalsCore = window.FocoZenGoalsCore;
+const timerCore = window.FocoZenTimerCore;
+const pipService = window.FocoZenPipService;
+const updateService = window.FocoZenUpdateService;
+
+const storageKeys = storageService?.storageKeys ?? {
+    TASKS: 'focozen_tasks',
+    HISTORY: 'focozen_history',
+    GOALS: 'focozen_goals',
+    CATEGORIES: 'focozen_categories',
+    SAVED_SESSION: 'focozen_saved_session',
+    TOTAL_POMODOROS: 'focozen_total_pomodoros',
+    SHOW_BUBBLE_TEXT: 'focozen_show_bubble_text',
+    USERNAME: 'focozen_username',
+    WIZARD_CATEGORIES: 'focozen_wizard_categories',
+    QUOTE_INDEX: 'focozen_quote_index',
+    LAST_QUOTE_DATE: 'focozen_last_quote_date',
+    UPDATED_VERSION: 'focozen_updated_version',
+    CHANGELOG: 'focozen_changelog',
+    LAST_VERSION: 'focozen_last_version',
+    LAST_CHANGELOG: 'focozen_last_changelog'
+};
+
+const soundsConfig = constantsService?.soundsConfig ?? [
     { id: 'chuva', name: 'Chuva', icon: 'fa-cloud-rain', image: 'chuva.jpg', file: 'chuva.mp3' },
     { id: 'oceano', name: 'Oceano', icon: 'fa-water', image: 'oceano.jpg', file: 'oceano.mp3' },
     { id: 'floresta', name: 'Floresta', icon: 'fa-tree', image: 'floresta.jpg', file: 'floresta.mp3' },
@@ -12,25 +39,25 @@ const soundsConfig = [
     { id: '40hz', name: '40Hz Gama', icon: 'fa-wave-square', image: 'default.jpg', file: '40hz (Ondas Gama).mp3' }
 ];
 
-const soundCategories = {
+const soundCategories = constantsService?.soundCategories ?? {
     'Natureza': { icon: 'fa-leaf', ids: ['chuva', 'oceano', 'floresta', 'fogueira'] },
     'Música & Foco': { icon: 'fa-headphones', ids: ['teclado', 'classica', 'Jazz', 'Lo-fi'] },
     'Frequências': { icon: 'fa-wave-square', ids: ['Brown noise', 'Pink noise', '40hz'] }
 };
 
-const soundThemes = {
+const soundThemes = constantsService?.soundThemes ?? {
     'chuva': 'water', 'oceano': 'water', 'floresta': 'nature', 'fogueira': 'fire',
     'teclado': 'yellow', 'classica': 'classica', 'Jazz': 'jazz', 'Lo-fi': 'lofi',
     'Brown noise': 'brown', 'Pink noise': 'pink', '40hz': 'sky'
 };
 
-const quotes = [
+const quotes = constantsService?.quotes ?? [
     { text: "A mente que se abre a uma nova ideia jamais voltará ao seu tamanho original.", author: "Albert Einstein" },
     { text: "O conhecimento é a única riqueza que se expande quando compartilhada.", author: "Sócrates" },
     { text: "Nao espere por circunstancias ideais. Comece agora.", author: "Seneca" }
 ];
 
-const successQuotes = [
+const successQuotes = constantsService?.successQuotes ?? [
     { text: "A vitoria pertence ao mais perseverante.", author: "Napoleao Bonaparte" },
     { text: "Nao e porque as coisas sao dificeis que nao ousamos; e porque nao ousamos que elas sao dificeis.", author: "Seneca" },
     { text: "O sucesso é ir de fracasso em fracasso sem perder o entusiasmo.", author: "Winston Churchill" },
@@ -39,11 +66,11 @@ const successQuotes = [
     { text: "Voce nao precisa ser grande para comecar, mas precisa comecar para ser grande.", author: "Zig Ziglar" }
 ];
 
-const POMODORO_MINUTES = 25;
-const SHORT_BREAK_MINUTES = 5;
-const LONG_BREAK_MINUTES = 15;
+const POMODORO_MINUTES = constantsService?.POMODORO_MINUTES ?? 25;
+const SHORT_BREAK_MINUTES = constantsService?.SHORT_BREAK_MINUTES ?? 5;
+const LONG_BREAK_MINUTES = constantsService?.LONG_BREAK_MINUTES ?? 15;
 
-const defaultCategories = [
+const defaultCategories = constantsService?.defaultCategories ?? [
     { name: 'Livre', icon: 'fa-infinity' },
     { name: 'Trabalho', icon: 'fa-briefcase' },
     { name: 'Estudos', icon: 'fa-book' },
@@ -91,7 +118,7 @@ let assistantSuggestions = [];
 let isAssistantOpen = false;
 let assistantConversationState = null;
 
-const motivationalRestartMessages = [
+const motivationalRestartMessages = constantsService?.motivationalRestartMessages ?? [
     'Pausar nao e desistir. Voce pode recomecar com mais clareza depois.',
     'Seu progresso conta. Respire, recarregue e volte mais forte.',
     'Todo grande avanço também respeita pausas inteligentes.',
@@ -103,6 +130,22 @@ let breathInterval;
 let breathPhaseTimer;
 
 function getTaskFocusDurationSeconds(task = currentTask) {
+    if (timerCore?.getTaskSessionDurationSeconds) {
+        return timerCore.getTaskSessionDurationSeconds({
+            task,
+            testMode,
+            pomodoroMinutes: POMODORO_MINUTES
+        });
+    }
+
+    if (utilsService?.calculateTaskFocusDurationSeconds) {
+        return utilsService.calculateTaskFocusDurationSeconds({
+            task,
+            testMode,
+            pomodoroMinutes: POMODORO_MINUTES
+        });
+    }
+
     if (!task) return testMode ? 5 : POMODORO_MINUTES * 60;
 
     const completedBlocks = Math.floor(task.completedPomodoros || 0);
@@ -114,6 +157,10 @@ function getTaskFocusDurationSeconds(task = currentTask) {
 }
 
 function readJsonStorage(key, fallback) {
+    if (storageService?.readJsonStorage) {
+        return storageService.readJsonStorage(key, fallback);
+    }
+
     try {
         const raw = localStorage.getItem(key);
         if (!raw) return fallback;
@@ -126,36 +173,45 @@ function readJsonStorage(key, fallback) {
 }
 
 function writeJsonStorage(key, value) {
+    if (storageService?.writeJsonStorage) {
+        storageService.writeJsonStorage(key, value);
+        return;
+    }
+
     localStorage.setItem(key, JSON.stringify(value));
 }
 
 function readNumberStorage(key, fallback = 0) {
+    if (storageService?.readNumberStorage) {
+        return storageService.readNumberStorage(key, fallback);
+    }
+
     const value = Number.parseInt(localStorage.getItem(key), 10);
     return Number.isFinite(value) ? value : fallback;
 }
 
 function saveTasks() {
-    writeJsonStorage('focozen_tasks', tasks);
+    writeJsonStorage(storageKeys.TASKS, tasks);
 }
 
 function saveFocusHistory() {
-    writeJsonStorage('focozen_history', focusHistory);
+    writeJsonStorage(storageKeys.HISTORY, focusHistory);
 }
 
 function saveFocusGoals() {
-    writeJsonStorage('focozen_goals', focusGoals);
+    writeJsonStorage(storageKeys.GOALS, focusGoals);
 }
 
 function saveUserCategories() {
-    writeJsonStorage('focozen_categories', userCategories);
+    writeJsonStorage(storageKeys.CATEGORIES, userCategories);
 }
 
 function readSavedSession() {
-    return readJsonStorage('focozen_saved_session', null);
+    return readJsonStorage(storageKeys.SAVED_SESSION, null);
 }
 
 function saveSavedSession(session) {
-    writeJsonStorage('focozen_saved_session', session);
+    writeJsonStorage(storageKeys.SAVED_SESSION, session);
 }
 
 // INICIALIZACAO BLINDADA
@@ -163,13 +219,17 @@ document.addEventListener('DOMContentLoaded', async () => {
     console.log("Iniciando FocoZen Pro...");
 
     try {
-        tasks = readJsonStorage('focozen_tasks', []);
-        totalPomodorosToday = readNumberStorage('focozen_total_pomodoros', 0);
-        showBubbleText = localStorage.getItem('focozen_show_bubble_text') !== 'false';
-        focusHistory = readJsonStorage('focozen_history', []);
-        focusGoals = readJsonStorage('focozen_goals', []);
+        tasks = readJsonStorage(storageKeys.TASKS, []);
+        totalPomodorosToday = readNumberStorage(storageKeys.TOTAL_POMODOROS, 0);
+        showBubbleText = (storageService?.readStorageValue
+            ? storageService.readStorageValue(storageKeys.SHOW_BUBBLE_TEXT, 'true')
+            : localStorage.getItem(storageKeys.SHOW_BUBBLE_TEXT)) !== 'false';
+        focusHistory = readJsonStorage(storageKeys.HISTORY, []);
+        focusGoals = readJsonStorage(storageKeys.GOALS, []);
         
-        username = localStorage.getItem('focozen_username');
+        username = storageService?.readStorageValue
+            ? storageService.readStorageValue(storageKeys.USERNAME, null)
+            : localStorage.getItem(storageKeys.USERNAME);
         if (username) {
             const input = document.getElementById('usernameInput');
             if(input) input.value = username;
@@ -229,7 +289,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             });
         }
         
-        userCategories = readJsonStorage('focozen_categories', defaultCategories);
+        userCategories = readJsonStorage(storageKeys.CATEGORIES, defaultCategories);
         if (window.renderTimerDropdown) window.renderTimerDropdown();
         if (window.renderCategoryChips) window.renderCategoryChips();
         resetGoalForm();
@@ -249,7 +309,10 @@ document.addEventListener('DOMContentLoaded', async () => {
         setTimeout(() => window.promptResumeSession(), 1500);
     } else {
         setTimeout(() => { 
-            if (!localStorage.getItem('focozen_username')) {
+            const storedUsername = storageService?.readStorageValue
+                ? storageService.readStorageValue(storageKeys.USERNAME, null)
+                : localStorage.getItem(storageKeys.USERNAME);
+            if (!storedUsername) {
                 document.getElementById('wizardModal')?.classList.add('active');
             }
         }, 1200);
@@ -413,8 +476,13 @@ window.prevWizard = function(currentStep) {
 };
 
 window.finishWizard = function() {
-    localStorage.setItem('focozen_username', username);
-    localStorage.setItem('focozen_wizard_categories', JSON.stringify(wizSelectedCats));
+    if (storageService?.writeStorageValue) {
+        storageService.writeStorageValue(storageKeys.USERNAME, username);
+    } else {
+        localStorage.setItem(storageKeys.USERNAME, username);
+    }
+
+    writeJsonStorage(storageKeys.WIZARD_CATEGORIES, wizSelectedCats);
     updateSidebarProfile();
     document.getElementById('wizardModal').classList.remove('active');
 };
@@ -477,7 +545,11 @@ function initNavigation() {
         const input = document.getElementById('settingsNameInput');
         if (input && input.value.trim()) {
             username = input.value.trim();
-            localStorage.setItem('focozen_username', username);
+            if (storageService?.writeStorageValue) {
+                storageService.writeStorageValue(storageKeys.USERNAME, username);
+            } else {
+                localStorage.setItem(storageKeys.USERNAME, username);
+            }
             updateSidebarProfile();
             const msg = document.getElementById('settingsSavedMsg');
             if (msg) { msg.style.display = 'flex'; setTimeout(() => msg.style.display = 'none', 3000); }
@@ -496,8 +568,8 @@ function initNavigation() {
             status.style.display = 'none';
             window._manualUpdateTriggered = true;
             
-            if (window.electronAPI && window.electronAPI.checkForUpdates) {
-                window.electronAPI.checkForUpdates();
+            if (updateService?.checkForUpdates && updateService.checkForUpdates()) {
+                return;
             } else {
                 setTimeout(() => {
                     window._manualUpdateTriggered = false;
@@ -525,16 +597,15 @@ function initPipIntegration() {
     const btnEnterPip = document.getElementById('btnEnterPip');
     if (btnEnterPip) {
         btnEnterPip.addEventListener('click', () => {
-            if (window.electronAPI && window.electronAPI.enterPip) {
+            if (pipService?.enter && pipService.enter()) {
                 isPipModeActive = true;
                 syncStateToPip();
-                window.electronAPI.enterPip();
             }
         });
     }
 
-    if (window.electronAPI && window.electronAPI.onPipAction) {
-        window.electronAPI.onPipAction((action, data) => {
+    if (pipService?.onAction) {
+        pipService.onAction((action, data) => {
             if (action === 'toggle-play') toggleTimer();
             else if (action === 'reset') resetTimer();
             else if (action === 'toggle-audio') toggleMasterPlay();
@@ -593,7 +664,7 @@ function initPipIntegration() {
                 deselectTask();
                 syncStateToPip({ hideCompletion: true });
                 // Minimizar o PiP sem fechar o programa
-                window.electronAPI.sendPipAction('minimize-to-tray');
+                pipService?.requestMinimizeToTray?.();
             }
             else if (action === 'set-volume') {
                 const parsedVolume = Number(data);
@@ -610,15 +681,20 @@ function initPipIntegration() {
 }
 
 function syncStateToPip(extraState = {}) {
-    if (!window.electronAPI || !window.electronAPI.sendPipState) return;
+    if (!pipService?.sendState) return;
 
     try {
-        const m = Math.floor(timeLeft / 60).toString().padStart(2, '0');
-        const s = (timeLeft % 60).toString().padStart(2, '0');
-        const timeString = `${m}:${s}`;
+        const timeString = timerCore?.formatTimerLabel
+            ? timerCore.formatTimerLabel(timeLeft)
+            : (utilsService?.formatClockTime
+                ? utilsService.formatClockTime(timeLeft)
+                : `${Math.floor(timeLeft / 60).toString().padStart(2, '0')}:${(timeLeft % 60).toString().padStart(2, '0')}`);
 
-        let progress = 0;
-        if (totalTimerTime > 0) progress = ((totalTimerTime - timeLeft) / totalTimerTime) * 100;
+        const progress = timerCore?.getTimerProgress
+            ? timerCore.getTimerProgress({ timeLeft, totalTime: totalTimerTime })
+            : (utilsService?.calculateProgressPercentage
+                ? utilsService.calculateProgressPercentage({ timeLeft, totalTime: totalTimerTime })
+                : (totalTimerTime > 0 ? ((totalTimerTime - timeLeft) / totalTimerTime) * 100 : 0));
 
         const activeCard = document.querySelector('.sound-card.active span');
         const soundName = activeCard ? activeCard.textContent : 'Silêncio';
@@ -628,7 +704,7 @@ function syncStateToPip(extraState = {}) {
         const bgImage = soundObj ? soundObj.image : 'default.jpg';
         const theme = soundThemes[currentSoundId] || 'default';
 
-        window.electronAPI.sendPipState({
+        pipService.sendState({
             timeString, progress, phase: currentMode,
             isRunning: isTimerRunning, soundName, isAudioPlaying: isPlaying,
             taskName, bgImage, theme, masterVolume, hasActiveTask: !!currentTask, ...extraState
@@ -640,7 +716,11 @@ function syncStateToPip(extraState = {}) {
 
 function toggleBubbleText() {
     showBubbleText = !showBubbleText;
-    localStorage.setItem('focozen_show_bubble_text', showBubbleText);
+    if (storageService?.writeStorageValue) {
+        storageService.writeStorageValue(storageKeys.SHOW_BUBBLE_TEXT, showBubbleText);
+    } else {
+        localStorage.setItem(storageKeys.SHOW_BUBBLE_TEXT, showBubbleText);
+    }
     const centerText = document.getElementById('bubbleCenterText');
     const icon = document.querySelector('#btnToggleBubbleText i');
     if (showBubbleText) {
@@ -666,12 +746,25 @@ function applyDefaultBackground() {
 function loadDailyQuote() {
     try {
         const today = new Date().toDateString();
-        let quoteIndex = parseInt(localStorage.getItem('focozen_quote_index'));
+        let quoteIndex = parseInt(
+            storageService?.readStorageValue
+                ? storageService.readStorageValue(storageKeys.QUOTE_INDEX, '0')
+                : localStorage.getItem(storageKeys.QUOTE_INDEX),
+            10
+        );
         if (isNaN(quoteIndex) || quoteIndex >= quotes.length || quoteIndex < 0) quoteIndex = 0;
-        if (localStorage.getItem('focozen_last_quote_date') !== today) {
+        const lastQuoteDate = storageService?.readStorageValue
+            ? storageService.readStorageValue(storageKeys.LAST_QUOTE_DATE, null)
+            : localStorage.getItem(storageKeys.LAST_QUOTE_DATE);
+        if (lastQuoteDate !== today) {
             quoteIndex = Math.floor(Math.random() * quotes.length);
-            localStorage.setItem('focozen_quote_index', quoteIndex);
-            localStorage.setItem('focozen_last_quote_date', today);
+            if (storageService?.writeStorageValue) {
+                storageService.writeStorageValue(storageKeys.QUOTE_INDEX, quoteIndex);
+                storageService.writeStorageValue(storageKeys.LAST_QUOTE_DATE, today);
+            } else {
+                localStorage.setItem(storageKeys.QUOTE_INDEX, quoteIndex);
+                localStorage.setItem(storageKeys.LAST_QUOTE_DATE, today);
+            }
         }
         const quote = quotes[quoteIndex] || quotes[0];
         const quoteText = document.getElementById('quoteText');
@@ -921,13 +1014,21 @@ function adjustTime(minutes) {
 
 function setTimerMode(mode) {
     pauseTimer(); currentMode = mode;
-    let mins = testMode ? (1/12) : (mode === 'shortBreak' ? SHORT_BREAK_MINUTES : (mode === 'longBreak' ? LONG_BREAK_MINUTES : POMODORO_MINUTES));
+    const modeDurationSeconds = timerCore?.getModeDurationSeconds
+        ? timerCore.getModeDurationSeconds({
+            mode,
+            testMode,
+            pomodoroMinutes: POMODORO_MINUTES,
+            shortBreakMinutes: SHORT_BREAK_MINUTES,
+            longBreakMinutes: LONG_BREAK_MINUTES
+        })
+        : (testMode ? 5 : (mode === 'shortBreak' ? SHORT_BREAK_MINUTES : (mode === 'longBreak' ? LONG_BREAK_MINUTES : POMODORO_MINUTES)) * 60);
     
     if (currentTask && mode === 'focus') {
         timeLeft = getTaskFocusDurationSeconds(currentTask);
         totalTimerTime = timeLeft;
     } else {
-        timeLeft = testMode ? 5 : mins * 60; 
+        timeLeft = modeDurationSeconds;
         totalTimerTime = timeLeft;
     }
     
@@ -1015,7 +1116,15 @@ function resetToFreeFocusSession() {
     const globalCat = document.getElementById('globalCategorySelect');
     if (globalCat) globalCat.value = 'Livre';
     if (window.updateCustomDropdownUI) window.updateCustomDropdownUI('Livre');
-    timeLeft = POMODORO_MINUTES * 60;
+    timeLeft = timerCore?.getModeDurationSeconds
+        ? timerCore.getModeDurationSeconds({
+            mode: 'focus',
+            testMode,
+            pomodoroMinutes: POMODORO_MINUTES,
+            shortBreakMinutes: SHORT_BREAK_MINUTES,
+            longBreakMinutes: LONG_BREAK_MINUTES
+        })
+        : POMODORO_MINUTES * 60;
     totalTimerTime = timeLeft;
     currentMode = 'focus';
     document.getElementById('timeLabel').textContent = 'Período de Foco';
@@ -1031,6 +1140,10 @@ function resetToFreeFocusSession() {
 }
 
 function getRandomRestartMessage() {
+    if (utilsService?.pickRandomItem) {
+        return utilsService.pickRandomItem(motivationalRestartMessages) ?? motivationalRestartMessages[0];
+    }
+
     return motivationalRestartMessages[Math.floor(Math.random() * motivationalRestartMessages.length)];
 }
 
@@ -1079,13 +1192,19 @@ function setPendingTaskResolution(task, compType) {
         return;
     }
 
-    pendingTaskResolution = {
-        taskId: task.id,
-        compType,
-        previousCompletedPomodoros: Math.max(0, task.completedPomodoros - 1),
-        previousEstimatedMinutes: task.estimatedMinutes,
-        sessionMinutes: Math.max(1, totalTimerTime / 60)
-    };
+    pendingTaskResolution = timerCore?.buildPendingTaskResolution
+        ? timerCore.buildPendingTaskResolution({
+            task,
+            totalTimerTime,
+            completionType: compType
+        })
+        : {
+            taskId: task.id,
+            compType,
+            previousCompletedPomodoros: Math.max(0, task.completedPomodoros - 1),
+            previousEstimatedMinutes: task.estimatedMinutes,
+            sessionMinutes: Math.max(1, totalTimerTime / 60)
+        };
 }
 
 function clearForcedTaskCompletion(task = currentTask) {
@@ -1123,8 +1242,8 @@ function restartCurrentTaskLater() {
 function handleTaskConcludedFlow({ fromPip = false } = {}) {
     const finalize = () => {
         concludeCurrentTask(false);
-        if (fromPip && window.electronAPI?.sendPipAction) {
-            window.electronAPI.sendPipAction('minimize-to-tray');
+        if (fromPip) {
+            pipService?.requestMinimizeToTray?.();
         }
     };
 
@@ -1154,8 +1273,8 @@ function handleRestartLaterFlow({ fromPip = false } = {}) {
     const message = getRandomRestartMessage();
     const finalize = () => {
         restartCurrentTaskLater();
-        if (fromPip && window.electronAPI?.sendPipAction) {
-            window.electronAPI.sendPipAction('minimize-to-tray');
+        if (fromPip) {
+            pipService?.requestMinimizeToTray?.();
         }
     };
 
@@ -1185,19 +1304,29 @@ function addTimeToCurrentTask(extraMinutes = 5) {
     if (!currentTask) return;
 
     const pending = getPendingTaskResolution(currentTask);
-    const baseEstimatedMinutes = pending?.previousEstimatedMinutes ?? currentTask.estimatedMinutes;
-    const previousCompletedPomodoros = pending?.previousCompletedPomodoros ?? Math.floor(currentTask.completedPomodoros);
-    const sessionMinutes = pending?.sessionMinutes ?? Math.max(1, totalTimerTime / 60);
+    const extendedTaskState = timerCore?.computeExtendedTaskState
+        ? timerCore.computeExtendedTaskState({
+            task: currentTask,
+            pendingResolution: pending,
+            extraMinutes,
+            totalTimerTime
+        })
+        : {
+            estimatedMinutes: (pending?.previousEstimatedMinutes ?? currentTask.estimatedMinutes) + extraMinutes,
+            completedPomodoros: pending?.previousCompletedPomodoros ?? Math.floor(currentTask.completedPomodoros),
+            nextTimeLeft: extraMinutes * 60,
+            nextTotalTime: ((pending?.sessionMinutes ?? Math.max(1, totalTimerTime / 60)) + extraMinutes) * 60
+        };
 
     currentTask.completed = false;
-    currentTask.completedPomodoros = previousCompletedPomodoros;
-    currentTask.estimatedMinutes = baseEstimatedMinutes + extraMinutes;
+    currentTask.completedPomodoros = extendedTaskState.completedPomodoros;
+    currentTask.estimatedMinutes = extendedTaskState.estimatedMinutes;
     saveTasks();
 
     currentMode = 'focus';
     pauseTimer();
-    totalTimerTime = (sessionMinutes + extraMinutes) * 60;
-    timeLeft = extraMinutes * 60;
+    totalTimerTime = extendedTaskState.nextTotalTime;
+    timeLeft = extendedTaskState.nextTimeLeft;
     pendingCompletionType = null;
     pendingTaskResolution = null;
 
@@ -1220,60 +1349,96 @@ function completeTimer() {
 
     if (currentMode === 'focus') {
         totalPomodorosToday++;
-        localStorage.setItem('focozen_total_pomodoros', totalPomodorosToday);
+        if (storageService?.writeStorageValue) {
+            storageService.writeStorageValue(storageKeys.TOTAL_POMODOROS, totalPomodorosToday);
+        } else {
+            localStorage.setItem(storageKeys.TOTAL_POMODOROS, totalPomodorosToday);
+        }
         
         // --- V2 DASHBOARD HISTORY LOGGING ---
         const activeCategory = document.getElementById('globalCategorySelect')?.value || "Livre";
-        const todayStr = new Date().toISOString().split('T')[0]; // "YYYY-MM-DD"
-        
-        focusHistory.push({
-            id: Date.now(),
-            date: todayStr,
-            durationMinutes: Math.max(1, Math.round(totalTimerTime / 60)),
-            category: activeCategory,
-            taskId: currentTask ? currentTask.id : null
-        });
+        const historyEntry = timerCore?.buildHistoryEntry
+            ? timerCore.buildHistoryEntry({
+                totalTimerTime,
+                category: activeCategory,
+                currentTask,
+                now: new Date()
+            })
+            : {
+                id: Date.now(),
+                date: new Date().toISOString().split('T')[0],
+                durationMinutes: Math.max(1, Math.round(totalTimerTime / 60)),
+                category: activeCategory,
+                taskId: currentTask ? currentTask.id : null
+            };
+
+        focusHistory.push(historyEntry);
         saveFocusHistory();
         // ------------------------------------
 
+        compType = timerCore?.getTimerCompletionType
+            ? timerCore.getTimerCompletionType({ currentMode, currentTask })
+            : '';
+
         if (currentTask) {
             currentTask.completedPomodoros++;
-            if (currentTask.completedPomodoros >= currentTask.pomodoros) {
-                compType = 'task-complete';
-            } else {
-                compType = 'focus-complete';
+            if (!compType) {
+                compType = currentTask.completedPomodoros >= currentTask.pomodoros ? 'task-complete' : 'focus-complete';
             }
             currentTask.completed = false;
             setPendingTaskResolution(currentTask, compType);
             saveTasks(); renderProgress(); renderTasksSidebar(); renderTasksList();
         } else {
             completedPomodoros++;
-            compType = 'focus-complete';
+            compType = compType || 'focus-complete';
         }
     } else {
-        compType = 'break-complete';
+        compType = timerCore?.getTimerCompletionType
+            ? timerCore.getTimerCompletionType({ currentMode, currentTask })
+            : 'break-complete';
     }
 
-    if (isPipModeActive) {
+    const transitionTarget = timerCore?.getTransitionTarget
+        ? timerCore.getTransitionTarget({
+            completionType: compType,
+            totalPomodorosToday,
+            isPipModeActive,
+            hasCurrentTask: !!currentTask
+        })
+        : {
+            modalPhase: compType === 'focus-complete' ? 'break' : 'focus',
+            shouldShowTaskPopup: compType === 'task-complete' && !!currentTask,
+            shouldSyncPipCompletion: isPipModeActive
+        };
+
+    if (transitionTarget.shouldSyncPipCompletion) {
         pendingCompletionType = compType;
         syncStateToPip({ showCompletion: compType });
     } else {
-        if (compType === 'task-complete' && currentTask) {
+        if (transitionTarget.shouldShowTaskPopup) {
             showTaskCompletionPopup(compType);
-        } else if (compType === 'focus-complete') {
-            showTransitionModal('break');
         } else {
-            showTransitionModal('focus');
+            showTransitionModal(transitionTarget.modalPhase);
         }
     }
 }
 
 function updateTimerDisplay() {
-    const m = Math.floor(timeLeft / 60).toString().padStart(2, '0');
-    const s = (timeLeft % 60).toString().padStart(2, '0');
-    document.getElementById('timerDisplay').textContent = `${m}:${s}`; document.title = `${m}:${s} - FocoZen Pro`;
+    const timeString = timerCore?.formatTimerLabel
+        ? timerCore.formatTimerLabel(timeLeft)
+        : (utilsService?.formatClockTime
+            ? utilsService.formatClockTime(timeLeft)
+            : `${Math.floor(timeLeft / 60).toString().padStart(2, '0')}:${(timeLeft % 60).toString().padStart(2, '0')}`);
+    document.getElementById('timerDisplay').textContent = timeString; document.title = `${timeString} - FocoZen Pro`;
 }
-function updateProgressBar() { if (totalTimerTime > 0) document.getElementById('timerProgress').style.width = `${((totalTimerTime - timeLeft) / totalTimerTime) * 100}%`; }
+function updateProgressBar() {
+    const progress = timerCore?.getTimerProgress
+        ? timerCore.getTimerProgress({ timeLeft, totalTime: totalTimerTime })
+        : (utilsService?.calculateProgressPercentage
+            ? utilsService.calculateProgressPercentage({ timeLeft, totalTime: totalTimerTime })
+            : (totalTimerTime > 0 ? ((totalTimerTime - timeLeft) / totalTimerTime) * 100 : 0));
+    document.getElementById('timerProgress').style.width = `${progress}%`;
+}
 
 function showTransitionModal(nextPhase) {
     const modal = document.getElementById('transitionModal');
@@ -1510,12 +1675,16 @@ function resetAppData() {
         'Isso irá apagar tarefas, preferências e progresso salvos localmente. Deseja continuar?',
         () => {
             try {
-                localStorage.clear();
+                if (storageService?.clearStorage) {
+                    storageService.clearStorage();
+                } else {
+                    localStorage.clear();
+                }
             } catch (error) {
                 console.error('Erro ao resetar dados:', error);
             }
-            if (window.electronAPI && window.electronAPI.sendPipAction) {
-                window.electronAPI.sendPipAction('quit-app');
+            if (pipService?.requestQuitApp && pipService.requestQuitApp()) {
+                return;
             } else {
                 window.location.reload();
             }
@@ -1953,13 +2122,17 @@ window.attemptDeselectTask = function(isAppClosing) {
                 saveFocusHistory();
             }
         }
-        if (window.electronAPI && window.electronAPI.closeApp) window.electronAPI.closeApp();
+        if (!(pipService?.requestQuitApp && pipService.requestQuitApp())) {
+            window.location.reload();
+        }
         return;
     }
 
     if (!hasProgress) {
         if (isAppClosing) {
-            if (window.electronAPI && window.electronAPI.closeApp) window.electronAPI.closeApp();
+            if (!(pipService?.requestQuitApp && pipService.requestQuitApp())) {
+                window.location.reload();
+            }
             return;
         }
         if (currentTask) deselectTask();
@@ -1998,8 +2171,14 @@ window.attemptDeselectTask = function(isAppClosing) {
                 currentTask.completedPomodoros = Math.floor(currentTask.completedPomodoros);
             }
             saveTasks();
-            localStorage.removeItem('focozen_saved_session');
-            if (window.electronAPI) window.electronAPI.closeApp();
+            if (storageService?.removeStorageValue) {
+                storageService.removeStorageValue(storageKeys.SAVED_SESSION);
+            } else {
+                localStorage.removeItem(storageKeys.SAVED_SESSION);
+            }
+            if (!(pipService?.requestQuitApp && pipService.requestQuitApp())) {
+                window.location.reload();
+            }
         } else {
             resetTimer();
             deselectTask();
@@ -2038,7 +2217,11 @@ window.attemptDeselectTask = function(isAppClosing) {
         console.log('[SAVE] Session saved:', stateObj);
 
         if (isAppClosing) {
-            setTimeout(() => { if (window.electronAPI) window.electronAPI.closeApp(); }, 300);
+            setTimeout(() => {
+                if (!(pipService?.requestQuitApp && pipService.requestQuitApp())) {
+                    window.location.reload();
+                }
+            }, 300);
         } else {
             // Manual cleanup — do NOT call resetTimer/deselectTask
             pauseTimer();
@@ -2074,7 +2257,10 @@ window.promptResumeSession = function() {
     
     // Auto Show modal wizard check
     const checkWizard = () => {
-        if (!localStorage.getItem('focozen_username')) {
+        const storedUsername = storageService?.readStorageValue
+            ? storageService.readStorageValue(storageKeys.USERNAME, null)
+            : localStorage.getItem(storageKeys.USERNAME);
+        if (!storedUsername) {
             document.getElementById('wizardModal')?.classList.add('active');
         }
     };
@@ -2097,13 +2283,21 @@ window.promptResumeSession = function() {
         
         overlay.querySelector('.btn-discard').onclick = () => {
             overlay.remove();
-            localStorage.removeItem('focozen_saved_session');
+            if (storageService?.removeStorageValue) {
+                storageService.removeStorageValue(storageKeys.SAVED_SESSION);
+            } else {
+                localStorage.removeItem(storageKeys.SAVED_SESSION);
+            }
             checkWizard();
         };
         
         overlay.querySelector('.btn-resume').onclick = () => {
             overlay.remove();
-            localStorage.removeItem('focozen_saved_session');
+            if (storageService?.removeStorageValue) {
+                storageService.removeStorageValue(storageKeys.SAVED_SESSION);
+            } else {
+                localStorage.removeItem(storageKeys.SAVED_SESSION);
+            }
             
             if (session.taskId) {
                 const targetTask = tasks.find(t => t.id === session.taskId);
@@ -2146,7 +2340,11 @@ window.promptResumeSession = function() {
             }
         };
     } catch(e) {
-         localStorage.removeItem('focozen_saved_session');
+         if (storageService?.removeStorageValue) {
+             storageService.removeStorageValue(storageKeys.SAVED_SESSION);
+         } else {
+             localStorage.removeItem(storageKeys.SAVED_SESSION);
+         }
          checkWizard();
     }
 };
@@ -2264,7 +2462,11 @@ function _doSelectTask(taskId, skipTimerSyncInput) {
             updateTimerDisplay();
             updateProgressBar();
             // Clear the session so we don't infinitely restore it if closed without saving
-            localStorage.removeItem('focozen_saved_session');
+            if (storageService?.removeStorageValue) {
+                storageService.removeStorageValue(storageKeys.SAVED_SESSION);
+            } else {
+                localStorage.removeItem(storageKeys.SAVED_SESSION);
+            }
         }
 
         const badge = document.getElementById('currentTaskBadge');
@@ -2449,6 +2651,206 @@ window.removeTempSubtask = removeTempSubtask; window.editTask = editTask;
 let chartCatInstance = null;
 let chartWeekInstance = null;
 
+function formatMinutesToHours(minutes) {
+    if (historyCore?.formatMinutesToHours) {
+        return historyCore.formatMinutesToHours(minutes);
+    }
+
+    const totalMinutes = Math.max(0, Number(minutes) || 0);
+    const hours = Math.floor(totalMinutes / 60);
+    const remainingMinutes = Math.floor(totalMinutes % 60);
+    return hours > 0 ? `${hours}h ${remainingMinutes}m` : `${remainingMinutes}m`;
+}
+
+function filterHistoryForPeriod(history, period) {
+    if (historyCore?.filterHistoryByPeriod) {
+        return historyCore.filterHistoryByPeriod(history, period, new Date());
+    }
+
+    return Array.isArray(history) ? history : [];
+}
+
+function getFocusWindowSummaryData() {
+    if (historyCore?.getFocusWindowSummary) {
+        return historyCore.getFocusWindowSummary({ history: focusHistory, now: new Date() });
+    }
+
+    return {
+        todayHistory: [],
+        todayMinutes: 0,
+        weekHistory: [],
+        weekMinutes: 0
+    };
+}
+
+function getFocusStreakSummaryData() {
+    if (historyCore?.getFocusStreakSummary) {
+        return historyCore.getFocusStreakSummary({ history: focusHistory, now: new Date() });
+    }
+
+    return {
+        currentStreak: 0,
+        maxStreak: 0
+    };
+}
+
+function getFocusGreetingStateData({ todayMinutes, weekMinutes }) {
+    if (historyCore?.getFocusGreetingState) {
+        return historyCore.getFocusGreetingState({ todayMinutes, weekMinutes });
+    }
+
+    return 'default';
+}
+
+function getSortedGoalCategoriesData() {
+    if (goalsCore?.getSortedGoalCategories) {
+        return goalsCore.getSortedGoalCategories({
+            userCategories,
+            defaultCategories,
+            focusGoals,
+            locale: 'pt-BR'
+        });
+    }
+
+    return [];
+}
+
+function getActiveGoalsData() {
+    if (goalsCore?.getActiveGoals) {
+        return goalsCore.getActiveGoals(focusGoals);
+    }
+
+    return [];
+}
+
+function getGoalSummariesData(period) {
+    if (goalsCore?.getGoalSummaries) {
+        return goalsCore.getGoalSummaries({
+            focusGoals,
+            focusHistory,
+            period,
+            now: new Date()
+        });
+    }
+
+    return [];
+}
+
+function getDailyGoalOutcomeData(date) {
+    if (goalsCore?.getDailyGoalOutcome) {
+        return goalsCore.getDailyGoalOutcome({
+            focusGoals,
+            focusHistory,
+            date
+        });
+    }
+
+    return {
+        targetMinutes: 0,
+        actualMinutes: 0,
+        activeCategories: 0,
+        hitCategories: 0,
+        hitAll: false
+    };
+}
+
+function getGoalOverviewData(period) {
+    if (goalsCore?.getGoalOverview) {
+        return goalsCore.getGoalOverview({
+            focusGoals,
+            focusHistory,
+            period,
+            now: new Date()
+        });
+    }
+
+    return {
+        summaries: [],
+        activeCount: 0,
+        hitCount: 0,
+        totalTarget: 0,
+        totalActual: 0,
+        averageProgress: 0,
+        bestCategory: null,
+        streak: 0
+    };
+}
+
+function getGoalEvolutionSeriesData(period) {
+    if (goalsCore?.getGoalEvolutionSeries) {
+        return goalsCore.getGoalEvolutionSeries({
+            focusGoals,
+            focusHistory,
+            period,
+            now: new Date()
+        });
+    }
+
+    return [];
+}
+
+function resolveCategoryPalette(category, index = 0) {
+    if (goalsCore?.getCategoryPalette) {
+        return goalsCore.getCategoryPalette(category, index);
+    }
+
+    return { from: '#60a5fa', to: '#2563eb' };
+}
+
+function getGoalMomentumContent(overview) {
+    const momentumState = goalsCore?.getGoalMomentumState
+        ? goalsCore.getGoalMomentumState(overview)
+        : 'empty';
+
+    if (momentumState === 'ahead') {
+        return {
+            badge: 'Meta batida',
+            headline: 'Voce esta entregando acima do planejado neste periodo.',
+            caption: `Excelente ritmo: ${overview.hitCount} de ${overview.activeCount} categorias ja bateram a meta.`,
+            encouragement: 'Voce esta construindo consistencia real. Tente manter esse padrao ate o fim do periodo.',
+            nextAction: 'Se continuar assim, vale subir um pouco a meta da categoria mais estavel.'
+        };
+    }
+
+    if (momentumState === 'near') {
+        return {
+            badge: 'Quase la',
+            headline: 'Falta pouco para transformar seu planejamento em meta cumprida.',
+            caption: `Voce ja percorreu ${overview.averageProgress}% do caminho planejado neste periodo.`,
+            encouragement: 'Seu ritmo esta forte. Um ultimo bloco bem usado pode virar varias metas em verde.',
+            nextAction: 'Priorize primeiro a categoria mais perto de 100% para ganhar tracao.'
+        };
+    }
+
+    if (momentumState === 'moving') {
+        return {
+            badge: 'Em movimento',
+            headline: 'O foco ja comecou. Agora vale alinhar melhor energia e prioridade.',
+            caption: `Voce entregou ${formatMinutesToHours(overview.totalActual)} de ${formatMinutesToHours(overview.totalTarget)} planejados.`,
+            encouragement: 'Mesmo longe do alvo, cada bloco concluido reduz a distancia ate a meta.',
+            nextAction: 'Concentre o proximo ciclo na categoria mais importante do seu dia.'
+        };
+    }
+
+    if (momentumState === 'start') {
+        return {
+            badge: 'Hora de iniciar',
+            headline: 'Ainda nao houve foco registrado para as metas deste periodo.',
+            caption: 'Um unico bloco iniciado ja comeca a dar forma para sua semana.',
+            encouragement: 'Nao precisa esperar motivacao perfeita. Comece pequeno e deixe o ritmo aparecer.',
+            nextAction: 'Escolha a categoria mais critica e faca um primeiro bloco de foco agora.'
+        };
+    }
+
+    return {
+        badge: 'Sem metas ativas',
+        headline: 'Crie metas por categoria para acompanhar seu ritmo real de foco.',
+        caption: 'Assim que houver metas, este painel compara o planejado com o realizado.',
+        encouragement: 'Configure suas primeiras metas e transforme foco em rotina.',
+        nextAction: 'Comece com 1 ou 2 categorias principais para criar consistencia sem friccao.'
+    };
+}
+
 const categoryPalette = [
     { from: '#60a5fa', to: '#2563eb' },
     { from: '#34d399', to: '#059669' },
@@ -2544,7 +2946,7 @@ function getActiveGoals() {
 }
 
 function getGoalSummaries(period) {
-    const activeGoals = getActiveGoals();
+    const activeGoals = getActiveGoalsData();
     const dates = enumeratePeriodDates(period);
     const actualByCategory = {};
 
@@ -2575,7 +2977,7 @@ function getGoalSummaries(period) {
 }
 
 function getDailyGoalOutcome(date) {
-    const activeGoals = getActiveGoals();
+    const activeGoals = getActiveGoalsData();
     let targetMinutes = 0;
     let actualMinutes = 0;
     let activeCategories = 0;
@@ -2715,7 +3117,7 @@ function renderGoalCategoryOptions() {
     const select = document.getElementById('goalCategorySelect');
     if (!select) return;
 
-    const categories = getSortedGoalCategories();
+    const categories = getSortedGoalCategoriesData();
     const currentValue = editingGoalId
         ? (focusGoals.find(goal => goal.id === editingGoalId)?.category || categories[0]?.name || '')
         : (select.value || categories[0]?.name || '');
@@ -2822,7 +3224,7 @@ function openGoalEditModal(goalId) {
     const goal = focusGoals.find(item => item.id === goalId);
     if (!goal) return;
 
-    const categories = getSortedGoalCategories();
+    const categories = getSortedGoalCategoriesData();
     const overlay = document.createElement('div');
     overlay.className = 'modal-overlay active custom-popup goal-edit-modal';
     overlay.innerHTML = `
@@ -2935,34 +3337,24 @@ window.compileDashboardData = function() {
 
     injectFakeDataIfNeeded();
 
-    const now = new Date();
-    const todayStr = now.toISOString().split('T')[0];
-    
-    // 1. Foco Hoje
-    const todayHistory = focusHistory.filter(h => h.date === todayStr);
-    const todayMinutes = todayHistory.reduce((sum, h) => sum + h.durationMinutes, 0);
-    document.getElementById('statsFocusToday').textContent = formatMinsToHours(todayMinutes);
-    
-    // 2. Foco Semana
-    const sevenDaysAgo = new Date();
-    sevenDaysAgo.setDate(now.getDate() - 6);
-    sevenDaysAgo.setHours(0,0,0,0);
-    const weekHistory = focusHistory.filter(h => new Date(h.date) >= sevenDaysAgo);
-    const weekMinutes = weekHistory.reduce((sum, h) => sum + h.durationMinutes, 0);
-    document.getElementById('statsFocusWeek').textContent = formatMinsToHours(weekMinutes);
+    const { todayHistory, todayMinutes, weekMinutes } = getFocusWindowSummaryData();
+    document.getElementById('statsFocusToday').textContent = formatMinutesToHours(todayMinutes);
+    document.getElementById('statsFocusWeek').textContent = formatMinutesToHours(weekMinutes);
     
     // Greeting Title Logic
     const firstName = username.split(' ')[0];
     let greetingTitle = `Mandou bem, ${firstName}!`;
     let greetingSub = "Aqui está o resumo do seu foco.";
     
-    if (todayMinutes >= 120 && todayMinutes >= weekMinutes / 3) {
+    const greetingState = getFocusGreetingStateData({ todayMinutes, weekMinutes });
+    
+    if (greetingState === 'master') {
         greetingTitle = `Mestre do Foco, ${firstName}`;
         greetingSub = 'Seu desempenho hoje foi excepcional.';
-    } else if (todayMinutes > 30) {
+    } else if (greetingState === 'consistent') {
         greetingTitle = `Consistente, ${firstName}`;
         greetingSub = 'Otimo ritmo, cada minuto focado conta.';
-    } else if (todayMinutes === 0) {
+    } else if (greetingState === 'start') {
         greetingTitle = `Hora de focar, ${firstName}`;
         greetingSub = 'Inicie uma sessao de foco para registrar seu dia.';
     }
@@ -2973,6 +3365,9 @@ window.compileDashboardData = function() {
     if (subEl) subEl.innerHTML = greetingSub;
 
     // 3. Ofensiva (Streak) & Max Streak
+    const { currentStreak, maxStreak } = getFocusStreakSummaryData();
+    if (false) {
+    const now = new Date();
     let currentStreak = 0;
     let checkDate = new Date(now);
     if (!todayHistory.length) checkDate.setDate(checkDate.getDate() - 1);
@@ -3007,6 +3402,7 @@ window.compileDashboardData = function() {
     }
     
     if (currentStreak > maxStreak) maxStreak = currentStreak;
+    }
 
     document.getElementById('statsStreak').innerHTML = `<i class="fas fa-fire glow-icon-primary"></i>${currentStreak} Dias`;
     document.getElementById('statsStreakPercent').textContent = `Melhor: ${maxStreak}`;
@@ -3026,7 +3422,7 @@ window.compileDashboardData = function() {
 
     // Render dashboard visualizations using selected period
     const period = window._statsPeriod || 'week';
-    const filtered = filterHistoryByPeriod(focusHistory, period);
+    const filtered = filterHistoryForPeriod(focusHistory, period);
     renderCategoriesChart(filtered);
     renderPeriodBarChart(focusHistory, period);
     renderStatsGoalsSummary(period);
@@ -3039,7 +3435,7 @@ window.compileDashboardData = function() {
                 document.querySelectorAll('#statsPeriodSelector .stats-period-btn').forEach(b => b.classList.remove('active'));
                 btn.classList.add('active');
                 window._statsPeriod = btn.dataset.period;
-                const filt = filterHistoryByPeriod(focusHistory, btn.dataset.period);
+                const filt = filterHistoryForPeriod(focusHistory, btn.dataset.period);
                 renderCategoriesChart(filt);
                 renderPeriodBarChart(focusHistory, btn.dataset.period);
                 renderStatsGoalsSummary(btn.dataset.period);
@@ -3125,7 +3521,7 @@ function renderCategoriesChart(allHistory) {
     const cy = containerH / 2;
     const maxRadius = Math.min(cx, cy) - 12;
     
-    let sortedEntries = labels.map((l, i) => ({ label: l, value: data[i], color: getCategoryPalette(l, i) }))
+    let sortedEntries = labels.map((l, i) => ({ label: l, value: data[i], color: resolveCategoryPalette(l, i) }))
         .sort((a, b) => b.value - a.value);
 
     if (sortedEntries.length > 4) {
@@ -3135,7 +3531,7 @@ function renderCategoriesChart(allHistory) {
             topEntries.push({
                 label: 'Outros',
                 value: otherValue,
-                color: getCategoryPalette('Outros', 5)
+                color: resolveCategoryPalette('Outros', 5)
             });
         }
         sortedEntries = topEntries;
@@ -3143,7 +3539,7 @@ function renderCategoriesChart(allHistory) {
 
     sortedEntries = sortedEntries.map((entry, index) => ({
         ...entry,
-        color: getCategoryPalette(entry.label, index)
+        color: resolveCategoryPalette(entry.label, index)
     }));
 
     const ringCount = sortedEntries.length || 1;
@@ -3163,7 +3559,7 @@ function renderCategoriesChart(allHistory) {
                             <span class="stats-legend-name">${entry.label}</span>
                             <span class="stats-legend-meta">${pct}% do foco no periodo</span>
                         </div>
-                        <span class="stats-legend-value">${formatMinsToHours(entry.value)}</span>
+                        <span class="stats-legend-value">${formatMinutesToHours(entry.value)}</span>
                     </div>
                 `;
             }).join('');
@@ -3279,7 +3675,7 @@ function drawArrowLabels(ctx, entries, total, cx, cy, maxRadius, ringWidth, ring
         // Percentage + time inline, right after category name
         ctx.font = '500 10px Inter';
         ctx.fillStyle = 'rgba(255,255,255,0.5)';
-        ctx.fillText(`${pctVal}% · ${formatMinsToHours(entry.value)}`, labelX + nameWidth + 6, targetY);
+        ctx.fillText(`${pctVal}% · ${formatMinutesToHours(entry.value)}`, labelX + nameWidth + 6, targetY);
     });
     ctx.restore();
 }
@@ -3292,55 +3688,52 @@ function renderStatsGoalsSummary(period) {
     const listEl = document.getElementById('statsGoalsSummaryList');
     if (!badgeEl || !headlineEl || !captionEl || !listEl) return;
 
-    const overview = getGoalOverview(period);
-    const momentum = getGoalMomentum(overview);
+    const overview = getGoalOverviewData(period);
+    const momentum = getGoalMomentumContent(overview);
+    const series = getGoalEvolutionSeriesData(period);
 
     if (periodLabel) periodLabel.textContent = getPeriodLabel(period);
     badgeEl.textContent = momentum.badge;
     headlineEl.textContent = momentum.headline;
-    captionEl.textContent = momentum.caption;
+    captionEl.textContent = '';
 
-    if (!overview.summaries.length) {
-        listEl.innerHTML = '<div class="goals-empty-state">Defina metas na aba Metas para ver o comparativo por categoria aqui.</div>';
+    if (!overview.summaries.length || !series.length) {
+        listEl.innerHTML = '<div class="goals-empty-state">Defina metas na aba Metas para acompanhar a evolução do seu plano por período.</div>';
         return;
     }
 
-    listEl.innerHTML = overview.summaries.map(item => {
-        const maxValue = Math.max(item.targetMinutes, item.actualMinutes, 1);
-        const actualWidth = Math.min(100, (item.actualMinutes / maxValue) * 100);
-        const targetOffset = Math.min(100, (item.targetMinutes / maxValue) * 100);
-        return `
-            <div class="goals-compact-row">
-                <div class="goals-compact-meta">
-                    <span class="goals-category-dot" style="color:${item.palette.from}; background:${item.palette.from};"></span>
-                    <span class="goals-category-name">${item.category}</span>
-                </div>
-                <div class="goals-progress-wrap">
-                    <div class="goals-progress-top">
-                        <span>Realizado ${formatMinsToHours(item.actualMinutes)}</span>
-                        <span>Meta ${formatMinsToHours(item.targetMinutes)}</span>
+    const overallPercent = overview.totalTarget > 0
+        ? Math.max(0, Math.round((overview.totalActual / overview.totalTarget) * 100))
+        : 0;
+
+    listEl.innerHTML = `
+        <div class="goals-rhythm-overview">
+            <div class="goals-rhythm-main">
+                <div class="goals-rhythm-main-top">
+                    <div>
+                        <div class="goals-rhythm-kicker">Total do período</div>
+                        <div class="goals-rhythm-value">${formatMinutesToHours(overview.totalActual)} <span>de ${formatMinutesToHours(overview.totalTarget)}</span></div>
+                        </div>
                     </div>
-                    <div class="goals-progress-rail">
-                        <div class="goals-progress-actual" style="width:${actualWidth}%; background:${item.palette.from}; color:${item.palette.from};"></div>
-                        <div class="goals-progress-target-marker" style="left:calc(${targetOffset}% - 1px);"></div>
-                    </div>
+                    <div class="goals-rhythm-percent">${overallPercent}%</div>
                 </div>
-                <div class="goals-progress-label">${Math.max(0, item.percent)}%</div>
+                <div class="goals-rhythm-rail">
+                    <div class="goals-rhythm-fill" style="width:${Math.min(100, overallPercent)}%"></div>
+                </div>
             </div>
         `;
-    }).join('');
 }
 
 function renderGoalsComparisonChart(period) {
     const listEl = document.getElementById('goalsComparisonList');
     if (!listEl) return;
 
-    const overview = getGoalOverview(period);
+    const overview = getGoalOverviewData(period);
     const titleEl = document.getElementById('goalsChartSubtitle');
     const pillEl = document.getElementById('goalsMomentumPill');
-    const momentum = getGoalMomentum(overview);
+    const momentum = getGoalMomentumContent(overview);
 
-    if (titleEl) titleEl.textContent = `${formatMinsToHours(overview.totalActual)} entregues de ${formatMinsToHours(overview.totalTarget)} planejados.`;
+    if (titleEl) titleEl.textContent = `${formatMinutesToHours(overview.totalActual)} entregues de ${formatMinutesToHours(overview.totalTarget)} planejados.`;
     if (pillEl) pillEl.textContent = momentum.badge;
 
     if (!overview.summaries.length) {
@@ -3363,14 +3756,14 @@ function renderGoalsComparisonChart(period) {
         const deltaText = deltaMinutes === 0
             ? 'Meta atingida'
             : deltaMinutes > 0
-                ? `Passou ${formatMinsToHours(Math.abs(deltaMinutes))}`
-                : `Faltam ${formatMinsToHours(Math.abs(deltaMinutes))}`;
+                ? `Passou ${formatMinutesToHours(Math.abs(deltaMinutes))}`
+                : `Faltam ${formatMinutesToHours(Math.abs(deltaMinutes))}`;
         const percentLabel = `${Math.max(0, item.percent)}%`;
         const actualLabelLeft = fillWidth > 0 ? Math.min(96, fillWidth) : 0;
         const actualAlignClass = fillWidth > 86 ? 'end' : 'after-fill';
         const targetAlignClass = targetOffset < 14 ? 'start' : (targetOffset > 86 ? 'end' : '');
         const actualLabelMarkup = item.actualMinutes > 0
-            ? `<span class="goals-track-label actual ${actualAlignClass}" style="left:${actualLabelLeft}%;">Realizado ${formatMinsToHours(item.actualMinutes)}</span>`
+            ? `<span class="goals-track-label actual ${actualAlignClass}" style="left:${actualLabelLeft}%;">Realizado ${formatMinutesToHours(item.actualMinutes)}</span>`
             : '';
 
         return `
@@ -3389,7 +3782,7 @@ function renderGoalsComparisonChart(period) {
                         <div class="goals-comparison-target" style="left:calc(${targetOffset}% - 1px);"></div>
                     </div>
                     <div class="goals-comparison-footer">
-                        <span class="goals-track-label target ${targetAlignClass}" style="left:${targetOffset}%;">Meta ${formatMinsToHours(item.targetMinutes)}</span>
+                        <span class="goals-track-label target ${targetAlignClass}" style="left:${targetOffset}%;">Meta ${formatMinutesToHours(item.targetMinutes)}</span>
                     </div>
                 </div>
             </div>
@@ -3410,7 +3803,7 @@ function renderGoalsListLegacy() {
         .slice()
         .sort((a, b) => a.category.localeCompare(b.category, 'pt-BR'))
         .map(goal => {
-            const palette = getCategoryPalette(goal.category);
+            const palette = resolveCategoryPalette(goal.category);
             const scheduleLabel = goal.schedule === 'everyday' ? 'Semana inteira' : 'Dias úteis';
             return `
                 <div class="goal-item">
@@ -3419,7 +3812,7 @@ function renderGoalsListLegacy() {
                             <span class="goals-category-dot" style="color:${palette.from}; background:${palette.from};"></span>
                             <span class="goals-category-name">${goal.category}</span>
                         </div>
-                        <span class="goal-item-subline">${formatMinsToHours(goal.dailyMinutes)} por dia - ${scheduleLabel}</span>
+                        <span class="goal-item-subline">${formatMinutesToHours(goal.dailyMinutes)} por dia - ${scheduleLabel}</span>
                     </div>
                     <div class="goals-progress-wrap">
                         <div class="goals-progress-top">
@@ -3441,7 +3834,7 @@ function renderGoalsListLegacy() {
 
 window.compileGoalsData = function() {
     const period = window._goalsPeriod || 'week';
-    const overview = getGoalOverview(period);
+    const overview = getGoalOverviewData(period);
     const bestLabel = overview.bestCategory
         ? `${overview.bestCategory.category} ${Math.max(0, overview.bestCategory.percent)}%`
         : 'Sem dados';
@@ -3549,7 +3942,7 @@ function renderGoalsList() {
         .slice()
         .sort((a, b) => a.category.localeCompare(b.category, 'pt-BR'))
         .map(goal => {
-            const palette = getCategoryPalette(goal.category);
+            const palette = resolveCategoryPalette(goal.category);
             const scheduleLabel = goal.schedule === 'everyday' ? 'Semana inteira' : 'Dias uteis';
             const dailyHours = ((Number(goal.dailyMinutes) || 0) / 60).toFixed(1).replace('.0', '').replace('.', ',');
             return `
@@ -3832,25 +4225,30 @@ document.addEventListener('DOMContentLoaded', () => {
 
 // ========== UPDATE SYSTEM ==========
 function setupUpdateListeners() {
-    if (!window.electronAPI) {
+    if (!updateService?.isAvailable || !updateService.isAvailable()) {
         console.warn('electronAPI nao disponivel - sistema de atualizacao desabilitado');
         return;
     }
     
     // Listen for update downloaded
-    if (window.electronAPI.onUpdateDownloaded) {
-        window.electronAPI.onUpdateDownloaded((info) => {
+    if (updateService?.onDownloaded) {
+        updateService.onDownloaded((info) => {
             console.log('Atualizacao baixada:', info);
             document.getElementById('updateDownloadBanner')?.remove();
             document.getElementById('updateInlineProgress')?.remove();
             if (window._manualUpdateTriggered) {
                 // Auto-install silently after manual check
                 window._manualUpdateTriggered = false;
-                localStorage.setItem('focozen_updated_version', info.version);
-                localStorage.setItem('focozen_changelog', info.releaseNotes || 'Melhorias de desempenho e correções de bugs.');
+                if (storageService?.writeStorageValue) {
+                    storageService.writeStorageValue(storageKeys.UPDATED_VERSION, info.version);
+                    storageService.writeStorageValue(storageKeys.CHANGELOG, info.releaseNotes || 'Melhorias de desempenho e correções de bugs.');
+                } else {
+                    localStorage.setItem(storageKeys.UPDATED_VERSION, info.version);
+                    localStorage.setItem(storageKeys.CHANGELOG, info.releaseNotes || 'Melhorias de desempenho e correções de bugs.');
+                }
                 const btn = document.getElementById('btnCheckUpdates');
                 if (btn) btn.innerHTML = '<i class="fas fa-sync-alt fa-spin"></i> Instalando...';
-                setTimeout(() => { window.electronAPI.installUpdate(); }, 800);
+                setTimeout(() => { updateService?.installUpdate?.(); }, 800);
             } else {
                 showUpdateNotification(info);
             }
@@ -3858,8 +4256,8 @@ function setupUpdateListeners() {
     }
 
     // Show download progress banner
-    if (window.electronAPI.onDownloadProgress) {
-        window.electronAPI.onDownloadProgress((pct) => {
+    if (updateService?.onDownloadProgress) {
+        updateService.onDownloadProgress((pct) => {
             let banner = document.getElementById('updateDownloadBanner');
             if (!banner) {
                 banner = document.createElement('div');
@@ -3878,12 +4276,16 @@ function setupUpdateListeners() {
             }
             document.getElementById('updateDownloadPct').textContent = pct + '%';
             document.getElementById('updateDownloadBar').style.width = pct + '%';
+            const inlinePctEl = document.getElementById('inlineDownloadPct');
+            const inlineBarEl = document.getElementById('inlineDownloadBar');
+            if (inlinePctEl) inlinePctEl.textContent = pct + '%';
+            if (inlineBarEl) inlineBarEl.style.width = pct + '%';
         });
     }
     
     // Listen for manual update check results
-    if (window.electronAPI.onUpdateCheckResult) {
-        window.electronAPI.onUpdateCheckResult((result) => {
+    if (updateService?.onCheckResult) {
+        updateService.onCheckResult((result) => {
             console.log('Resultado da verificacao de atualizacao:', result);
             handleUpdateCheckResult(result);
         });
@@ -3929,9 +4331,14 @@ function showUpdateNotification(info) {
     overlay.classList.add('active');
     overlay.querySelector('.btn-update-now').addEventListener('click', () => {
         // Save flag to show changelog after restart
-        localStorage.setItem('focozen_updated_version', info.version);
-        localStorage.setItem('focozen_changelog', info.releaseNotes || 'Melhorias de desempenho e correções de bugs.');
-        window.electronAPI.installUpdate();
+        if (storageService?.writeStorageValue) {
+            storageService.writeStorageValue(storageKeys.UPDATED_VERSION, info.version);
+            storageService.writeStorageValue(storageKeys.CHANGELOG, info.releaseNotes || 'Melhorias de desempenho e correções de bugs.');
+        } else {
+            localStorage.setItem(storageKeys.UPDATED_VERSION, info.version);
+            localStorage.setItem(storageKeys.CHANGELOG, info.releaseNotes || 'Melhorias de desempenho e correções de bugs.');
+        }
+        updateService?.installUpdate?.();
     });
     
     overlay.querySelector('.btn-update-later').addEventListener('click', () => {
@@ -3967,26 +4374,38 @@ function formatReleaseNotes(notes) {
 }
 
 async function checkForChangelog() {
-    const updatedVersion = localStorage.getItem('focozen_updated_version');
+    const updatedVersion = storageService?.readStorageValue
+        ? storageService.readStorageValue(storageKeys.UPDATED_VERSION, null)
+        : localStorage.getItem(storageKeys.UPDATED_VERSION);
     
     if (updatedVersion) {
         // Clear one-time flags immediately
-        localStorage.removeItem('focozen_updated_version');
-        localStorage.removeItem('focozen_changelog');
+        if (storageService?.removeStorageValue) {
+            storageService.removeStorageValue(storageKeys.UPDATED_VERSION);
+            storageService.removeStorageValue(storageKeys.CHANGELOG);
+        } else {
+            localStorage.removeItem(storageKeys.UPDATED_VERSION);
+            localStorage.removeItem(storageKeys.CHANGELOG);
+        }
 
         // Read changelog from NEW app's CHANGELOG.md (after restart)
         let changelog = 'Melhorias de desempenho e correções de bugs.';
-        if (window.electronAPI && window.electronAPI.getChangelogForVersion) {
+        if (updateService?.getChangelogForVersion) {
             try {
-                changelog = await window.electronAPI.getChangelogForVersion(updatedVersion);
+                changelog = await updateService.getChangelogForVersion(updatedVersion);
             } catch(e) {
                 console.error('Erro ao ler changelog para versao:', e);
             }
         }
 
         // Save permanent copy for Sobre section
-        localStorage.setItem('focozen_last_version', updatedVersion);
-        localStorage.setItem('focozen_last_changelog', changelog);
+        if (storageService?.writeStorageValue) {
+            storageService.writeStorageValue(storageKeys.LAST_VERSION, updatedVersion);
+            storageService.writeStorageValue(storageKeys.LAST_CHANGELOG, changelog);
+        } else {
+            localStorage.setItem(storageKeys.LAST_VERSION, updatedVersion);
+            localStorage.setItem(storageKeys.LAST_CHANGELOG, changelog);
+        }
         
         // Show changelog modal after app settles
         setTimeout(() => {
@@ -4025,8 +4444,8 @@ function showChangelogModal(version, notes) {
 
 async function initSobreSection() {
     let version = '—';
-    if (window.electronAPI && window.electronAPI.getAppVersion) {
-        version = await window.electronAPI.getAppVersion();
+    if (updateService?.getAppVersion) {
+        version = await updateService.getAppVersion();
     }
 
     const versionEl = document.getElementById('sobreVersionNumber');
@@ -4037,9 +4456,9 @@ async function initSobreSection() {
 
     if (sobreChangelogEl) {
         // Load full changelog from CHANGELOG.md
-        if (window.electronAPI && window.electronAPI.getFullChangelog) {
+        if (updateService?.getFullChangelog) {
             try {
-                const fullChangelog = await window.electronAPI.getFullChangelog();
+                const fullChangelog = await updateService.getFullChangelog();
                 if (sobreVersionLabel) sobreVersionLabel.textContent = 'Histórico Completo de Versões';
                 sobreChangelogEl.innerHTML = formatFullChangelog(fullChangelog);
             } catch (err) {
@@ -4094,15 +4513,6 @@ function handleUpdateCheckResult(result) {
                     <div id="inlineDownloadBar" style="height:100%;background:linear-gradient(90deg,var(--accent-primary),var(--accent-secondary));width:0%;transition:width 0.3s ease;border-radius:99px;"></div>
                 </div>`;
             section.appendChild(prog);
-            // Hook progress updates into inline bar too
-            if (window.electronAPI?.onDownloadProgress) {
-                window.electronAPI.onDownloadProgress((pct) => {
-                    const pctEl = document.getElementById('inlineDownloadPct');
-                    const barEl = document.getElementById('inlineDownloadBar');
-                    if (pctEl) pctEl.textContent = pct + '%';
-                    if (barEl) barEl.style.width = pct + '%';
-                });
-            }
         }
         return;
     }
@@ -4864,7 +5274,7 @@ function getSessionsCountForPeriod(period, category = null, previous = false) {
 }
 
 function getAssistantGoalSummaries(period, previous = false) {
-    const activeGoals = getActiveGoals();
+    const activeGoals = getActiveGoalsData();
     const range = getAssistantDateRange(period, previous);
     const dates = enumerateDatesBetween(range.start, range.end);
     const actualByCategory = {};
@@ -4887,7 +5297,7 @@ function getAssistantGoalSummaries(period, previous = false) {
             actualMinutes,
             remainingMinutes: Math.max(0, targetMinutes - actualMinutes),
             percent,
-            palette: getCategoryPalette(goal.category, index)
+            palette: resolveCategoryPalette(goal.category, index)
         };
     }).sort((a, b) => {
         if (b.percent !== a.percent) return b.percent - a.percent;
@@ -4994,7 +5404,7 @@ function formatAssistantGoalStatus(goalSummary) {
 }
 
 function getFocusNowSuggestion() {
-    const overview = getGoalOverview(getAssistantDefaultPeriod());
+    const overview = getGoalOverviewData(getAssistantDefaultPeriod());
     if (!overview.activeCount) {
         if (currentTask) {
             return `Sua melhor aposta agora é continuar em ${currentTask.category || 'Livre'} e fechar a tarefa "${currentTask.name}".`;
@@ -5081,7 +5491,7 @@ function getLaggingGoalSummary(period, previous = false) {
 }
 
 function getCategoriesWithoutGoals() {
-    const goalKeys = new Set(getActiveGoals().map(goal => normalizeAssistantText(goal.category)));
+    const goalKeys = new Set(getActiveGoalsData().map(goal => normalizeAssistantText(goal.category)));
     return getAllAssistantCategories()
         .filter(category => normalizeAssistantText(category) !== normalizeAssistantText('Livre'))
         .filter(category => !goalKeys.has(normalizeAssistantText(category)));
@@ -5627,7 +6037,7 @@ function answerLaggingGoal(text) {
 }
 
 function answerGoalCount() {
-    const activeGoals = getActiveGoals();
+    const activeGoals = getActiveGoalsData();
     if (!activeGoals.length) {
         return {
             content: 'Você não tem metas ativas no momento.',
@@ -5794,7 +6204,7 @@ function answerGoalRealism(text) {
         };
     }
 
-    const goal = getActiveGoals().find(item => normalizeAssistantText(item.category) === normalizeAssistantText(category));
+    const goal = getActiveGoalsData().find(item => normalizeAssistantText(item.category) === normalizeAssistantText(category));
     if (!goal) {
         return {
             content: `Hoje ${category} não tem meta ativa, então eu não consigo avaliar o realismo dela.`,
@@ -5818,7 +6228,7 @@ function answerGoalRealism(text) {
 }
 
 function answerGoalAdjustmentAdvice() {
-    const goals = getActiveGoals();
+    const goals = getActiveGoalsData();
     if (!goals.length) {
         return {
             content: 'Sem metas ativas eu não tenho o que ajustar ainda. Se quiser, posso te ajudar a montar as primeiras com base no que você já faz.',
@@ -5874,7 +6284,7 @@ function answerCategoryChangeAdvice(text) {
         };
     }
 
-    const goal = getActiveGoals().find(item => normalizeAssistantText(item.category) === normalizeAssistantText(category));
+    const goal = getActiveGoalsData().find(item => normalizeAssistantText(item.category) === normalizeAssistantText(category));
     if (!goal) {
         return {
             content: `Hoje ${category} nem tem meta ativa, então eu só reduziria se ela realmente deixou de ser prioridade nesta semana.`,
