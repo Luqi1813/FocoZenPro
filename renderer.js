@@ -9,6 +9,8 @@ const updateService = window.FocoZenUpdateService;
 const taskSessionService = window.FocoZenTaskSessionService;
 const legacyGoalsStats = window.FocoZenLegacyGoalsStats;
 const legacyTasks = window.FocoZenLegacyTasks;
+const assistantCore = window.FocoZenAssistantCore;
+const legacyAssistant = window.FocoZenLegacyAssistant;
 
 const storageKeys = storageService?.storageKeys ?? {
     TASKS: 'focozen_tasks',
@@ -466,6 +468,79 @@ function configureLegacyTasksModule() {
     });
 }
 
+function configureLegacyAssistantModule() {
+    if (!legacyAssistant?.configure) return;
+
+    legacyAssistant.configure({
+        assistantCore,
+        getAssistantMessages: () => assistantMessages,
+        getAssistantSuggestions: () => assistantSuggestions,
+        getAssistantConversationState: () => assistantConversationState,
+        getIsAssistantOpen: () => isAssistantOpen,
+        getUsername: () => username,
+        setAssistantMessages: (value) => { assistantMessages = Array.isArray(value) ? value : []; },
+        setAssistantSuggestions: (value) => { assistantSuggestions = Array.isArray(value) ? value : []; },
+        setAssistantConversationState: (value) => { assistantConversationState = value; },
+        setIsAssistantOpen: (value) => { isAssistantOpen = !!value; },
+        persistAssistantMessages,
+        getIsTyping: () => !!window._assistantTyping,
+        setIsTyping: (value) => { window._assistantTyping = !!value; },
+        createAssistantWelcomeMessage,
+        getDefaultSuggestions: (viewId) => getAssistantDefaultSuggestions(viewId),
+        readStoredMessages: () => readJsonStorage(getAssistantStorageKey(), []),
+        getAssistantViewLabel: (viewId) => getAssistantViewLabel(viewId),
+        getFollowUpContext: () => ({
+            ...(assistantConversationState || {}),
+            defaultCategories,
+            userCategories,
+            focusGoals
+        }),
+        getReplyContext: () => ({
+            answerers: {
+                assistantHelp: () => answerAssistantHelp(),
+                broaderGuidance: (text) => answerBroaderGuidance(text),
+                focusNow: () => answerFocusNow(),
+                goalList: () => answerGoalList(),
+                removeAllGoals: () => removeAllGoalsFromAssistant(),
+                removeGoal: (text) => removeGoalFromAssistant(text),
+                saveGoal: (text) => saveGoalFromAssistant(text),
+                timerControl: (text) => answerTimerControl(text),
+                taskCreateOrStart: (text) => answerTaskCreateOrStart(text),
+                focusTotal: (text) => answerFocusTotal(text),
+                topCategory: (text) => answerTopCategory(text),
+                goalHits: (text) => answerGoalHits(text),
+                categoryStatus: (text) => answerCategoryStatus(text),
+                plannedVsActual: (text) => answerPlannedVsActual(text),
+                trend: (text) => answerTrend(text),
+                summary: (text) => answerSummary(text),
+                laggingGoal: (text) => answerLaggingGoal(text),
+                pomodoros: (text) => answerPomodoros(text),
+                performanceAssessment: (text) => answerPerformanceAssessment(text),
+                goalRealism: (text) => answerGoalRealism(text),
+                goalAdjustmentAdvice: () => answerGoalAdjustmentAdvice(),
+                categoryChangeAdvice: (text) => answerCategoryChangeAdvice(text),
+                goalCount: () => answerGoalCount(),
+                categoriesWithoutGoal: () => answerCategoriesWithoutGoal(),
+                tasks: () => answerTasks()
+            },
+            effects: {
+                switchView
+            },
+            conversationState: assistantConversationState,
+            defaultCategories,
+            userCategories,
+            focusGoals,
+            pomodoroMinutes: POMODORO_MINUTES,
+            findTaskByText: findAssistantTaskByText,
+            getDefaultSuggestions: (viewId) => getAssistantDefaultSuggestions(viewId),
+            getDefaultPeriod: () => getAssistantDefaultPeriod()
+        }),
+        personalizeAssistantReply,
+        switchViewFromAssistant,
+        customConfirm
+    });
+}
+
 // INICIALIZACAO BLINDADA
 document.addEventListener('DOMContentLoaded', async () => {
     console.log("Iniciando FocoZen Pro...");
@@ -499,6 +574,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     try { configureTaskSessionService(); } catch(e) { console.error('Erro Task Session:', e); }
     try { configureLegacyGoalsStatsModule(); } catch(e) { console.error('Erro Goals/Stats Legacy:', e); }
     try { configureLegacyTasksModule(); } catch(e) { console.error('Erro Tasks Legacy:', e); }
+    try { configureLegacyAssistantModule(); } catch(e) { console.error('Erro Assistant Legacy:', e); }
     try { initTaskForm(); } catch(e) { console.error('Erro Formulário:', e); }
     try { initSidebarControls(); } catch(e) { console.error('Erro Sidebar:', e); }
     try { initPipIntegration(); } catch(e) { console.error('Erro PIP:', e); }
@@ -7207,6 +7283,213 @@ function buildAssistantReply(text) {
         suggestions: getAssistantDefaultSuggestions()
     };
 }
+
+const legacyNormalizeAssistantTextImpl = normalizeAssistantText;
+const legacyDetectAssistantTemporalContextImpl = detectAssistantTemporalContext;
+const legacyDetectAssistantCategoryImpl = detectAssistantCategory;
+const legacyDetectAssistantDurationMinutesImpl = detectAssistantDurationMinutes;
+const legacyDetectAssistantScheduleImpl = detectAssistantSchedule;
+const legacyExtractAssistantTaskDraftImpl = extractAssistantTaskDraft;
+const legacyGetAssistantMissingTaskFieldsImpl = getAssistantMissingTaskFields;
+const legacyExpandAssistantFollowUpImpl = expandAssistantFollowUp;
+const legacyBuildAssistantReplyImpl = buildAssistantReply;
+const legacyRenderAssistantMessagesImpl = renderAssistantMessages;
+const legacyRenderAssistantSuggestionsImpl = renderAssistantSuggestions;
+const legacySetAssistantOpenImpl = setAssistantOpen;
+const legacyUpdateAssistantContextImpl = updateAssistantContext;
+const legacyResetAssistantChatImpl = resetAssistantChat;
+const legacyInitAssistantImpl = initAssistant;
+const legacyHandleAssistantSubmitImpl = handleAssistantSubmit;
+
+normalizeAssistantText = function(value = '') {
+    if (assistantCore?.normalizeText) {
+        return assistantCore.normalizeText(value);
+    }
+
+    return legacyNormalizeAssistantTextImpl(value);
+};
+
+detectAssistantTemporalContext = function(text, fallback = null) {
+    if (assistantCore?.detectTemporalContext) {
+        return assistantCore.detectTemporalContext(
+            text,
+            fallback || { period: getAssistantDefaultPeriod(), previous: false }
+        );
+    }
+
+    return legacyDetectAssistantTemporalContextImpl(text, fallback);
+};
+
+detectAssistantCategory = function(text) {
+    if (assistantCore?.detectCategory) {
+        return assistantCore.detectCategory(text, {
+            defaultCategories,
+            userCategories,
+            focusGoals
+        });
+    }
+
+    return legacyDetectAssistantCategoryImpl(text);
+};
+
+detectAssistantDurationMinutes = function(text) {
+    if (assistantCore?.detectDurationMinutes) {
+        return assistantCore.detectDurationMinutes(text, {
+            pomodoroMinutes: POMODORO_MINUTES
+        });
+    }
+
+    return legacyDetectAssistantDurationMinutesImpl(text);
+};
+
+detectAssistantSchedule = function(text) {
+    if (assistantCore?.detectSchedule) {
+        return assistantCore.detectSchedule(text);
+    }
+
+    return legacyDetectAssistantScheduleImpl(text);
+};
+
+extractAssistantTaskDraft = function(text, baseDraft = null) {
+    if (assistantCore?.extractTaskDraft) {
+        return assistantCore.extractTaskDraft(text, baseDraft, {
+            defaultCategories,
+            userCategories,
+            focusGoals,
+            pomodoroMinutes: POMODORO_MINUTES,
+            findExistingTask: findAssistantTaskByText
+        });
+    }
+
+    return legacyExtractAssistantTaskDraftImpl(text, baseDraft);
+};
+
+getAssistantMissingTaskFields = function(draft) {
+    if (assistantCore?.getMissingTaskFields) {
+        return assistantCore.getMissingTaskFields(draft);
+    }
+
+    return legacyGetAssistantMissingTaskFieldsImpl(draft);
+};
+
+expandAssistantFollowUp = function(text) {
+    if (assistantCore?.expandFollowUp) {
+        return assistantCore.expandFollowUp(text, {
+            ...(assistantConversationState || {}),
+            defaultPeriod: getAssistantDefaultPeriod(),
+            defaultCategories,
+            userCategories,
+            focusGoals
+        });
+    }
+
+    return legacyExpandAssistantFollowUpImpl(text);
+};
+
+buildAssistantReply = function(text) {
+    if (assistantCore?.buildReply) {
+        return assistantCore.buildReply(text, {
+            answerers: {
+                assistantHelp: () => answerAssistantHelp(),
+                broaderGuidance: (input) => answerBroaderGuidance(input),
+                focusNow: () => answerFocusNow(),
+                goalList: () => answerGoalList(),
+                removeAllGoals: () => removeAllGoalsFromAssistant(),
+                removeGoal: (input) => removeGoalFromAssistant(input),
+                saveGoal: (input) => saveGoalFromAssistant(input),
+                timerControl: (input) => answerTimerControl(input),
+                taskCreateOrStart: (input) => answerTaskCreateOrStart(input),
+                focusTotal: (input) => answerFocusTotal(input),
+                topCategory: (input) => answerTopCategory(input),
+                goalHits: (input) => answerGoalHits(input),
+                categoryStatus: (input) => answerCategoryStatus(input),
+                plannedVsActual: (input) => answerPlannedVsActual(input),
+                trend: (input) => answerTrend(input),
+                summary: (input) => answerSummary(input),
+                laggingGoal: (input) => answerLaggingGoal(input),
+                pomodoros: (input) => answerPomodoros(input),
+                performanceAssessment: (input) => answerPerformanceAssessment(input),
+                goalRealism: (input) => answerGoalRealism(input),
+                goalAdjustmentAdvice: () => answerGoalAdjustmentAdvice(),
+                categoryChangeAdvice: (input) => answerCategoryChangeAdvice(input),
+                goalCount: () => answerGoalCount(),
+                categoriesWithoutGoal: () => answerCategoriesWithoutGoal(),
+                tasks: () => answerTasks()
+            },
+            effects: {
+                switchView
+            },
+            conversationState: assistantConversationState,
+            defaultCategories,
+            userCategories,
+            focusGoals,
+            pomodoroMinutes: POMODORO_MINUTES,
+            findTaskByText: findAssistantTaskByText,
+            getDefaultSuggestions: (viewId) => getAssistantDefaultSuggestions(viewId),
+            getDefaultPeriod: () => getAssistantDefaultPeriod()
+        });
+    }
+
+    return legacyBuildAssistantReplyImpl(text);
+};
+
+renderAssistantMessages = function() {
+    if (legacyAssistant?.renderMessages) {
+        return legacyAssistant.renderMessages();
+    }
+
+    return legacyRenderAssistantMessagesImpl();
+};
+
+renderAssistantSuggestions = function() {
+    if (legacyAssistant?.renderSuggestions) {
+        return legacyAssistant.renderSuggestions();
+    }
+
+    return legacyRenderAssistantSuggestionsImpl();
+};
+
+setAssistantOpen = function(open) {
+    if (legacyAssistant?.setOpen) {
+        return legacyAssistant.setOpen(open);
+    }
+
+    return legacySetAssistantOpenImpl(open);
+};
+
+updateAssistantContext = function() {
+    if (legacyAssistant?.updateContext) {
+        return legacyAssistant.updateContext();
+    }
+
+    return legacyUpdateAssistantContextImpl();
+};
+
+window.updateAssistantContext = updateAssistantContext;
+
+resetAssistantChat = function() {
+    if (legacyAssistant?.resetChat) {
+        return legacyAssistant.resetChat();
+    }
+
+    return legacyResetAssistantChatImpl();
+};
+
+initAssistant = function() {
+    if (legacyAssistant?.init) {
+        return legacyAssistant.init();
+    }
+
+    return legacyInitAssistantImpl();
+};
+
+handleAssistantSubmit = function(rawText = null) {
+    if (legacyAssistant?.handleSubmit) {
+        return legacyAssistant.handleSubmit(rawText);
+    }
+
+    return legacyHandleAssistantSubmitImpl(rawText);
+};
 
 // TEST FUNCTION - Call from DevTools console: testChangelog()
 window.testChangelog = function() {
