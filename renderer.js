@@ -6,6 +6,7 @@ const goalsCore = window.FocoZenGoalsCore;
 const timerCore = window.FocoZenTimerCore;
 const pipService = window.FocoZenPipService;
 const updateService = window.FocoZenUpdateService;
+const audioService = window.FocoZenAudioService;
 const taskSessionService = window.FocoZenTaskSessionService;
 const legacyGoalsStats = window.FocoZenLegacyGoalsStats;
 const legacyTasks = window.FocoZenLegacyTasks;
@@ -24,6 +25,10 @@ const storageKeys = storageService?.storageKeys ?? {
     WIZARD_CATEGORIES: 'focozen_wizard_categories',
     QUOTE_INDEX: 'focozen_quote_index',
     LAST_QUOTE_DATE: 'focozen_last_quote_date',
+    AUDIO_SOUND_ID: 'focozen_audio_sound_id',
+    AUDIO_VOLUME: 'focozen_audio_volume',
+    AUDIO_MUTED: 'focozen_audio_muted',
+    AUDIO_PREVIOUS_VOLUME: 'focozen_audio_previous_volume',
     UPDATED_VERSION: 'focozen_updated_version',
     CHANGELOG: 'focozen_changelog',
     LAST_VERSION: 'focozen_last_version',
@@ -388,6 +393,102 @@ function configureTaskSessionService() {
     });
 }
 
+function getCurrentSoundConfig() {
+    return soundsConfig.find((sound) => sound.id === currentSoundId) || null;
+}
+
+function applyAudioStateToUi() {
+    const currentSound = getCurrentSoundConfig();
+    const soundName = currentSound?.name || 'Nenhum som selecionado';
+    const soundTheme = currentSound ? (soundThemes[currentSound.id] || 'default') : 'default';
+
+    document.documentElement.setAttribute('data-sound', soundTheme);
+
+    const nowPlaying = document.getElementById('nowPlaying');
+    if (nowPlaying) {
+        nowPlaying.innerHTML = `<i class="fas fa-music"></i><span>${soundName}</span>`;
+    }
+
+    const statsName = document.getElementById('statsPlayerSoundName');
+    const goalsName = document.getElementById('goalsPlayerSoundName');
+    const settingsName = document.getElementById('settingsPlayerSoundName');
+    if (statsName) statsName.textContent = currentSound?.name || 'Nenhum som';
+    if (goalsName) goalsName.textContent = currentSound?.name || 'Nenhum som';
+    if (settingsName) settingsName.textContent = currentSound?.name || 'Nenhum som';
+
+    document.querySelectorAll('.sound-card').forEach((card) => {
+        card.classList.toggle('active', card.dataset.soundId === currentSoundId);
+    });
+
+    document.querySelectorAll('.vpa-sound-item').forEach((item) => {
+        item.classList.toggle('active', item.dataset.soundId === currentSoundId);
+    });
+
+    document.querySelectorAll('.carousel-sound-chip').forEach((chip) => {
+        chip.classList.toggle('active', chip.dataset.soundId === currentSoundId);
+    });
+
+    if (currentSound?.image) {
+        changeBackground(currentSound.image);
+    } else {
+        applyDefaultBackground();
+    }
+
+    const muteIcon = isMuted ? 'fas fa-volume-mute' : 'fas fa-volume-up';
+    const headerMuteBtn = document.getElementById('btnMuteToggle');
+    if (headerMuteBtn?.querySelector('i')) {
+        headerMuteBtn.querySelector('i').className = muteIcon;
+    }
+
+    ['stats', 'goals', 'settings'].forEach((prefix) => {
+        const muteBtn = document.getElementById(`${prefix}PlayerMuteBtn`);
+        if (muteBtn?.querySelector('i')) {
+            muteBtn.querySelector('i').className = muteIcon;
+        }
+    });
+
+    updateVolumeDisplay();
+    updateMasterPlayButton();
+}
+
+function configureAudioService() {
+    if (!audioService?.configure) return;
+
+    audioService.configure({
+        storageService,
+        storageKeys,
+        soundsConfig,
+        soundCategories,
+        listAudioFiles: async () => {
+            if (window.electronAPI?.getAudioFiles) {
+                return await window.electronAPI.getAudioFiles();
+            }
+
+            return [];
+        },
+        resolveAudioPath: async (fileName) => {
+            if (window.electronAPI?.getAudioPath) {
+                return await window.electronAPI.getAudioPath(fileName);
+            }
+
+            return null;
+        },
+        createAudio: (source) => new Audio(source),
+        onStateChange: (nextState) => {
+            currentAudio = nextState.currentAudio;
+            currentSoundId = nextState.currentSoundId;
+            isPlaying = !!nextState.isPlaying;
+            masterVolume = nextState.masterVolume;
+            isMuted = !!nextState.isMuted;
+            volumeBeforeMute = nextState.volumeBeforeMute;
+            applyAudioStateToUi();
+        },
+        onPlaybackError: () => {
+            showGlassToast('Nao foi possivel carregar esse som agora');
+        }
+    });
+}
+
 function configureLegacyGoalsStatsModule() {
     if (!legacyGoalsStats?.configure) return;
 
@@ -572,6 +673,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     try { initBreath(); } catch(e) { console.error('Erro Respiracao:', e); }
     try { initModals(); } catch(e) { console.error('Erro Modais:', e); }
     try { configureTaskSessionService(); } catch(e) { console.error('Erro Task Session:', e); }
+    try { configureAudioService(); } catch(e) { console.error('Erro Audio Service:', e); }
     try { configureLegacyGoalsStatsModule(); } catch(e) { console.error('Erro Goals/Stats Legacy:', e); }
     try { configureLegacyTasksModule(); } catch(e) { console.error('Erro Tasks Legacy:', e); }
     try { configureLegacyAssistantModule(); } catch(e) { console.error('Erro Assistant Legacy:', e); }
@@ -1000,12 +1102,7 @@ function initPipIntegration() {
             else if (action === 'set-volume') {
                 const parsedVolume = Number(data);
                 if (Number.isNaN(parsedVolume)) return;
-                masterVolume = Math.max(0, Math.min(1, parsedVolume));
-                if (currentAudio) currentAudio.volume = masterVolume;
-                const masterVolumeInput = document.getElementById('masterVolume');
-                if (masterVolumeInput) masterVolumeInput.value = Math.round(masterVolume * 100);
-                updateVolumeDisplay();
-                syncStateToPip();
+                audioService?.setVolume?.(parsedVolume);
             }
         });
     }
@@ -1108,127 +1205,91 @@ function loadDailyQuote() {
 async function initSoundSelector() {
     const container = document.getElementById('soundGrid');
 
-    let files = [];
-    if (window.electronAPI && window.electronAPI.getAudioFiles) {
-        files = await window.electronAPI.getAudioFiles() || [];
-    }
+    const groupedSounds = audioService?.initialize
+        ? await audioService.initialize()
+        : [];
 
-    if (files.length === 0) {
-        if(container) container.innerHTML = '<p style="color: var(--text-muted); font-size: 0.8rem;">Nenhum som encontrado.</p>';
+    if (!groupedSounds.length) {
+        if (container) {
+            container.innerHTML = '<p style="color: var(--text-muted); font-size: 0.8rem;">Nenhum som encontrado.</p>';
+        }
         return;
     }
 
-    if(container) container.innerHTML = '';
+    if (container) container.innerHTML = '';
 
-    for (const [catName, catData] of Object.entries(soundCategories)) {
-        const validSounds = soundsConfig.filter(s => catData.ids.includes(s.id) && files.includes(s.file));
-        if (validSounds.length > 0) {
-            if(container) {
-                const catWrapper = document.createElement('div');
-                catWrapper.className = 'sound-category-wrapper';
-                catWrapper.innerHTML = `<div class="sound-category-title"><i class="fas ${catData.icon}"></i> ${catName}</div>`;
-                const grid = document.createElement('div'); grid.className = 'sound-grid';
+    for (const group of groupedSounds) {
+        if (container) {
+            const catWrapper = document.createElement('div');
+            catWrapper.className = 'sound-category-wrapper';
+            catWrapper.innerHTML = `<div class="sound-category-title"><i class="fas ${group.icon}"></i> ${group.name}</div>`;
 
-                validSounds.forEach(sound => {
-                    const card = document.createElement('div');
-                    card.className = 'sound-card'; card.dataset.soundId = sound.id;
-                    card.innerHTML = `<i class="fas ${sound.icon}"></i><span>${sound.name}</span>`;
-                    card.addEventListener('click', () => selectSound(sound, card));
-                    grid.appendChild(card);
-                });
-                catWrapper.appendChild(grid); container.appendChild(catWrapper);
-            }
+            const grid = document.createElement('div');
+            grid.className = 'sound-grid';
+
+            group.sounds.forEach((sound) => {
+                const card = document.createElement('div');
+                card.className = 'sound-card';
+                card.dataset.soundId = sound.id;
+                card.innerHTML = `<i class="fas ${sound.icon}"></i><span>${sound.name}</span>`;
+                card.addEventListener('click', () => selectSound(sound, card));
+                grid.appendChild(card);
+            });
+
+            catWrapper.appendChild(grid);
+            container.appendChild(catWrapper);
         }
     }
 
-    document.getElementById('masterPlayPause')?.addEventListener('click', toggleMasterPlay);
-    document.getElementById('btnMuteToggle')?.addEventListener('click', toggleMute);
-    document.getElementById('masterVolume')?.addEventListener('input', (e) => {
-        masterVolume = e.target.value / 100;
-        updateVolumeDisplay();
-        if (currentAudio) currentAudio.volume = masterVolume;
-        syncStateToPip();
-    });
+    const playButton = document.getElementById('masterPlayPause');
+    const muteButton = document.getElementById('btnMuteToggle');
+    const volumeSlider = document.getElementById('masterVolume');
+
+    if (playButton && !playButton.dataset.bound) {
+        playButton.dataset.bound = 'true';
+        playButton.addEventListener('click', toggleMasterPlay);
+    }
+
+    if (muteButton && !muteButton.dataset.bound) {
+        muteButton.dataset.bound = 'true';
+        muteButton.addEventListener('click', toggleMute);
+    }
+
+    if (volumeSlider && !volumeSlider.dataset.bound) {
+        volumeSlider.dataset.bound = 'true';
+        volumeSlider.addEventListener('input', (event) => {
+            audioService?.setVolume?.(Number(event.target.value) / 100);
+        });
+    }
+
+    applyAudioStateToUi();
 }
 
 async function selectSound(sound, cardElement) {
-    document.querySelectorAll('.sound-card').forEach(c => c.classList.remove('active'));
-    if (currentAudio) {
-        currentAudio.pause();
-        currentAudio.removeAttribute('src');
-        currentAudio.load();
-        currentAudio = null;
-    }
-
-    if (currentSoundId === sound.id && cardElement) {
-        currentSoundId = null; isPlaying = false; updateMasterPlayButton();
-        syncStateToPip();
-        return;
-    }
-
-    if(cardElement) {
-        cardElement.classList.add('active');
-    } else {
-        const card = document.querySelector(`.sound-card[data-sound-id="${sound.id}"]`);
-        if(card) card.classList.add('active');
-    }
-
-    currentSoundId = sound.id;
-
-    document.documentElement.setAttribute('data-sound', soundThemes[sound.id] || 'default');
-    document.getElementById('nowPlaying').innerHTML = `<i class="fas fa-music"></i><span>${sound.name}</span>`;
-    const statsName = document.getElementById('statsPlayerSoundName');
-    const goalsName = document.getElementById('goalsPlayerSoundName');
-    const settingsName = document.getElementById('settingsPlayerSoundName');
-    if (statsName) statsName.textContent = sound.name;
-    if (goalsName) goalsName.textContent = sound.name;
-    if (settingsName) settingsName.textContent = sound.name;
-    document.querySelectorAll('.vpa-sound-item').forEach(item => {
-        item.classList.toggle('active', item.dataset.soundId === sound.id);
+    const result = await audioService?.selectSound?.(sound, {
+        toggleOff: !!cardElement,
+        autoplay: true
     });
 
-    try {
-        if (window.electronAPI && window.electronAPI.getAudioPath) {
-            currentAudio = new Audio(await window.electronAPI.getAudioPath(sound.file));
-            currentAudio.loop = true; currentAudio.volume = masterVolume;
-            currentAudio.oncanplaythrough = async () => { await currentAudio.play(); isPlaying = true; updateMasterPlayButton(); };
-        }
-    } catch (e) { console.error('Erro audio:', e) }
-    changeBackground(sound.image);
-    syncStateToPip();
+    if (!result?.ok && result?.reason !== 'selection-superseded') {
+        console.error('Erro audio:', result?.error || result?.reason || 'falha desconhecida');
+    }
 }
 
 function toggleMute() {
-    const btn = document.getElementById('btnMuteToggle');
-    const slider = document.getElementById('masterVolume');
-    if (isMuted) {
-        masterVolume = volumeBeforeMute;
-        isMuted = false;
-        if (btn) btn.querySelector('i').className = 'fas fa-volume-up';
-    } else {
-        volumeBeforeMute = masterVolume;
-        masterVolume = 0;
-        isMuted = true;
-        if (btn) btn.querySelector('i').className = 'fas fa-volume-mute';
-    }
-    if (currentAudio) currentAudio.volume = masterVolume;
-    if (slider) slider.value = Math.round(masterVolume * 100);
-    updateVolumeDisplay();
-    const muteIcon = isMuted ? 'fas fa-volume-mute' : 'fas fa-volume-up';
-    ['stats', 'goals', 'settings'].forEach(prefix => {
-        const muteBtn = document.getElementById(`${prefix}PlayerMuteBtn`);
-        if (muteBtn) muteBtn.querySelector('i').className = muteIcon;
-    });
-    syncStateToPip();
+    audioService?.toggleMute?.();
 }
 
-function toggleMasterPlay() {
+async function toggleMasterPlay() {
     if (!currentSoundId) {
         showGlassToast('Selecione algum som para iniciar');
         return;
     }
-    isPlaying ? currentAudio?.pause() : currentAudio?.play();
-    isPlaying = !isPlaying; updateMasterPlayButton();
+
+    const result = await audioService?.togglePlay?.();
+    if (!result?.ok && result?.reason !== 'no-sound-selected') {
+        console.error('Erro ao alternar audio:', result?.error || result?.reason || 'falha desconhecida');
+    }
 }
 
 function updateMasterPlayButton() {
@@ -5094,12 +5155,14 @@ function getCurrentViewId() {
 }
 
 function getAssistantViewLabel(viewId = getCurrentViewId()) {
-    return {
+    const labels = {
         'view-home': 'Home',
-        'view-stats': 'Estatísticas',
+        'view-stats': 'Estatisticas',
         'view-goals': 'Metas',
-        'view-settings': 'Configurações'
-    }[viewId] || 'App';
+        'view-settings': 'Configuracoes'
+    };
+
+    return labels[viewId] || 'App';
 }
 
 function getAssistantDefaultSuggestions(viewId = getCurrentViewId()) {
@@ -5111,16 +5174,16 @@ function getAssistantDefaultSuggestions(viewId = getCurrentViewId()) {
         ],
         'view-stats': [
             'Qual categoria recebeu mais foco esta semana?',
-            'Resuma meu mês',
-            'Quantas sessões de foco tive hoje?'
+            'Resuma meu mes',
+            'Quantas sessoes de foco tive hoje?'
         ],
         'view-goals': [
-            'Crie uma meta de 3h por dia para Trabalho em dias úteis',
+            'Crie uma meta de 3h por dia para Trabalho em dias uteis',
             'Quais metas bati esta semana?',
             'Como estou em Estudos?'
         ],
         'view-settings': [
-            'Quais metas estão ativas?',
+            'Quais metas estao ativas?',
             'Quanto foquei esta semana?',
             'O que focar agora?'
         ]
@@ -5136,14 +5199,13 @@ function setAssistantSuggestions(list) {
 
 function createAssistantWelcomeMessage() {
     const firstName = (username || 'Mestre').split(' ')[0];
-    const insight = buildAssistantOpenInsight();
     return {
         id: Date.now(),
         role: 'assistant',
-        content: `Oi, ${firstName}. Eu fico de olho no que acontece no app e posso conversar com você sobre metas, histórico, categorias, foco e próximos passos. Se quiser, posso tanto responder quanto agir por aqui.`,
+        content: `Oi, ${firstName}. Eu fico de olho no que acontece no app e posso conversar com voce sobre metas, historico, categorias, foco e proximos passos. Se quiser, posso tanto responder quanto agir por aqui.`,
         actions: [
             { type: 'prompt', value: 'Quanto foquei hoje?', label: 'Resumo de hoje' },
-            { type: 'prompt', value: 'O que focar agora?', label: 'Próximo foco' }
+            { type: 'prompt', value: 'O que focar agora?', label: 'Proximo foco' }
         ]
     };
 }
@@ -5209,7 +5271,7 @@ function renderAssistantMessages() {
 
         const metaMarkup = message.role === 'assistant'
             ? `<div class="assistant-message-meta"><i class="fas fa-brain"></i><span>Assistente</span></div>`
-            : `<div class="assistant-message-meta"><i class="fas fa-user"></i><span>${escapeHtml((username || 'Você').split(' ')[0])}</span></div>`;
+            : `<div class="assistant-message-meta"><i class="fas fa-user"></i><span>${escapeHtml((username || 'Voce').split(' ')[0])}</span></div>`;
 
         return `
             <div class="assistant-message ${message.role}">
@@ -5264,7 +5326,7 @@ function autoResizeAssistantInput() {
 
 function updateAssistantContext() {
     const label = document.getElementById('assistantContextLabel');
-    if (label) label.textContent = `${getAssistantViewLabel()} · respostas com base nos seus dados`;
+    if (label) label.textContent = `${getAssistantViewLabel()} - respostas com base nos seus dados`;
 
     if (!assistantMessages.length) {
         assistantMessages = [createAssistantWelcomeMessage()];
@@ -5314,7 +5376,7 @@ function initAssistant() {
     clearBtn?.addEventListener('click', (event) => {
         event.preventDefault();
         event.stopPropagation();
-        customConfirm('Limpar conversa', 'Deseja limpar o histórico desta conversa com o assistente?', () => {
+        customConfirm('Limpar conversa', 'Deseja limpar o historico desta conversa com o assistente?', () => {
             resetAssistantChat();
         });
     });
@@ -5410,7 +5472,7 @@ function detectAssistantTemporalContext(text, fallback = null) {
 
     if (includesAny(normalized, ['ontem'])) return { period: 'day', previous: true };
     if (includesAny(normalized, ['semana passada', 'na semana passada'])) return { period: 'week', previous: true };
-    if (includesAny(normalized, ['mes passado', 'no mes passado', 'mês passado'])) return { period: 'month', previous: true };
+    if (includesAny(normalized, ['mes passado', 'no mes passado'])) return { period: 'month', previous: true };
 
     if (includesAny(normalized, ['mes', 'mensal', 'ultimos 30 dias', 'ultimo mes'])) return { period: 'month', previous: false };
     if (includesAny(normalized, ['semana', 'semanal', 'ultimos 7 dias'])) return { period: 'week', previous: false };
@@ -5419,17 +5481,13 @@ function detectAssistantTemporalContext(text, fallback = null) {
     return fallback || { period: getAssistantDefaultPeriod(), previous: false };
 }
 
-function detectAssistantPeriod(text) {
-    return detectAssistantTemporalContext(text).period;
-}
-
 function getPeriodNarration(period, previous = false) {
     if (previous) {
         return {
             day: 'ontem',
             week: 'na semana passada',
-            month: 'no mês passado'
-        }[period] || 'no período anterior';
+            month: 'no mes passado'
+        }[period] || 'no periodo anterior';
     }
 
     return {
@@ -5444,20 +5502,25 @@ function getPeriodPromptPhrase(period, previous = false) {
         return {
             day: 'ontem',
             week: 'na semana passada',
-            month: 'no mês passado'
-        }[period] || 'no período anterior';
+            month: 'no mes passado'
+        }[period] || 'no periodo anterior';
     }
 
     return {
         day: 'hoje',
         week: 'esta semana',
-        month: 'neste mês'
-    }[period] || 'neste período';
+        month: 'neste mes'
+    }[period] || 'neste periodo';
 }
 
 function getAllAssistantCategories() {
-    const merged = [...defaultCategories, ...userCategories, ...focusGoals.map(goal => ({ name: goal.category }))];
+    const merged = [
+        ...defaultCategories,
+        ...userCategories,
+        ...focusGoals.map(goal => ({ name: goal.category }))
+    ];
     const seen = new Set();
+
     return merged
         .map(item => item?.name)
         .filter(Boolean)
@@ -5471,24 +5534,22 @@ function getAllAssistantCategories() {
 
 function detectAssistantCategory(text) {
     const normalized = normalizeAssistantText(text);
-    const categories = getAllAssistantCategories()
-        .slice()
-        .sort((a, b) => b.length - a.length);
+    const categories = getAllAssistantCategories().slice().sort((a, b) => b.length - a.length);
 
     const aliases = {
-        'trabalho': 'Trabalho',
-        'estudo': 'Estudos',
-        'estudos': 'Estudos',
-        'estudar': 'Estudos',
-        'projeto': 'Projetos',
-        'projetos': 'Projetos',
-        'leitura': 'Leitura',
-        'ler': 'Leitura',
-        'livro': 'Leitura',
-        'hobby': 'Hobbies',
-        'hobbies': 'Hobbies',
-        'lazer': 'Hobbies',
-        'livre': 'Livre'
+        trabalho: 'Trabalho',
+        estudo: 'Estudos',
+        estudos: 'Estudos',
+        estudar: 'Estudos',
+        projeto: 'Projetos',
+        projetos: 'Projetos',
+        leitura: 'Leitura',
+        ler: 'Leitura',
+        livro: 'Leitura',
+        hobby: 'Hobbies',
+        hobbies: 'Hobbies',
+        lazer: 'Hobbies',
+        livre: 'Livre'
     };
 
     for (const category of categories) {
@@ -7084,9 +7145,12 @@ function answerBroaderGuidance(text) {
 
 function buildAssistantReply(text) {
     const normalized = normalizeAssistantText(text);
+    const category = detectAssistantCategory(text);
+    const durationMinutes = detectAssistantDurationMinutes(text);
+    const defaultPeriod = getAssistantDefaultPeriod();
     const isTaskFollowUp = assistantConversationState?.intent === 'task_creation_pending' && (
-        !!detectAssistantCategory(text) ||
-        !!detectAssistantDurationMinutes(text) ||
+        !!category ||
+        !!durationMinutes ||
         includesAny(normalized, ['tarefa', 'categoria', 'minuto', 'minutos', 'hora', 'horas']) ||
         normalized.split(/\s+/).filter(Boolean).length <= 6
     );
@@ -7103,9 +7167,7 @@ function buildAssistantReply(text) {
     }
 
     const broaderGuidance = answerBroaderGuidance(text);
-    if (broaderGuidance) {
-        return broaderGuidance;
-    }
+    if (broaderGuidance) return broaderGuidance;
 
     if (includesAny(normalized, ['abrir metas', 'va para metas', 'ir para metas'])) {
         switchView('view-goals');
@@ -7140,9 +7202,7 @@ function buildAssistantReply(text) {
         };
     }
 
-    if (includesAny(normalized, ['quais metas', 'metas ativas', 'listar metas']) && !includesAny(normalized, ['bati', 'batidas'])) {
-        return answerGoalList();
-    }
+    if (includesAny(normalized, ['quais metas', 'metas ativas', 'listar metas']) && !includesAny(normalized, ['bati', 'batidas'])) return answerGoalList();
 
     if (
         includesAny(normalized, [
@@ -7159,41 +7219,33 @@ function buildAssistantReply(text) {
             'excluir minhas metas',
             'deletar minhas metas'
         ]) ||
-        (includesAny(normalized, ['apagar', 'remover', 'excluir', 'deletar', 'limpar']) && includesAny(normalized, ['metas']) && !detectAssistantCategory(text))
+        (includesAny(normalized, ['apagar', 'remover', 'excluir', 'deletar', 'limpar']) && includesAny(normalized, ['metas']) && !category)
     ) {
         return removeAllGoalsFromAssistant();
     }
 
-    if (includesAny(normalized, ['remova a meta', 'remove a meta', 'remover meta', 'apague a meta', 'exclua a meta', 'deleta a meta', 'tira a meta'])) {
-        return removeGoalFromAssistant(text);
-    }
+    if (includesAny(normalized, ['remova a meta', 'remove a meta', 'remover meta', 'apague a meta', 'exclua a meta', 'deleta a meta', 'tira a meta'])) return removeGoalFromAssistant(text);
 
     const looksLikeGoalCommand =
-        detectAssistantDurationMinutes(text) &&
-        detectAssistantCategory(text) &&
+        durationMinutes &&
+        category &&
         includesAny(normalized, ['meta', 'crie', 'criar', 'ajuste', 'ajustar', 'defina', 'definir', 'mude', 'altere', 'quero', 'planeje']);
 
-    if (looksLikeGoalCommand) {
-        return saveGoalFromAssistant(text);
-    }
+    if (looksLikeGoalCommand) return saveGoalFromAssistant(text);
 
     if (includesAny(normalized, ['pausar timer', 'pause o timer', 'pausar foco', 'pare o timer', 'para o timer', 'reinicie o timer', 'resetar timer', 'zerar timer', 'reiniciar foco', 'inicie o foco', 'iniciar foco', 'comece o foco', 'inicie o timer', 'iniciar timer', 'continue o foco'])) {
         const timerReply = answerTimerControl(text);
         if (timerReply) return timerReply;
     }
 
-    if (isTaskFollowUp) {
-        return answerTaskCreateOrStart(text);
-    }
+    if (isTaskFollowUp) return answerTaskCreateOrStart(text);
 
-    if (includesAny(normalized, ['o que focar agora', 'oque focar agora', 'onde focar agora', 'qual categoria focar', 'o que priorizar'])) {
-        return answerFocusNow();
-    }
+    if (includesAny(normalized, ['o que focar agora', 'oque focar agora', 'onde focar agora', 'qual categoria focar', 'o que priorizar'])) return answerFocusNow();
 
     if (
         includesAny(normalized, ['iniciar tarefa', 'inicie a tarefa', 'comecar tarefa', 'comece a tarefa', 'abrir tarefa', 'abra a tarefa', 'criar tarefa', 'crie uma tarefa', 'nova tarefa', 'adicionar tarefa']) ||
         ((includesAny(normalized, ['iniciar', 'inicie', 'comecar', 'comece', 'abrir', 'abra']) && !!findAssistantTaskByText(text))) ||
-        (includesAny(normalized, ['tarefa']) && (!!detectAssistantDurationMinutes(text) || !!detectAssistantCategory(text)))
+        (includesAny(normalized, ['tarefa']) && (!!durationMinutes || !!category))
     ) {
         return answerTaskCreateOrStart(text);
     }
@@ -7202,13 +7254,9 @@ function buildAssistantReply(text) {
         return answerLaggingGoal(text);
     }
 
-    if (includesAny(normalized, ['quais metas bati', 'bati alguma meta', 'metas batidas'])) {
-        return answerGoalHits(text);
-    }
+    if (includesAny(normalized, ['quais metas bati', 'bati alguma meta', 'metas batidas'])) return answerGoalHits(text);
 
-    if (includesAny(normalized, ['estou indo mal', 'estou indo bem', 'to indo mal', 'to indo bem', 'como eu estou indo', 'como estou indo', 'estou bem', 'estou mal'])) {
-        return answerPerformanceAssessment(text);
-    }
+    if (includesAny(normalized, ['estou indo mal', 'estou indo bem', 'to indo mal', 'to indo bem', 'como eu estou indo', 'como estou indo', 'estou bem', 'estou mal'])) return answerPerformanceAssessment(text);
 
     if (includesAny(normalized, ['meta realista', 'esta realista', 'está realista', 'meta muito alta', 'meta muito baixa', 'faz sentido essa meta'])) {
         return answerGoalRealism(text);
@@ -7218,9 +7266,7 @@ function buildAssistantReply(text) {
         return answerGoalAdjustmentAdvice();
     }
 
-    if (includesAny(normalized, ['faz sentido eu reduzir', 'vale a pena reduzir', 'devo reduzir', 'devo baixar', 'devo diminuir'])) {
-        return answerCategoryChangeAdvice(text);
-    }
+    if (includesAny(normalized, ['faz sentido eu reduzir', 'vale a pena reduzir', 'devo reduzir', 'devo baixar', 'devo diminuir'])) return answerCategoryChangeAdvice(text);
 
     if (includesAny(normalized, ['quantas metas', 'numero de metas', 'número de metas', 'quantas metas tenho'])) {
         return answerGoalCount();
@@ -7230,45 +7276,29 @@ function buildAssistantReply(text) {
         return answerCategoriesWithoutGoal();
     }
 
-    if (includesAny(normalized, ['como estou em', 'status de', 'andamento de']) && detectAssistantCategory(text)) {
-        return answerCategoryStatus(text);
-    }
+    if (includesAny(normalized, ['como estou em', 'status de', 'andamento de']) && category) return answerCategoryStatus(text);
 
-    if (includesAny(normalized, ['qual categoria', 'categoria que mais', 'mais foco', 'lider']) && includesAny(normalized, ['foco', 'foquei', 'tempo'])) {
-        return answerTopCategory(text);
-    }
+    if (includesAny(normalized, ['qual categoria', 'categoria que mais', 'mais foco', 'lider']) && includesAny(normalized, ['foco', 'foquei', 'tempo'])) return answerTopCategory(text);
 
     if (includesAny(normalized, ['quantos pomodoros', 'quantas sessoes'])) {
         return answerPomodoros(text);
     }
 
-    if (includesAny(normalized, ['planejado', 'realizado', 'quanto falta para as metas', 'como esta meu plano'])) {
-        return answerPlannedVsActual(text);
-    }
+    if (includesAny(normalized, ['planejado', 'realizado', 'quanto falta para as metas', 'como esta meu plano'])) return answerPlannedVsActual(text);
 
-    if (includesAny(normalized, ['estou melhorando', 'estou piorando', 'compare', 'comparado', 'evoluindo', 'evolucao'])) {
-        return answerTrend(text);
-    }
+    if (includesAny(normalized, ['estou melhorando', 'estou piorando', 'compare', 'comparado', 'evoluindo', 'evolucao'])) return answerTrend(text);
 
-    if (includesAny(normalized, ['resumo', 'resuma', 'meu desempenho', 'como eu fui'])) {
-        return answerSummary(text);
-    }
+    if (includesAny(normalized, ['resumo', 'resuma', 'meu desempenho', 'como eu fui'])) return answerSummary(text);
 
     if (includesAny(normalized, ['como foi meu foco', 'como esta meu foco', 'como tá meu foco', 'como ta meu foco'])) {
         return answerFocusTotal(text);
     }
 
-    if (includesAny(normalized, ['tarefas', 'tarefa atual', 'o que tenho para fazer'])) {
-        return answerTasks();
-    }
+    if (includesAny(normalized, ['tarefas', 'tarefa atual', 'o que tenho para fazer'])) return answerTasks();
 
-    if (includesAny(normalized, ['quanto foquei', 'quanto tempo', 'quanto entreguei', 'quanto de foco'])) {
-        return answerFocusTotal(text);
-    }
+    if (includesAny(normalized, ['quanto foquei', 'quanto tempo', 'quanto entreguei', 'quanto de foco'])) return answerFocusTotal(text);
 
-    if (detectAssistantCategory(text)) {
-        return answerCategoryStatus(text);
-    }
+    if (category) return answerCategoryStatus(text);
 
     if (includesAny(normalized, ['foco', 'historico', 'histórico', 'desempenho'])) {
         return answerSummary(text);
