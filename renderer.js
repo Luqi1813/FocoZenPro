@@ -6,6 +6,7 @@ const goalsCore = window.FocoZenGoalsCore;
 const timerCore = window.FocoZenTimerCore;
 const pipService = window.FocoZenPipService;
 const updateService = window.FocoZenUpdateService;
+const taskSessionService = window.FocoZenTaskSessionService;
 
 const storageKeys = storageService?.storageKeys ?? {
     TASKS: 'focozen_tasks',
@@ -207,11 +208,180 @@ function saveUserCategories() {
 }
 
 function readSavedSession() {
+    if (taskSessionService?.readSavedSession) {
+        return taskSessionService.readSavedSession();
+    }
+
     return readJsonStorage(storageKeys.SAVED_SESSION, null);
 }
 
 function saveSavedSession(session) {
+    if (taskSessionService?.saveSavedSession) {
+        taskSessionService.saveSavedSession(session);
+        return;
+    }
+
     writeJsonStorage(storageKeys.SAVED_SESSION, session);
+}
+
+function checkWizardOnboarding() {
+    const storedUsername = storageService?.readStorageValue
+        ? storageService.readStorageValue(storageKeys.USERNAME, null)
+        : localStorage.getItem(storageKeys.USERNAME);
+
+    if (!storedUsername) {
+        document.getElementById('wizardModal')?.classList.add('active');
+    }
+}
+
+function applySelectedTaskUi(task) {
+    if (!task) return;
+
+    const badge = document.getElementById('currentTaskBadge');
+    if (badge) {
+        badge.textContent = task.name.substring(0, 15) + (task.name.length > 15 ? '...' : '');
+        badge.className = 'task-badge task-mode';
+    }
+
+    document.getElementById('btnFreeFocus')?.classList.remove('hidden');
+    const globalCategory = document.getElementById('globalCategorySelect');
+    if (globalCategory) globalCategory.value = task.category || 'Livre';
+    if (window.updateCustomDropdownUI) window.updateCustomDropdownUI(task.category || 'Livre');
+}
+
+function applyFreeFocusUi({ category = 'Livre' } = {}) {
+    const badge = document.getElementById('currentTaskBadge');
+    if (badge) {
+        badge.textContent = 'Sessao Livre';
+        badge.className = 'task-badge free-mode';
+    }
+
+    document.getElementById('btnFreeFocus')?.classList.add('hidden');
+    const globalCategory = document.getElementById('globalCategorySelect');
+    if (globalCategory) globalCategory.value = category;
+    if (window.updateCustomDropdownUI) window.updateCustomDropdownUI(category);
+}
+
+function applyTimerModeUi({ mode = 'focus', resetToggleButton = true } = {}) {
+    document.getElementById('timeLabel').textContent = mode === 'focus'
+        ? 'Periodo de Foco'
+        : (mode === 'shortBreak' ? 'Pausa Curta' : 'Pausa Longa');
+
+    if (resetToggleButton) {
+        document.getElementById('timerToggle').innerHTML = '<i class="fas fa-play"></i>';
+    }
+
+    document.querySelectorAll('.mode-btn').forEach((button) => button.classList.remove('active'));
+    document.querySelector(`.mode-btn[data-mode="${mode}"]`)?.classList.add('active');
+}
+
+function hideWelcomeModal() {
+    document.getElementById('welcomeModal')?.classList.remove('active');
+}
+
+function showTaskSwitchPrompt({ onDiscard, onSave, onCancel }) {
+    const overlay = document.createElement('div');
+    overlay.className = 'modal-overlay active custom-popup';
+    overlay.innerHTML = `
+        <div class="elegant-popup" style="text-align:center; max-width:400px;">
+            <div class="elegant-icon" style="color:#f59e0b;"><i class="fas fa-exchange-alt"></i></div>
+            <h3 class="elegant-title">Trocar Tarefa?</h3>
+            <p class="elegant-message">Voce tem progresso na tarefa atual. O que deseja fazer?</p>
+            <div class="elegant-actions">
+                <button class="btn-modal danger btn-discard-sw">Desistir e Trocar</button>
+                <button class="btn-modal primary btn-save-sw">Salvar e Trocar</button>
+            </div>
+            <button class="btn-modal secondary btn-cancel-sw" style="margin-top:10px;width:100%;">Cancelar</button>
+        </div>`;
+    document.body.appendChild(overlay);
+
+    overlay.querySelector('.btn-discard-sw').onclick = () => {
+        overlay.remove();
+        onDiscard?.();
+    };
+    overlay.querySelector('.btn-save-sw').onclick = () => {
+        overlay.remove();
+        onSave?.();
+    };
+    overlay.querySelector('.btn-cancel-sw').onclick = () => {
+        overlay.remove();
+        onCancel?.();
+    };
+}
+
+function showResumeSessionPrompt({ onDiscard, onResume }) {
+    const overlay = document.createElement('div');
+    overlay.className = 'modal-overlay active custom-popup';
+    overlay.innerHTML = `
+        <div class="elegant-popup" style="text-align: center; max-width: 420px;">
+            <div class="elegant-icon" style="color: #10b981;"><i class="fas fa-play-circle"></i></div>
+            <h3 class="elegant-title">Sessao Encontrada</h3>
+            <p class="elegant-message">Detectamos uma sessao pausada anteriormente. Deseja retoma-la de onde parou?</p>
+            <div class="elegant-actions">
+                <button class="btn-modal danger btn-discard">Descartar</button>
+                <button class="btn-modal primary btn-resume">Retomar</button>
+            </div>
+        </div>`;
+    document.body.appendChild(overlay);
+
+    overlay.querySelector('.btn-discard').onclick = () => {
+        overlay.remove();
+        onDiscard?.();
+    };
+    overlay.querySelector('.btn-resume').onclick = () => {
+        overlay.remove();
+        onResume?.();
+    };
+}
+
+function configureTaskSessionService() {
+    if (!taskSessionService?.configure) return;
+
+    taskSessionService.configure({
+        getTasks: () => tasks,
+        getCurrentTask: () => currentTask,
+        getTimeLeft: () => timeLeft,
+        getTotalTimerTime: () => totalTimerTime,
+        getCurrentMode: () => currentMode,
+        getIsTimerRunning: () => isTimerRunning,
+        getFocusHistory: () => focusHistory,
+        getTestMode: () => testMode,
+        setCurrentTask: (value) => { currentTask = value; },
+        setTimeLeft: (value) => { timeLeft = value; },
+        setTotalTimerTime: (value) => { totalTimerTime = value; },
+        setCurrentMode: (value) => { currentMode = value; },
+        saveTasks,
+        saveFocusHistory,
+        toggleTimer,
+        pauseTimer,
+        resetTimer,
+        setTimerMode,
+        getTaskFocusDurationSeconds,
+        updateTimerDisplay,
+        updateProgressBar,
+        renderTasksList,
+        renderTasksSidebar,
+        renderProgress,
+        updateHeaderTaskCount,
+        syncStateToPip,
+        storageService,
+        storageKeys,
+        timerCore,
+        pomodoroMinutes: POMODORO_MINUTES,
+        shortBreakMinutes: SHORT_BREAK_MINUTES,
+        longBreakMinutes: LONG_BREAK_MINUTES,
+        getActiveCategory: () => document.getElementById('globalCategorySelect')?.value || 'Livre',
+        showTaskSwitchPrompt,
+        showResumeSessionPrompt,
+        showTaskSuccessModal,
+        showGlassToast,
+        checkWizardOnboarding,
+        applySelectedTaskUi,
+        applyFreeFocusUi,
+        applyTimerModeUi,
+        hideWelcomeModal,
+        normalizeTaskName: prettifyAssistantTaskName
+    });
 }
 
 // INICIALIZACAO BLINDADA
@@ -244,6 +414,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     try { initTimer(); } catch(e) { console.error('Erro Timer:', e); }
     try { initBreath(); } catch(e) { console.error('Erro Respiracao:', e); }
     try { initModals(); } catch(e) { console.error('Erro Modais:', e); }
+    try { configureTaskSessionService(); } catch(e) { console.error('Erro Task Session:', e); }
     try { initTaskForm(); } catch(e) { console.error('Erro Formulário:', e); }
     try { initSidebarControls(); } catch(e) { console.error('Erro Sidebar:', e); }
     try { initPipIntegration(); } catch(e) { console.error('Erro PIP:', e); }
@@ -2080,27 +2251,7 @@ window.deleteTask = function(taskId) {
 };
 
 function deselectTask() {
-    // Always stop timer and reset to default 25-min state
-    if (isTimerRunning) pauseTimer();
-    currentTask = null;
-    const badge = document.getElementById('currentTaskBadge');
-    badge.textContent = 'Sessao Livre'; badge.className = 'task-badge free-mode';
-    document.getElementById('btnFreeFocus').classList.add('hidden');
-    const globalCat = document.getElementById('globalCategorySelect');
-    if (globalCat) globalCat.value = "Livre";
-    if (window.updateCustomDropdownUI) window.updateCustomDropdownUI("Livre");
-    // Reset timer back to 25-minute default
-    timeLeft = POMODORO_MINUTES * 60;
-    totalTimerTime = timeLeft;
-    currentMode = 'focus';
-    document.getElementById('timeLabel').textContent = 'Período de Foco';
-    document.getElementById('timerToggle').innerHTML = '<i class="fas fa-play"></i>';
-    document.querySelectorAll('.mode-btn').forEach(b => b.classList.remove('active'));
-    document.querySelector('.mode-btn[data-mode="focus"]')?.classList.add('active');
-    updateTimerDisplay();
-    updateProgressBar();
-    renderProgress(); renderTasksSidebar(); renderTasksList();
-    syncStateToPip();
+    taskSessionService?.deselectTask?.();
 }
 
 window.attemptDeselectTask = function(isAppClosing) {
@@ -2502,6 +2653,31 @@ function toggleTaskComplete(taskId) {
         if(task.completed) { showTaskSuccessModal(task.name); if(currentTask?.id === taskId) deselectTask(); }
         renderTasksList(); renderTasksSidebar(); updateHeaderTaskCount();
     }
+}
+
+window.promptResumeSession = function() {
+    taskSessionService?.promptResumeSession?.();
+};
+
+function startTask(taskId) {
+    taskSessionService?.startTask?.(taskId);
+}
+
+function selectTask(taskId, skipTimerSync = false, onComplete = null) {
+    taskSessionService?.selectTask?.(taskId, {
+        skipTimerSync: !!skipTimerSync,
+        onComplete
+    });
+}
+
+function _doSelectTask(taskId, skipTimerSyncInput = false) {
+    taskSessionService?.performTaskSelection?.(taskId, {
+        skipTimerSync: !!skipTimerSyncInput
+    });
+}
+
+function toggleTaskComplete(taskId) {
+    taskSessionService?.toggleTaskComplete?.(taskId);
 }
 
 function deleteTask(taskId) {
@@ -5143,6 +5319,10 @@ function createTaskFromAssistant(draft, startNow = true) {
     }
 
     return task;
+}
+
+function createTaskFromAssistant(draft, startNow = true) {
+    return taskSessionService?.createTaskFromAssistant?.(draft, startNow);
 }
 
 function applyAssistantFreeFocus(durationMinutes = null, category = null) {
