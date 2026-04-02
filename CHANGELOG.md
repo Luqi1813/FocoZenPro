@@ -2,6 +2,20 @@
 
 Todas as mudancas notaveis do FocoZen Pro serao documentadas neste arquivo.
 
+## [1.1.1] - 2026-04-02
+
+### Adicionado
+- Nova base modular em `src/core` e `src/services` para reaproveitar regras de timer, metas, historico, PiP e updates na futura migracao para React
+- Documento de baseline da refatoracao para orientar validacao manual e sequencia segura das proximas etapas
+
+### Melhorado
+- `renderer.js` agora consome bridges dedicados para PiP e atualizacoes, reduzindo acoplamento direto com `window.electronAPI`
+- Calculos de metas, estatisticas e timer foram centralizados em modulos reutilizaveis, preservando a UI legada
+
+### Corrigido
+- Textos com encoding incorreto em categorias e labels extraidos para constantes compartilhadas
+- Integracao incremental do renderer com historico, metas, timer, PiP e update flow sem alterar o comportamento visual esperado
+
 ## [1.1.0] - 2026-04-01
 
 ### Adicionado
