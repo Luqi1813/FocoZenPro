@@ -26,7 +26,7 @@
     const rerenderTasks = () => {
         renderTasksList();
         renderTasksSidebar();
-        renderProgress();
+        deps?.renderProgress?.();
     };
 
     const updatePomodoroSuggestion = () => {
@@ -389,60 +389,10 @@
         });
     };
 
-    const renderProgress = () => {
-        const content = document.getElementById('progressContent');
-        if (!content) return;
-
-        const state = getState();
-        let percent = 0;
-        let title = 'Sessao Livre de Foco';
-
-        if (state.currentTask) {
-            title = state.currentTask.name;
-            if (state.currentTask.pomodoros > 0) {
-                percent = (state.currentTask.completedPomodoros / state.currentTask.pomodoros) * 100;
-            }
-        }
-
-        if (state.currentMode === 'focus' && state.totalTimerTime > 0) {
-            const currentTimerFraction = (state.totalTimerTime - state.timeLeft) / state.totalTimerTime;
-            if (state.currentTask && state.currentTask.pomodoros > 0) {
-                percent = ((state.currentTask.completedPomodoros + currentTimerFraction) / state.currentTask.pomodoros) * 100;
-            } else {
-                percent = currentTimerFraction * 100;
-            }
-        }
-
-        percent = Math.max(0, Math.min(100, percent));
-        const hiddenClass = state.showBubbleText ? '' : 'hidden-text';
-
-        content.innerHTML = `
-            <div class="task-progress-display">
-                <h4>${title}</h4>
-                <div class="sand-bubble-container ${state.isTimerRunning && state.currentMode === 'focus' ? 'running' : ''}" style="--fill-percent: ${percent}%;">
-                    <div class="liquid-wave-wrapper">
-                        <svg class="wave-svg" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 420 200" preserveAspectRatio="none">
-                            <path d="M0,12 Q17.5,0 35,12 T70,12 T105,12 T140,12 T175,12 T210,12 T245,12 T280,12 T315,12 T350,12 T385,12 T420,12 V200 H0 Z" fill="var(--accent-primary)" opacity="0.7"/>
-                        </svg>
-                        <svg class="wave-svg" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 420 200" preserveAspectRatio="none">
-                            <path d="M0,12 Q17.5,24 35,12 T70,12 T105,12 T140,12 T175,12 T210,12 T245,12 T280,12 T315,12 T350,12 T385,12 T420,12 V200 H0 Z" fill="var(--accent-secondary)" opacity="0.4"/>
-                        </svg>
-                    </div>
-                    <div class="sand-bubble-center ${hiddenClass}" id="bubbleCenterText">
-                        <div class="pomodoro-count" id="bubblePercentage">${Math.floor(percent)}%</div>
-                    </div>
-                </div>
-            </div>`;
-
-        const percentageElement = document.getElementById('bubblePercentage');
-        if (percentageElement) percentageElement.textContent = `${Math.floor(percent)}%`;
-    };
-
     window.FocoZenLegacyTasks = Object.freeze({
         configure,
         renderTasksList,
         renderTasksSidebar,
-        renderProgress,
         renderTempSubtasks,
         updatePomodoroSuggestion,
         createOrEditTask,

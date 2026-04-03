@@ -8,6 +8,8 @@ const pipService = window.FocoZenPipService;
 const updateService = window.FocoZenUpdateService;
 const audioService = window.FocoZenAudioService;
 const taskSessionService = window.FocoZenTaskSessionService;
+const legacyHome = window.FocoZenLegacyHome;
+const legacyTimer = window.FocoZenLegacyTimer;
 const legacyGoalsStats = window.FocoZenLegacyGoalsStats;
 const legacyTasks = window.FocoZenLegacyTasks;
 const assistantCore = window.FocoZenAssistantCore;
@@ -136,9 +138,6 @@ const motivationalRestartMessages = constantsService?.motivationalRestartMessage
     'Disciplina também é saber a hora de recomeçar com energia.'
 ];
 
-let breathInterval;
-let breathPhaseTimer;
-
 function getTaskFocusDurationSeconds(task = currentTask) {
     if (timerCore?.getTaskSessionDurationSeconds) {
         return timerCore.getTaskSessionDurationSeconds({
@@ -244,44 +243,15 @@ function checkWizardOnboarding() {
 }
 
 function applySelectedTaskUi(task) {
-    if (!task) return;
-
-    const badge = document.getElementById('currentTaskBadge');
-    if (badge) {
-        badge.textContent = task.name.substring(0, 15) + (task.name.length > 15 ? '...' : '');
-        badge.className = 'task-badge task-mode';
-    }
-
-    document.getElementById('btnFreeFocus')?.classList.remove('hidden');
-    const globalCategory = document.getElementById('globalCategorySelect');
-    if (globalCategory) globalCategory.value = task.category || 'Livre';
-    if (window.updateCustomDropdownUI) window.updateCustomDropdownUI(task.category || 'Livre');
+    legacyHome?.applySelectedTaskUi?.(task);
 }
 
 function applyFreeFocusUi({ category = 'Livre' } = {}) {
-    const badge = document.getElementById('currentTaskBadge');
-    if (badge) {
-        badge.textContent = 'Sessao Livre';
-        badge.className = 'task-badge free-mode';
-    }
-
-    document.getElementById('btnFreeFocus')?.classList.add('hidden');
-    const globalCategory = document.getElementById('globalCategorySelect');
-    if (globalCategory) globalCategory.value = category;
-    if (window.updateCustomDropdownUI) window.updateCustomDropdownUI(category);
+    legacyHome?.applyFreeFocusUi?.({ category });
 }
 
 function applyTimerModeUi({ mode = 'focus', resetToggleButton = true } = {}) {
-    document.getElementById('timeLabel').textContent = mode === 'focus'
-        ? 'Periodo de Foco'
-        : (mode === 'shortBreak' ? 'Pausa Curta' : 'Pausa Longa');
-
-    if (resetToggleButton) {
-        document.getElementById('timerToggle').innerHTML = '<i class="fas fa-play"></i>';
-    }
-
-    document.querySelectorAll('.mode-btn').forEach((button) => button.classList.remove('active'));
-    document.querySelector(`.mode-btn[data-mode="${mode}"]`)?.classList.add('active');
+    legacyTimer?.applyModeUi?.({ mode, resetToggleButton });
 }
 
 function hideWelcomeModal() {
@@ -399,15 +369,7 @@ function getCurrentSoundConfig() {
 
 function applyAudioStateToUi() {
     const currentSound = getCurrentSoundConfig();
-    const soundName = currentSound?.name || 'Nenhum som selecionado';
-    const soundTheme = currentSound ? (soundThemes[currentSound.id] || 'default') : 'default';
-
-    document.documentElement.setAttribute('data-sound', soundTheme);
-
-    const nowPlaying = document.getElementById('nowPlaying');
-    if (nowPlaying) {
-        nowPlaying.innerHTML = `<i class="fas fa-music"></i><span>${soundName}</span>`;
-    }
+    legacyHome?.applyAudioStateToUi?.();
 
     const statsName = document.getElementById('statsPlayerSoundName');
     const goalsName = document.getElementById('goalsPlayerSoundName');
@@ -415,10 +377,6 @@ function applyAudioStateToUi() {
     if (statsName) statsName.textContent = currentSound?.name || 'Nenhum som';
     if (goalsName) goalsName.textContent = currentSound?.name || 'Nenhum som';
     if (settingsName) settingsName.textContent = currentSound?.name || 'Nenhum som';
-
-    document.querySelectorAll('.sound-card').forEach((card) => {
-        card.classList.toggle('active', card.dataset.soundId === currentSoundId);
-    });
 
     document.querySelectorAll('.vpa-sound-item').forEach((item) => {
         item.classList.toggle('active', item.dataset.soundId === currentSoundId);
@@ -428,18 +386,7 @@ function applyAudioStateToUi() {
         chip.classList.toggle('active', chip.dataset.soundId === currentSoundId);
     });
 
-    if (currentSound?.image) {
-        changeBackground(currentSound.image);
-    } else {
-        applyDefaultBackground();
-    }
-
     const muteIcon = isMuted ? 'fas fa-volume-mute' : 'fas fa-volume-up';
-    const headerMuteBtn = document.getElementById('btnMuteToggle');
-    if (headerMuteBtn?.querySelector('i')) {
-        headerMuteBtn.querySelector('i').className = muteIcon;
-    }
-
     ['stats', 'goals', 'settings'].forEach((prefix) => {
         const muteBtn = document.getElementById(`${prefix}PlayerMuteBtn`);
         if (muteBtn?.querySelector('i')) {
@@ -449,6 +396,61 @@ function applyAudioStateToUi() {
 
     updateVolumeDisplay();
     updateMasterPlayButton();
+    syncStateToPip();
+}
+
+function configureLegacyHomeModule() {
+    if (!legacyHome?.configure) return;
+
+    legacyHome.configure({
+        audioService,
+        taskSessionService,
+        timerCore,
+        soundsConfig,
+        soundThemes,
+        getCurrentTask: () => currentTask,
+        getCurrentMode: () => currentMode,
+        getTimeLeft: () => timeLeft,
+        getTotalTimerTime: () => totalTimerTime,
+        getIsTimerRunning: () => isTimerRunning,
+        getShowBubbleText: () => showBubbleText,
+        getCurrentSoundId: () => currentSoundId,
+        getIsPlaying: () => isPlaying,
+        getMasterVolume: () => masterVolume,
+        getIsMuted: () => isMuted,
+        getUserCategories: () => userCategories,
+        setShowBubbleText: (value) => { showBubbleText = !!value; },
+        persistShowBubbleText: (value) => {
+            if (storageService?.writeStorageValue) {
+                storageService.writeStorageValue(storageKeys.SHOW_BUBBLE_TEXT, value);
+            } else {
+                localStorage.setItem(storageKeys.SHOW_BUBBLE_TEXT, value);
+            }
+        },
+        showGlassToast,
+        customAlert,
+        openCreateModal,
+        attemptDeselectTask: (isAppClosing) => window.attemptDeselectTask?.(isAppClosing),
+        saveTasks,
+        renderTasksSidebar,
+        syncStateToPip
+    });
+}
+
+function configureLegacyTimerModule() {
+    if (!legacyTimer?.configure) return;
+
+    legacyTimer.configure({
+        timerCore,
+        getCurrentMode: () => currentMode,
+        getTimeLeft: () => timeLeft,
+        getTotalTimerTime: () => totalTimerTime,
+        getIsTimerRunning: () => isTimerRunning,
+        onSetMode: (mode) => setTimerMode(mode),
+        onToggleTimer: () => toggleTimer(),
+        onResetTimer: () => resetTimer(),
+        onAdjustTime: (minutes) => adjustTime(minutes)
+    });
 }
 
 function configureAudioService() {
@@ -654,6 +656,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             : localStorage.getItem(storageKeys.SHOW_BUBBLE_TEXT)) !== 'false';
         focusHistory = readJsonStorage(storageKeys.HISTORY, []);
         focusGoals = readJsonStorage(storageKeys.GOALS, []);
+        userCategories = readJsonStorage(storageKeys.CATEGORIES, defaultCategories);
         
         username = storageService?.readStorageValue
             ? storageService.readStorageValue(storageKeys.USERNAME, null)
@@ -668,12 +671,12 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     try { updateSidebarProfile(); initNavigation(); } catch(e) { console.error('Erro Navegacao:', e); }
     try { loadDailyQuote(); } catch(e) { console.error('Erro Quote:', e); }
-    try { await initSoundSelector(); } catch(e) { console.error('Erro Sons:', e); }
+    try { configureAudioService(); } catch(e) { console.error('Erro Audio Service:', e); }
+    try { configureLegacyHomeModule(); } catch(e) { console.error('Erro Home Legacy:', e); }
+    try { configureLegacyTimerModule(); } catch(e) { console.error('Erro Timer Legacy:', e); }
     try { initTimer(); } catch(e) { console.error('Erro Timer:', e); }
-    try { initBreath(); } catch(e) { console.error('Erro Respiracao:', e); }
     try { initModals(); } catch(e) { console.error('Erro Modais:', e); }
     try { configureTaskSessionService(); } catch(e) { console.error('Erro Task Session:', e); }
-    try { configureAudioService(); } catch(e) { console.error('Erro Audio Service:', e); }
     try { configureLegacyGoalsStatsModule(); } catch(e) { console.error('Erro Goals/Stats Legacy:', e); }
     try { configureLegacyTasksModule(); } catch(e) { console.error('Erro Tasks Legacy:', e); }
     try { configureLegacyAssistantModule(); } catch(e) { console.error('Erro Assistant Legacy:', e); }
@@ -681,6 +684,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     try { initSidebarControls(); } catch(e) { console.error('Erro Sidebar:', e); }
     try { initPipIntegration(); } catch(e) { console.error('Erro PIP:', e); }
     try { initAssistant(); } catch(e) { console.error('Erro Assistente:', e); }
+    try { await legacyHome?.init?.(); } catch(e) { console.error('Erro Home Init:', e); }
 
     // ATUALIZACAO FORCADA DAS LISTAS PARA CORRIGIR O BUG "NENHUMA TAREFA"
     try {
@@ -689,40 +693,10 @@ document.addEventListener('DOMContentLoaded', async () => {
         resetToFreeFocusSession();
     } catch(e) { console.error('Erro Render Inicial:', e); }
 
-    try { updateVolumeDisplay(); } catch(e) { console.error('Erro Volume:', e); }
+    try { applyAudioStateToUi(); } catch(e) { console.error('Erro Audio UI:', e); }
     try { updateHeaderTaskCount(); } catch(e) { console.error('Erro Count:', e); }
-    try { applyDefaultBackground(); } catch(e) { console.error('Erro Background:', e); }
 
     try {
-        const icon = document.querySelector('#btnToggleBubbleText i');
-        if(icon) icon.className = showBubbleText ? 'fas fa-eye' : 'fas fa-eye-slash';
-
-        document.getElementById('btnFreeFocus')?.addEventListener('click', () => attemptDeselectTask(false));
-        document.getElementById('btnToggleBubbleText')?.addEventListener('click', toggleBubbleText);
-        
-        // Custom Category Dropdown Logic
-        window.updateCustomDropdownUI = function(val) {
-            const item = document.querySelector(`.custom-dropdown-item[data-val="${val}"]`);
-            if(item) {
-                document.querySelectorAll('.custom-dropdown-item').forEach(i => i.classList.remove('active'));
-                item.classList.add('active');
-                const triggerText = document.getElementById('catTriggerText');
-                const triggerIcon = document.getElementById('catTriggerIcon');
-                if(triggerText) triggerText.textContent = item.textContent.trim();
-                if(triggerIcon) triggerIcon.className = item.querySelector('i').className;
-            }
-        };
-
-        const catMenu = document.getElementById('catMenu');
-        const catTriggerBtn = document.getElementById('catTriggerBtn');
-        if (catTriggerBtn && catMenu) {
-            catTriggerBtn.addEventListener('click', (e) => { e.stopPropagation(); catMenu.classList.toggle('show'); });
-            document.addEventListener('click', (e) => {
-                if (!catTriggerBtn.contains(e.target) && !catMenu.contains(e.target)) catMenu.classList.remove('show');
-            });
-        }
-        
-        userCategories = readJsonStorage(storageKeys.CATEGORIES, defaultCategories);
         if (window.renderTimerDropdown) window.renderTimerDropdown();
         if (window.renderCategoryChips) window.renderCategoryChips();
         resetGoalForm();
@@ -755,36 +729,12 @@ document.addEventListener('DOMContentLoaded', async () => {
 // ==========================================
 // CATEGORY ENGINE (V2)
 // ==========================================
+window.updateCustomDropdownUI = function(value) {
+    return legacyHome?.updateCustomDropdownUI?.(value);
+};
+
 window.renderTimerDropdown = function() {
-    const menu = document.getElementById('catMenu');
-    if (!menu) return;
-    const currentVal = document.getElementById('globalCategorySelect')?.value || 'Livre';
-    menu.innerHTML = '';
-    userCategories.forEach(cat => {
-        const item = document.createElement('div');
-        item.className = `custom-dropdown-item ${cat.name === currentVal ? 'active' : ''}`;
-        item.setAttribute('data-val', cat.name);
-        item.innerHTML = `<i class="fas ${cat.icon || 'fa-tag'}"></i> ${cat.name}`;
-        item.onclick = (e) => {
-            e.stopPropagation();
-            const hasProgress = currentMode === 'focus' && timeLeft < totalTimerTime;
-            if (isTimerRunning || hasProgress) {
-                customAlert('Sessao Ativa', 'Para mudar a categoria, reinicie o temporizador ou conclua a sessao atual.');
-                menu.classList.remove('show');
-                return;
-            }
-            if (currentTask) {
-                customAlert('Tarefa Vinculada', 'Para mudar a categoria, edite a tarefa (botao de lapis na barra lateral).');
-                menu.classList.remove('show');
-                return;
-            }
-            document.getElementById('globalCategorySelect').value = cat.name;
-            if(window.updateCustomDropdownUI) window.updateCustomDropdownUI(cat.name);
-            menu.classList.remove('show');
-            if (currentTask) { currentTask.category = cat.name; saveTasks(); renderTasksSidebar(); }
-        };
-        menu.appendChild(item);
-    });
+    return legacyHome?.renderTimerDropdown?.();
 };
 
 window.renderCategoryChips = function() {
@@ -1142,35 +1092,6 @@ function syncStateToPip(extraState = {}) {
     }
 }
 
-function toggleBubbleText() {
-    showBubbleText = !showBubbleText;
-    if (storageService?.writeStorageValue) {
-        storageService.writeStorageValue(storageKeys.SHOW_BUBBLE_TEXT, showBubbleText);
-    } else {
-        localStorage.setItem(storageKeys.SHOW_BUBBLE_TEXT, showBubbleText);
-    }
-    const centerText = document.getElementById('bubbleCenterText');
-    const icon = document.querySelector('#btnToggleBubbleText i');
-    if (showBubbleText) {
-        centerText?.classList.remove('hidden-text');
-        if (icon) icon.className = 'fas fa-eye';
-    } else {
-        centerText?.classList.add('hidden-text');
-        if (icon) icon.className = 'fas fa-eye-slash';
-    }
-}
-
-function changeBackground(imageName) {
-    const bg = document.getElementById('dynamicBg');
-    if (bg && imageName) {
-        bg.style.backgroundImage = `url('assets/images/${imageName}')`;
-    }
-}
-
-function applyDefaultBackground() {
-    changeBackground('default.jpg');
-}
-
 function loadDailyQuote() {
     try {
         const today = new Date().toDateString();
@@ -1202,69 +1123,6 @@ function loadDailyQuote() {
     } catch(e) { console.error(e); }
 }
 
-async function initSoundSelector() {
-    const container = document.getElementById('soundGrid');
-
-    const groupedSounds = audioService?.initialize
-        ? await audioService.initialize()
-        : [];
-
-    if (!groupedSounds.length) {
-        if (container) {
-            container.innerHTML = '<p style="color: var(--text-muted); font-size: 0.8rem;">Nenhum som encontrado.</p>';
-        }
-        return;
-    }
-
-    if (container) container.innerHTML = '';
-
-    for (const group of groupedSounds) {
-        if (container) {
-            const catWrapper = document.createElement('div');
-            catWrapper.className = 'sound-category-wrapper';
-            catWrapper.innerHTML = `<div class="sound-category-title"><i class="fas ${group.icon}"></i> ${group.name}</div>`;
-
-            const grid = document.createElement('div');
-            grid.className = 'sound-grid';
-
-            group.sounds.forEach((sound) => {
-                const card = document.createElement('div');
-                card.className = 'sound-card';
-                card.dataset.soundId = sound.id;
-                card.innerHTML = `<i class="fas ${sound.icon}"></i><span>${sound.name}</span>`;
-                card.addEventListener('click', () => selectSound(sound, card));
-                grid.appendChild(card);
-            });
-
-            catWrapper.appendChild(grid);
-            container.appendChild(catWrapper);
-        }
-    }
-
-    const playButton = document.getElementById('masterPlayPause');
-    const muteButton = document.getElementById('btnMuteToggle');
-    const volumeSlider = document.getElementById('masterVolume');
-
-    if (playButton && !playButton.dataset.bound) {
-        playButton.dataset.bound = 'true';
-        playButton.addEventListener('click', toggleMasterPlay);
-    }
-
-    if (muteButton && !muteButton.dataset.bound) {
-        muteButton.dataset.bound = 'true';
-        muteButton.addEventListener('click', toggleMute);
-    }
-
-    if (volumeSlider && !volumeSlider.dataset.bound) {
-        volumeSlider.dataset.bound = 'true';
-        volumeSlider.addEventListener('input', (event) => {
-            audioService?.setVolume?.(Number(event.target.value) / 100);
-        });
-    }
-
-    applyAudioStateToUi();
-}
-
 async function selectSound(sound, cardElement) {
     const result = await audioService?.selectSound?.(sound, {
         toggleOff: !!cardElement,
@@ -1293,8 +1151,6 @@ async function toggleMasterPlay() {
 }
 
 function updateMasterPlayButton() {
-    const masterVolumeSlider = document.getElementById('masterVolume');
-
     ['stats', 'goals', 'settings'].forEach(prefix => {
         const playBtn = document.getElementById(`${prefix}PlayerPlayBtn`);
         const muteBtn = document.getElementById(`${prefix}PlayerMuteBtn`);
@@ -1308,11 +1164,10 @@ function updateMasterPlayButton() {
             muteBtn.dataset.bound = true;
             muteBtn.addEventListener('click', () => toggleMute());
         }
-        if (volSlider && masterVolumeSlider && !volSlider.dataset.bound) {
+        if (volSlider && !volSlider.dataset.bound) {
             volSlider.dataset.bound = true;
             volSlider.addEventListener('input', (e) => {
-                masterVolumeSlider.value = e.target.value;
-                masterVolumeSlider.dispatchEvent(new Event('input'));
+                audioService?.setVolume?.(Number(e.target.value) / 100);
             });
         }
         if (playBtn) {
@@ -1326,15 +1181,6 @@ function updateMasterPlayButton() {
         }
         if (volSlider) volSlider.value = Math.round(masterVolume * 100);
     });
-
-    const btn = document.getElementById('masterPlayPause');
-    if (isPlaying) {
-        if(btn){ btn.classList.add('playing'); btn.querySelector('i').className = 'fas fa-pause'; }
-    } else {
-        if(btn){ btn.classList.remove('playing'); btn.querySelector('i').className = 'fas fa-play'; }
-    }
-
-    syncStateToPip();
 }
 
 function buildViewPlayerSounds(containerId) {
@@ -1370,7 +1216,6 @@ function buildViewPlayerSounds(containerId) {
 
 function updateVolumeDisplay() {
     const vol = Math.round(masterVolume * 100);
-    document.getElementById('volumeValue').textContent = `${vol}%`;
     ['stats', 'goals', 'settings'].forEach(prefix => {
         const valEl = document.getElementById(`${prefix}PlayerVolumeValue`);
         const slider = document.getElementById(`${prefix}PlayerVolumeSlider`);
@@ -1380,20 +1225,7 @@ function updateVolumeDisplay() {
 }
 
 function initTimer() {
-    window.toggleTaskTimer = toggleTimer;
-    // Expose isTimerRunning for inline onclick handlers in sidebar templates
-    Object.defineProperty(window, 'isTimerRunning', { get: () => isTimerRunning });
-    document.querySelectorAll('.mode-btn').forEach(btn => {
-        btn.addEventListener('click', () => {
-            document.querySelectorAll('.mode-btn').forEach(b => b.classList.remove('active'));
-            btn.classList.add('active'); setTimerMode(btn.dataset.mode);
-        });
-    });
-    document.getElementById('timerToggle')?.addEventListener('click', toggleTimer);
-    document.getElementById('timerReset')?.addEventListener('click', resetTimer);
-    document.getElementById('increaseTime5')?.addEventListener('click', () => adjustTime(5));
-    document.getElementById('decreaseTime5')?.addEventListener('click', () => adjustTime(-5));
-    updateTimerDisplay();
+    legacyTimer?.init?.();
 }
 
 function adjustTime(minutes) {
@@ -1401,7 +1233,9 @@ function adjustTime(minutes) {
     if (isTimerRunning) return;
     if (currentTask && currentMode === 'focus') return; // Always block when a task is active
     timeLeft = Math.max(5, Math.min(120, Math.floor(timeLeft / 60) + minutes)) * 60;
-    totalTimerTime = timeLeft; updateTimerDisplay();
+    totalTimerTime = timeLeft;
+    updateTimerDisplay();
+    updateProgressBar();
 }
 
 function setTimerMode(mode) {
@@ -1424,32 +1258,31 @@ function setTimerMode(mode) {
         totalTimerTime = timeLeft;
     }
     
-    document.getElementById('timeLabel').textContent = mode === 'focus' ? 'Período de Foco' : (mode === 'shortBreak' ? 'Pausa Curta' : 'Pausa Longa');
-
-    document.querySelectorAll('.mode-btn').forEach(b => b.classList.remove('active'));
-    const btnToActive = document.querySelector(`.mode-btn[data-mode="${mode}"]`);
-    if(btnToActive) btnToActive.classList.add('active');
-
-    const btnPlay = document.getElementById('timerToggle');
-    if (btnPlay) btnPlay.innerHTML = '<i class="fas fa-play"></i>';
-
-    updateTimerDisplay(); updateProgressBar(); renderProgress();
+    applyTimerModeUi({ mode, resetToggleButton: true });
+    updateTimerDisplay();
+    updateProgressBar();
+    renderProgress();
     syncStateToPip();
 }
 
 let targetEndTime = 0;
 
 function toggleTimer() {
-    const btn = document.getElementById('timerToggle');
     if (isTimerRunning) {
-        pauseTimer(); btn.innerHTML = '<i class="fas fa-play"></i>'; renderProgress(); renderTasksSidebar();
+        pauseTimer();
+        legacyTimer?.setRunningUi?.(false);
+        renderProgress();
+        renderTasksSidebar();
         syncStateToPip();
     } else {
-        isTimerRunning = true; btn.innerHTML = '<i class="fas fa-pause"></i>'; renderProgress(); renderTasksSidebar();
+        isTimerRunning = true;
+        legacyTimer?.setRunningUi?.(true);
+        renderProgress();
+        renderTasksSidebar();
         syncStateToPip();
-        
+
         targetEndTime = Date.now() + (timeLeft * 1000);
-        
+
         timerInterval = setInterval(() => {
             const now = Date.now();
             if (now >= targetEndTime) {
@@ -1473,7 +1306,11 @@ function toggleTimer() {
     }
 }
 
-function pauseTimer() { isTimerRunning = false; clearInterval(timerInterval); }
+function pauseTimer() {
+    isTimerRunning = false;
+    clearInterval(timerInterval);
+    legacyTimer?.setRunningUi?.(false);
+}
 
 function resetTimer() {
     pauseTimer();
@@ -1490,7 +1327,6 @@ function resetTimer() {
         updateTimerDisplay();
         updateProgressBar();
     }
-    document.getElementById('timerToggle').innerHTML = '<i class="fas fa-play"></i>';
     renderProgress(); renderTasksSidebar(); syncStateToPip();
 }
 
@@ -1519,10 +1355,7 @@ function resetToFreeFocusSession() {
         : POMODORO_MINUTES * 60;
     totalTimerTime = timeLeft;
     currentMode = 'focus';
-    document.getElementById('timeLabel').textContent = 'Período de Foco';
-    document.getElementById('timerToggle').innerHTML = '<i class="fas fa-play"></i>';
-    document.querySelectorAll('.mode-btn').forEach(b => b.classList.remove('active'));
-    document.querySelector('.mode-btn[data-mode="focus"]')?.classList.add('active');
+    applyTimerModeUi({ mode: 'focus', resetToggleButton: true });
     updateTimerDisplay();
     updateProgressBar();
     renderProgress();
@@ -1722,10 +1555,7 @@ function addTimeToCurrentTask(extraMinutes = 5) {
     pendingCompletionType = null;
     pendingTaskResolution = null;
 
-    document.getElementById('timeLabel').textContent = 'Período de Foco';
-    document.getElementById('timerToggle').innerHTML = '<i class="fas fa-play"></i>';
-    document.querySelectorAll('.mode-btn').forEach(b => b.classList.remove('active'));
-    document.querySelector('.mode-btn[data-mode="focus"]')?.classList.add('active');
+    applyTimerModeUi({ mode: 'focus', resetToggleButton: true });
     updateTimerDisplay();
     updateProgressBar();
     renderProgress();
@@ -1816,6 +1646,11 @@ function completeTimer() {
 }
 
 function updateTimerDisplay() {
+    if (legacyTimer?.updateDisplay) {
+        legacyTimer.updateDisplay();
+        return;
+    }
+
     const timeString = timerCore?.formatTimerLabel
         ? timerCore.formatTimerLabel(timeLeft)
         : (utilsService?.formatClockTime
@@ -1824,6 +1659,11 @@ function updateTimerDisplay() {
     document.getElementById('timerDisplay').textContent = timeString; document.title = `${timeString} - FocoZen Pro`;
 }
 function updateProgressBar() {
+    if (legacyTimer?.updateProgressBar) {
+        legacyTimer.updateProgressBar();
+        return;
+    }
+
     const progress = timerCore?.getTimerProgress
         ? timerCore.getTimerProgress({ timeLeft, totalTime: totalTimerTime })
         : (utilsService?.calculateProgressPercentage
@@ -2127,6 +1967,44 @@ function showTaskSuccessModal(taskName) {
     overlay.querySelector('.btn-go-break').onclick = () => { overlay.remove(); startPhase('shortBreak'); };
 }
 
+function openCreateModal() {
+    editingTaskId = null;
+    document.getElementById('taskNameInput').value = '';
+    document.getElementById('taskTimeInput').value = testMode ? '0.08' : '25';
+    document.getElementById('taskPomodorosInput').value = '1';
+    document.getElementById('taskCategoryInput').value = 'Livre';
+    document.querySelectorAll('#taskCategoryChips .cat-chip').forEach((chip) => chip.classList.remove('active'));
+    const defaultChip = document.querySelector('#taskCategoryChips .cat-chip[data-val="Livre"]');
+    if (defaultChip) defaultChip.classList.add('active');
+
+    ['taskTimeInput', 'taskPomodorosInput'].forEach((id) => {
+        const element = document.getElementById(id);
+        if (element) {
+            element.disabled = false;
+            element.style.opacity = '1';
+        }
+    });
+
+    ['increaseTime', 'decreaseTime', 'increasePomodoros', 'decreasePomodoros'].forEach((id) => {
+        const element = document.getElementById(id);
+        if (element) {
+            element.disabled = false;
+            element.style.opacity = '1';
+        }
+    });
+
+    const lockHint = document.getElementById('taskTimeLockHint');
+    if (lockHint) lockHint.style.display = 'none';
+
+    tempSubtasks = [];
+    renderTempSubtasks();
+    updatePomodoroSuggestion();
+    document.getElementById('modalTaskTitle').innerHTML = '<i class="fas fa-plus-circle"></i> Nova Tarefa';
+    document.getElementById('btnSalvarTarefa').textContent = 'Criar Tarefa';
+    window.renderCategoryChips?.();
+    document.getElementById('newTaskModal')?.classList.add('active');
+}
+
 function initModals() {
     document.getElementById('btnTasks')?.addEventListener('click', () => {
         switchView('view-home');
@@ -2140,34 +2018,11 @@ function initModals() {
         const hint = document.getElementById('taskTimeLockHint'); if (hint) hint.style.display = 'none';
     };
 
-    const openCreateModal = () => {
-        editingTaskId = null;
-        document.getElementById('taskNameInput').value = '';
-        document.getElementById('taskTimeInput').value = testMode ? '0.08' : '25';
-        document.getElementById('taskPomodorosInput').value = '1';
-        document.getElementById('taskCategoryInput').value = 'Livre';
-        document.querySelectorAll('#taskCategoryChips .cat-chip').forEach(c => c.classList.remove('active'));
-        const defChip = document.querySelector('#taskCategoryChips .cat-chip[data-val="Livre"]');
-        if(defChip) defChip.classList.add('active');
-        resetModalFields();
-        tempSubtasks = []; renderTempSubtasks();
-        updatePomodoroSuggestion();
-        document.getElementById('modalTaskTitle').innerHTML = '<i class="fas fa-plus-circle"></i> Nova Tarefa';
-        document.getElementById('btnSalvarTarefa').textContent = 'Criar Tarefa';
-        window.renderCategoryChips && window.renderCategoryChips();
-        document.getElementById('newTaskModal').classList.add('active');
-    };
-
     document.getElementById('btnTasksModal')?.addEventListener('click', openCreateModal);
-    document.getElementById('btnNewTaskHeader')?.addEventListener('click', openCreateModal);
     document.getElementById('btnAddTaskModal')?.addEventListener('click', openCreateModal);
 
     document.getElementById('closeNewTask')?.addEventListener('click', () => document.getElementById('newTaskModal').classList.remove('active'));
     document.getElementById('cancelNewTask')?.addEventListener('click', () => document.getElementById('newTaskModal').classList.remove('active'));
-
-    document.getElementById('breathInfo')?.addEventListener('click', () => document.getElementById('breathInfoModal').classList.add('active'));
-    document.getElementById('closeBreathInfo')?.addEventListener('click', () => document.getElementById('breathInfoModal').classList.remove('active'));
-    document.getElementById('closeBreathInfoBtn')?.addEventListener('click', () => document.getElementById('breathInfoModal').classList.remove('active'));
 }
 
 function initTaskForm() {
@@ -2607,9 +2462,7 @@ window.attemptDeselectTask = function(isAppClosing) {
             const globalCat = document.getElementById('globalCategorySelect');
             if (globalCat) globalCat.value = 'Livre';
             if (window.updateCustomDropdownUI) window.updateCustomDropdownUI('Livre');
-            document.getElementById('timerToggle').innerHTML = '<i class="fas fa-play"></i>';
-            document.querySelectorAll('.mode-btn').forEach(b => b.classList.remove('active'));
-            document.querySelector('.mode-btn[data-mode="focus"]')?.classList.add('active');
+            applyTimerModeUi({ mode: 'focus', resetToggleButton: true });
             updateTimerDisplay(); updateProgressBar();
             renderProgress(); renderTasksSidebar(); renderTasksList();
             syncStateToPip();
@@ -2681,9 +2534,7 @@ window.promptResumeSession = function() {
                     currentMode = 'focus';
                     timeLeft = session.timeLeft;
                     totalTimerTime = session.totalTimerTime;
-                    document.getElementById('timeLabel').textContent = 'Período de Foco';
-                    document.querySelectorAll('.mode-btn').forEach(b => b.classList.remove('active'));
-                    document.querySelector('.mode-btn[data-mode="focus"]')?.classList.add('active');
+                    applyTimerModeUi({ mode: currentMode, resetToggleButton: true });
                     updateTimerDisplay();
                     updateProgressBar();
                     renderTasksSidebar();
@@ -2703,9 +2554,7 @@ window.promptResumeSession = function() {
                 currentMode = 'focus';
                 timeLeft = session.timeLeft;
                 totalTimerTime = session.totalTimerTime;
-                document.getElementById('timeLabel').textContent = 'Período de Foco';
-                document.querySelectorAll('.mode-btn').forEach(b => b.classList.remove('active'));
-                document.querySelector('.mode-btn[data-mode="focus"]')?.classList.add('active');
+                applyTimerModeUi({ mode: currentMode, resetToggleButton: true });
                 updateTimerDisplay();
                 updateProgressBar();
                 toggleTimer();
@@ -2828,9 +2677,7 @@ function _doSelectTask(taskId, skipTimerSyncInput) {
             currentMode = session.mode || 'focus';
             timeLeft = session.timeLeft;
             totalTimerTime = session.totalTimerTime;
-            document.getElementById('timeLabel').textContent = 'Período de Foco';
-            document.querySelectorAll('.mode-btn').forEach(b => b.classList.remove('active'));
-            document.querySelector('.mode-btn[data-mode="focus"]')?.classList.add('active');
+            applyTimerModeUi({ mode: currentMode, resetToggleButton: true });
             updateTimerDisplay();
             updateProgressBar();
             // Clear the session so we don't infinitely restore it if closed without saving
@@ -2909,50 +2756,7 @@ function deleteTask(taskId) {
 }
 
 function renderProgress() {
-    const content = document.getElementById('progressContent'); if (!content) return;
-    let percent = 0; let title = "Sessao Livre de Foco";
-    let currentHtml = "";
-
-    if (currentTask) {
-        title = currentTask.name;
-        if (currentTask.pomodoros > 0) percent = (currentTask.completedPomodoros / currentTask.pomodoros) * 100;
-    }
-
-    // Add real-time timer progress (both running AND paused with partial progress)
-    if (currentMode === 'focus' && totalTimerTime > 0) {
-        const currentTimerFraction = (totalTimerTime - timeLeft) / totalTimerTime;
-        if (currentTask && currentTask.pomodoros > 0) {
-            percent = ((currentTask.completedPomodoros + currentTimerFraction) / currentTask.pomodoros) * 100;
-        } else {
-            percent = currentTimerFraction * 100;
-        }
-    }
-    
-    percent = Math.max(0, Math.min(100, percent));
-    currentHtml = `<div class="pomodoro-count" id="bubblePercentage">${Math.floor(percent)}%</div>`;
-
-    const hiddenClass = showBubbleText ? '' : 'hidden-text';
-
-    content.innerHTML = `
-        <div class="task-progress-display">
-            <h4>${title}</h4>
-            <div class="sand-bubble-container ${isTimerRunning && currentMode === 'focus' ? 'running' : ''}" style="--fill-percent: ${percent}%;">
-                <div class="liquid-wave-wrapper">
-                    <svg class="wave-svg" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 420 200" preserveAspectRatio="none">
-                        <path d="M0,12 Q17.5,0 35,12 T70,12 T105,12 T140,12 T175,12 T210,12 T245,12 T280,12 T315,12 T350,12 T385,12 T420,12 V200 H0 Z" fill="var(--accent-primary)" opacity="0.7"/>
-                    </svg>
-                    <svg class="wave-svg" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 420 200" preserveAspectRatio="none">
-                        <path d="M0,12 Q17.5,24 35,12 T70,12 T105,12 T140,12 T175,12 T210,12 T245,12 T280,12 T315,12 T350,12 T385,12 T420,12 V200 H0 Z" fill="var(--accent-secondary)" opacity="0.4"/>
-                    </svg>
-                </div>
-                <div class="sand-bubble-center ${hiddenClass}" id="bubbleCenterText">
-                    ${currentHtml}
-                </div>
-            </div>
-        </div>`;
-
-    const percentageEl = document.getElementById('bubblePercentage');
-    if(percentageEl) percentageEl.textContent = `${Math.floor(percent)}%`;
+    return legacyHome?.renderProgress?.();
 }
 
 const legacyUpdatePomodoroSuggestionImpl = updatePomodoroSuggestion;
@@ -3027,11 +2831,7 @@ renderTasksSidebar = function() {
 };
 
 renderProgress = function() {
-    if (legacyTasks?.renderProgress) {
-        return legacyTasks.renderProgress();
-    }
-
-    return legacyRenderProgressImpl();
+    return legacyHome?.renderProgress?.() ?? legacyRenderProgressImpl?.();
 };
 
 window.editTask = function(taskId) {
@@ -3083,88 +2883,10 @@ window.deleteSelectedTasks = function() {
 };
 
 function updateTaskBubbleProgress() {
-    let percent = 0;
-    if (currentTask && currentTask.pomodoros > 0) {
-        const currentTimerFraction = totalTimerTime > 0 ? (totalTimerTime - timeLeft) / totalTimerTime : 0;
-        percent = ((currentTask.completedPomodoros + currentTimerFraction) / currentTask.pomodoros) * 100;
-        const sidebarBar = document.getElementById(`sidebar-prog-${currentTask.id}`);
-        const sidebarPercentText = document.getElementById(`sidebar-percent-${currentTask.id}`);
-        if (sidebarBar) sidebarBar.style.width = `${Math.min(100,percent)}%`;
-        if (sidebarPercentText) sidebarPercentText.textContent = `${Math.floor(Math.min(100,percent))}%`;
-    } else if (currentMode === 'focus' && totalTimerTime > 0) {
-        percent = ((totalTimerTime - timeLeft) / totalTimerTime) * 100;
-    }
-
-    percent = Math.max(0, Math.min(100, percent));
-    const container = document.querySelector('.sand-bubble-container');
-    if (container) container.style.setProperty('--fill-percent', `${percent}%`);
-
-    const percentageEl = document.getElementById('bubblePercentage');
-    if (percentageEl) percentageEl.textContent = `${Math.floor(percent)}%`;
+    return legacyHome?.updateTaskBubbleProgress?.();
 }
 
 function updateHeaderTaskCount() { const badge = document.getElementById('headerTaskCount'); if (badge) badge.textContent = tasks.filter(t => !t.completed).length; }
-
-function initBreath() {
-    document.getElementById('btnOpenBreathSession')?.addEventListener('click', startBreathSession);
-    document.getElementById('closeBreathActive')?.addEventListener('click', stopBreathSession);
-}
-
-function startBreathSession() {
-    document.getElementById('breathActiveModal').classList.add('active');
-    const circle = document.getElementById('breathActiveCircle');
-    if (circle) { circle.className = 'breath-active-circle'; void circle.offsetWidth; }
-    document.getElementById('breathPhaseTitle').textContent = 'Prepare-se...';
-    document.getElementById('breathTimeText').textContent = '';
-    setTimeout(runBreathCycleLogic, 500);
-}
-
-function stopBreathSession() {
-    document.getElementById('breathActiveModal').classList.remove('active');
-    clearTimeout(breathPhaseTimer);
-    clearInterval(breathInterval);
-    const circle = document.getElementById('breathActiveCircle');
-    if(circle) circle.className = 'breath-active-circle';
-}
-
-function runBreathCycleLogic() {
-    clearTimeout(breathPhaseTimer);
-    clearInterval(breathInterval);
-    const circle = document.getElementById('breathActiveCircle');
-    const phaseText = document.getElementById('breathPhaseTitle');
-    const timeText = document.getElementById('breathTimeText');
-    if(!circle || !phaseText || !timeText) return;
-    let phaseTimeLeft = 0;
-    const updateTick = () => { timeText.textContent = phaseTimeLeft; phaseTimeLeft--; };
-    const startInhale = () => {
-        if (!document.getElementById('breathActiveModal').classList.contains('active')) return;
-        phaseTimeLeft = 4;
-        circle.className = 'breath-active-circle'; void circle.offsetWidth;
-        circle.className = 'breath-active-circle breath-state-inhale';
-        phaseText.textContent = 'Inspire'; updateTick();
-        breathInterval = setInterval(updateTick, 1000);
-        breathPhaseTimer = setTimeout(() => { clearInterval(breathInterval); startHold(); }, 4000);
-    };
-    const startHold = () => {
-        if (!document.getElementById('breathActiveModal').classList.contains('active')) return;
-        phaseTimeLeft = 7;
-        circle.className = 'breath-active-circle'; void circle.offsetWidth;
-        circle.className = 'breath-active-circle breath-state-hold';
-        phaseText.textContent = 'Segure'; updateTick();
-        breathInterval = setInterval(updateTick, 1000);
-        breathPhaseTimer = setTimeout(() => { clearInterval(breathInterval); startExhale(); }, 7000);
-    };
-    const startExhale = () => {
-        if (!document.getElementById('breathActiveModal').classList.contains('active')) return;
-        phaseTimeLeft = 8;
-        circle.className = 'breath-active-circle'; void circle.offsetWidth;
-        circle.className = 'breath-active-circle breath-state-exhale';
-        phaseText.textContent = 'Expire'; updateTick();
-        breathInterval = setInterval(updateTick, 1000);
-        breathPhaseTimer = setTimeout(() => { clearInterval(breathInterval); startInhale(); }, 8000);
-    };
-    startInhale();
-}
 
 window.selectTask = selectTask; window.toggleTaskComplete = toggleTaskComplete; window.deleteTask = deleteTask; window.startTask = startTask;
 window.removeTempSubtask = removeTempSubtask; window.editTask = editTask;
@@ -5726,9 +5448,7 @@ function applyAssistantFreeFocus(durationMinutes = null, category = null) {
     currentMode = 'focus';
     totalTimerTime = resolvedMinutes * 60;
     timeLeft = totalTimerTime;
-    document.getElementById('timeLabel').textContent = 'Periodo de Foco';
-    document.querySelectorAll('.mode-btn').forEach(button => button.classList.remove('active'));
-    document.querySelector('.mode-btn[data-mode="focus"]')?.classList.add('active');
+    applyTimerModeUi({ mode: 'focus', resetToggleButton: true });
     updateTimerDisplay();
     updateProgressBar();
     renderProgress();
