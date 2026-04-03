@@ -1,6 +1,7 @@
 #react-assistant-root {
     display: flex;
     flex: 1;
+    min-width: 0;
     min-height: 0;
 }
 
@@ -218,10 +219,12 @@
     display: flex;
     flex-direction: column;
     flex: 1;
+    min-width: 0;
     min-height: 0;
 }
 
 .react-assistant-shell .assistant-messages {
+    width: 100%;
     min-height: 0;
 }
 

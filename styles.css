@@ -1774,6 +1774,7 @@ ASSISTENTE GLOBAL
     opacity: 0;
     pointer-events: none;
     transition: transform 0.28s cubic-bezier(0.22, 1, 0.36, 1), opacity 0.24s ease;
+    overflow: hidden;
 }
 
 body.assistant-open .assistant-backdrop {
@@ -1883,6 +1884,8 @@ body.bulk-delete-mode .assistant-fab {
 }
 
 .assistant-panel-note {
+    width: 100%;
+    min-width: 0;
     padding: 12px 14px;
     border-radius: 16px;
     background: rgba(255,255,255,0.04);
@@ -1890,10 +1893,12 @@ body.bulk-delete-mode .assistant-fab {
     color: rgba(255,255,255,0.7);
     font-size: 0.82rem;
     line-height: 1.45;
+    overflow-wrap: anywhere;
 }
 
 .assistant-messages {
     flex: 1;
+    min-width: 0;
     min-height: 0;
     overflow-y: auto;
     display: flex;
@@ -1905,12 +1910,15 @@ body.bulk-delete-mode .assistant-fab {
 }
 
 .assistant-message {
+    min-width: 0;
     max-width: 92%;
     padding: 12px 14px;
     border-radius: 18px;
     font-size: 0.9rem;
     line-height: 1.55;
     white-space: normal;
+    overflow-wrap: anywhere;
+    word-break: break-word;
 }
 
 .assistant-message-meta {
@@ -2013,6 +2021,7 @@ body.bulk-delete-mode .assistant-fab {
 }
 
 .assistant-suggestions {
+    min-width: 0;
     display: flex;
     flex-wrap: nowrap;
     gap: 8px;
@@ -2038,6 +2047,7 @@ body.bulk-delete-mode .assistant-fab {
 }
 
 .assistant-composer {
+    min-width: 0;
     display: flex;
     align-items: flex-end;
     gap: 10px;
