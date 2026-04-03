@@ -1,4 +1,5 @@
 import React, { startTransition, useCallback, useEffect, useRef, useState } from 'react';
+import { TimerReactPanel } from './TimerReactPanel.jsx';
 import {
     subscribeHomeViewModel,
     selectSound,
@@ -8,7 +9,8 @@ import {
     changeCategory,
     handleFreeFocus,
     toggleBubbleText,
-    openCreateModal
+    openCreateModal,
+    enterPip
 } from '../contracts/home-runtime.js';
 
 // ─── Sound Grid ───
@@ -426,7 +428,7 @@ export default function HomeReactView() {
                     <button id="btnNewTaskHeader" className="btn-new-task-header" onClick={() => openCreateModal()}>
                         <i className="fas fa-plus"></i><span>Nova Tarefa</span>
                     </button>
-                    <button id="btnEnterPip" className="btn-new-task-header secondary-btn btn-pip-trigger" title="Modo PIP (Picture in Picture)">
+                    <button id="btnEnterPip" className="btn-new-task-header secondary-btn btn-pip-trigger" title="Modo PIP (Picture in Picture)" onClick={() => enterPip()}>
                         <i className="fas fa-external-link-alt"></i><span>PIP</span>
                     </button>
                 </div>
@@ -456,38 +458,11 @@ export default function HomeReactView() {
 
                 {/* Center column — Timer stays in HTML, only surround elements are React */}
                 <div className="center-column">
-                    {/* Timer panel — rendered by legacy HTML, we leave a div for it */}
-                    <section className="panel panel-controls">
-                        <div className="panel-header header-controls-wrap">
-                            <span><i className="fas fa-clock"></i> Timer Pomodoro</span>
-                            <CategoryDropdown
-                                categories={snapshot.userCategories}
-                                activeCategory={snapshot.activeCategory}
-                                snapshot={snapshot}
-                            />
-                            <TaskStatusBadge snapshot={snapshot} />
-                        </div>
-
-                        {/* Timer internals stay in HTML — rendered by legacyTimer */}
-                        <div className="timer-modes">
-                            <button className={`mode-btn${snapshot.currentMode === 'focus' ? ' active' : ''}`} data-mode="focus">Foco</button>
-                            <button className={`mode-btn${snapshot.currentMode === 'shortBreak' ? ' active' : ''}`} data-mode="shortBreak">Pausa Curta</button>
-                            <button className={`mode-btn${snapshot.currentMode === 'longBreak' ? ' active' : ''}`} data-mode="longBreak">Pausa Longa</button>
-                        </div>
-                        <div className="timer-display">
-                            <div className="time-control-wrapper">
-                                <button id="decreaseTime5" className="time-adjust-btn"><i className="fas fa-minus"></i></button>
-                                <div className="time-big" id="timerDisplay">25:00</div>
-                                <button id="increaseTime5" className="time-adjust-btn"><i className="fas fa-plus"></i></button>
-                            </div>
-                            <div className="time-label" id="timeLabel">Periodo de Foco</div>
-                        </div>
-                        <div className="timer-controls">
-                            <button id="timerReset" className="ctrl-btn"><i className="fas fa-redo"></i></button>
-                            <button id="timerToggle" className="ctrl-btn btn-play"><i className="fas fa-play"></i></button>
-                        </div>
-                        <div className="timer-progress"><div id="timerProgress" className="progress-bar"></div></div>
-                    </section>
+                    <TimerReactPanel
+                        snapshot={snapshot}
+                        CategoryDropdown={CategoryDropdown}
+                        TaskStatusBadge={TaskStatusBadge}
+                    />
 
                     <div className="bottom-tools-grid">
                         <BreathingPanel />

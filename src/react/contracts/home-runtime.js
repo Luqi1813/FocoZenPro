@@ -61,3 +61,7 @@ export function toggleBubbleText() {
 export function openCreateModal() {
     return readRuntime().openCreateModal?.();
 }
+
+export function enterPip() {
+    return readRuntime().enterPip?.();
+}

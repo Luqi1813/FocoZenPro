@@ -9,7 +9,6 @@ const updateService = window.FocoZenUpdateService;
 const audioService = window.FocoZenAudioService;
 const taskSessionService = window.FocoZenTaskSessionService;
 
-const legacyTimer = window.FocoZenLegacyTimer;
 const legacyTasks = window.FocoZenLegacyTasks;
 const assistantCore = window.FocoZenAssistantCore;
 
@@ -133,6 +132,7 @@ const GOALS_RUNTIME_EDIT_EVENT = 'focozen:goals-runtime-edit';
 const STATS_RUNTIME_CHANGE_EVENT = 'focozen:stats-runtime-change';
 const ASSISTANT_RUNTIME_CHANGE_EVENT = 'focozen:assistant-runtime-change';
 const HOME_RUNTIME_CHANGE_EVENT = 'focozen:home-runtime-change';
+const TIMER_RUNTIME_CHANGE_EVENT = 'focozen:timer-runtime-change';
 
 function cloneRuntimeData(value) {
     if (value === null || value === undefined) return value;
@@ -539,7 +539,66 @@ window.FocoZenHomeRuntime = Object.freeze({
             return false;
         }
         return true;
+    },
+    enterPip() {
+        console.log('[HomeRuntime] Solicitando entrada em PIP...');
+        if (!pipService) {
+            console.error('[HomeRuntime] pipService nao inicializado!');
+            return false;
+        }
+        if (pipService.enter && pipService.enter()) {
+            console.log('[HomeRuntime] PIP aberto com sucesso');
+            isPipModeActive = true;
+            syncStateToPip();
+            return true;
+        }
+        console.warn('[HomeRuntime] pipService.enter() falhou ou nao existe');
+        return false;
     }
+});
+
+// ==========================================
+// TIMER RUNTIME V2
+// ==========================================
+
+function getTimerRuntimeSnapshot() {
+    return {
+        currentMode,
+        timeLeft,
+        totalTimerTime,
+        isTimerRunning,
+        progressTitle: currentTask ? currentTask.name : 'Sessao Livre',
+        progress: timerCore?.getTimerProgress
+            ? timerCore.getTimerProgress({ timeLeft, totalTime: totalTimerTime })
+            : (totalTimerTime > 0 ? ((totalTimerTime - timeLeft) / totalTimerTime) * 100 : 0),
+        timeString: timerCore?.formatTimerLabel
+            ? timerCore.formatTimerLabel(timeLeft)
+            : `${Math.floor(timeLeft / 60).toString().padStart(2, '0')}:${(timeLeft % 60).toString().padStart(2, '0')}`
+    };
+}
+
+function notifyTimerRuntime() {
+    const snapshot = getTimerRuntimeSnapshot();
+    document.title = `${snapshot.timeString} - FocoZen Pro`;
+    window.dispatchEvent(new CustomEvent(TIMER_RUNTIME_CHANGE_EVENT, {
+        detail: snapshot
+    }));
+    // We also notify Home so the progress bubble (liquid glass) updates its "percent" based on the new timer tick
+    notifyHomeRuntime();
+}
+
+window.FocoZenTimerRuntime = Object.freeze({
+    getSnapshot: getTimerRuntimeSnapshot,
+    subscribe(listener) {
+        if (typeof listener !== 'function') return () => {};
+        const handler = (event) => listener(event.detail ?? getTimerRuntimeSnapshot());
+        window.addEventListener(TIMER_RUNTIME_CHANGE_EVENT, handler);
+        return () => window.removeEventListener(TIMER_RUNTIME_CHANGE_EVENT, handler);
+    },
+    onSetMode: (mode) => setTimerMode(mode),
+    onToggleTimer: () => toggleTimer(),
+    onResetTimer: () => resetTimer(),
+    onAdjustTime: (minutes) => adjustTime(minutes)
 });
 
 const motivationalRestartMessages = constantsService?.motivationalRestartMessages ?? [
@@ -568,7 +627,6 @@ function assertRequiredBootstrapContracts() {
     ensureRequiredContract('window.FocoZenAudioService', audioService, ['configure', 'initialize', 'selectSound', 'togglePlay', 'toggleMute', 'setVolume']);
     ensureRequiredContract('window.FocoZenTaskSessionService', taskSessionService, ['configure', 'readSavedSession', 'saveSavedSession', 'createTaskFromAssistant', 'deselectTask', 'promptResumeSession', 'startTask', 'selectTask', 'performTaskSelection', 'toggleTaskComplete']);
 
-    ensureRequiredContract('window.FocoZenLegacyTimer', legacyTimer, ['configure', 'init', 'syncUi', 'applyModeUi', 'setRunningUi', 'updateDisplay', 'updateProgressBar']);
     ensureRequiredContract('window.FocoZenLegacyTasks', legacyTasks, ['configure', 'updatePomodoroSuggestion', 'addTempSubtask', 'removeTempSubtask', 'renderTempSubtasks', 'createOrEditTask', 'renderTasksList', 'renderTasksSidebar', 'openTaskEdit', 'deleteTask', 'toggleSubtask', 'toggleTaskSelection', 'toggleSelectAllTasks', 'deleteSelectedTasks']);
     ensureRequiredContract('window.FocoZenAssistantCore', assistantCore, ['normalizeText', 'detectTemporalContext', 'detectCategory', 'detectDurationMinutes', 'detectSchedule', 'extractTaskDraft', 'getMissingTaskFields', 'expandFollowUp', 'buildReply']);
 }
@@ -685,7 +743,7 @@ function applyFreeFocusUi({ category = 'Livre' } = {}) {
 }
 
 function applyTimerModeUi({ mode = 'focus', resetToggleButton = true } = {}) {
-    legacyTimer.applyModeUi({ mode, resetToggleButton });
+    notifyTimerRuntime();
 }
 
 function hideWelcomeModal() {
@@ -835,21 +893,6 @@ function applyAudioStateToUi() {
 
 
 
-function configureLegacyTimerModule() {
-    const timerModule = ensureRequiredContract('window.FocoZenLegacyTimer', legacyTimer, ['configure']);
-
-    timerModule.configure({
-        timerCore,
-        getCurrentMode: () => currentMode,
-        getTimeLeft: () => timeLeft,
-        getTotalTimerTime: () => totalTimerTime,
-        getIsTimerRunning: () => isTimerRunning,
-        onSetMode: (mode) => setTimerMode(mode),
-        onToggleTimer: () => toggleTimer(),
-        onResetTimer: () => resetTimer(),
-        onAdjustTime: (minutes) => adjustTime(minutes)
-    });
-}
 
 function configureAudioService() {
     const service = ensureRequiredContract('window.FocoZenAudioService', audioService, ['configure']);
@@ -963,14 +1006,13 @@ document.addEventListener('DOMContentLoaded', async () => {
     try { loadDailyQuote(); } catch(e) { console.error('Erro Quote:', e); }
     try { configureAudioService(); } catch(e) { console.error('Erro Audio Service:', e); }
 
-    try { configureLegacyTimerModule(); } catch(e) { console.error('Erro Timer Legacy:', e); }
     try { initTimer(); } catch(e) { console.error('Erro Timer:', e); }
     try { initModals(); } catch(e) { console.error('Erro Modais:', e); }
     try { configureTaskSessionService(); } catch(e) { console.error('Erro Task Session:', e); }
     try { configureLegacyTasksModule(); } catch(e) { console.error('Erro Tasks Legacy:', e); }
     try { initTaskForm(); } catch(e) { console.error('Erro Formulário:', e); }
     try { initSidebarControls(); } catch(e) { console.error('Erro Sidebar:', e); }
-    try { initPipIntegration(); } catch(e) { console.error('Erro PIP:', e); }
+    try { setupPipActions(); } catch(e) { console.error('Erro PIP Actions:', e); }
     try { initAssistant(); } catch(e) { console.error('Erro Assistente:', e); }
 
 
@@ -1270,17 +1312,7 @@ function updateSidebarProfile() {
 // ==========================================
 // INTEGRACAO PIP
 // ==========================================
-function initPipIntegration() {
-    const btnEnterPip = document.getElementById('btnEnterPip');
-    if (btnEnterPip) {
-        btnEnterPip.addEventListener('click', () => {
-            if (pipService?.enter && pipService.enter()) {
-                isPipModeActive = true;
-                syncStateToPip();
-            }
-        });
-    }
-
+function setupPipActions() {
     if (pipService?.onAction) {
         pipService.onAction((action, data) => {
             if (action === 'toggle-play') toggleTimer();
@@ -1353,7 +1385,10 @@ function initPipIntegration() {
 }
 
 function syncStateToPip(extraState = {}) {
-    if (!pipService?.sendState) return;
+    if (!pipService?.sendState) {
+        if (isPipModeActive) console.warn('[PIP] Nao e possivel enviar estado: pipService.sendState ausente');
+        return;
+    }
 
     try {
         const timeString = timerCore?.formatTimerLabel
@@ -1519,7 +1554,7 @@ function updateVolumeDisplay() {
 }
 
 function initTimer() {
-    legacyTimer.init();
+
 }
 
 function adjustTime(minutes) {
@@ -1564,13 +1599,13 @@ let targetEndTime = 0;
 function toggleTimer() {
     if (isTimerRunning) {
         pauseTimer();
-        legacyTimer.setRunningUi(false);
+        notifyTimerRuntime();
         renderProgress();
         renderTasksSidebar();
         syncStateToPip();
     } else {
         isTimerRunning = true;
-        legacyTimer.setRunningUi(true);
+        notifyTimerRuntime();
         renderProgress();
         renderTasksSidebar();
         syncStateToPip();
@@ -1603,7 +1638,7 @@ function toggleTimer() {
 function pauseTimer() {
     isTimerRunning = false;
     clearInterval(timerInterval);
-    legacyTimer.setRunningUi(false);
+    notifyTimerRuntime();
 }
 
 function resetTimer() {
@@ -1940,10 +1975,10 @@ function completeTimer() {
 }
 
 function updateTimerDisplay() {
-    legacyTimer.updateDisplay();
+    notifyTimerRuntime();
 }
 function updateProgressBar() {
-    legacyTimer.updateProgressBar();
+    notifyTimerRuntime();
 }
 
 function showTransitionModal(nextPhase) {
