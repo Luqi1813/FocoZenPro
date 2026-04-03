@@ -1,4 +1,4 @@
-# Estabilizacao Pos-Rollback (Atualizado — Fase 2 concluida)
+# Estabilizacao Pos-Rollback
 
 ## Base ativa agora
 - `renderer.js` segue como coordenador principal do app.
@@ -17,29 +17,29 @@
 - `src/services/updates.js`
 - `src/services/audio.js`
 - `src/services/task-session.js`
-- `src/legacy-renderer/home.js`
-- `src/legacy-renderer/timer.js`
 - `src/legacy-renderer/tasks.js`
 
 > [!NOTE]
-> Ja **removidos** do bootstrap em fases anteriores:
-> - `src/legacy-renderer/goals-stats.js` (migrado p/ React — GoalsReactView + StatsReactView)
-> - `src/legacy-renderer/assistant.js` (migrado p/ React — AssistantReactDock)
+> Ja removidos do bootstrap nas migracoes React:
+> - `src/legacy-renderer/goals-stats.js`
+> - `src/legacy-renderer/assistant.js`
+> - `src/legacy-renderer/home.js`
+> - `src/legacy-renderer/timer.js`
 
 ## Contratos publicos ativos (`window.*`)
 
-### Runtimes React (consumidos pelos componentes React)
+### Runtimes React
 - `window.FocoZenGoalsRuntime`
 - `window.FocoZenStatsRuntime`
 - `window.FocoZenAssistantRuntime`
+- `window.FocoZenHomeRuntime`
+- `window.FocoZenTimerRuntime`
 
 ### Services compartilhados
 - `window.FocoZenAudioService`
 - `window.FocoZenTaskSessionService`
 
-### Legacy renderers (ainda ativos)
-- `window.FocoZenLegacyHome`
-- `window.FocoZenLegacyTimer`
+### Legacy renderers ainda ativos
 - `window.FocoZenLegacyTasks`
 
 ## Donos atuais por responsabilidade
@@ -55,40 +55,42 @@
 - `src/services/*`
   - bridges reais de integracao
   - `storage`, `pip`, `updates`, `audio`, `task-session`
+- `src/react/*`
+  - UI React de Metas, Estatisticas, Assistente, Home e Timer
 - `src/legacy-renderer/*`
-  - UI legado por dominio
+  - UI legado restante de Tarefas
 
 ## Progresso da migracao React
 
-| Dominio | Status | Componente React |
+| Dominio | Status | Implementacao atual |
 |---|---|---|
-| Metas | ✅ Concluido | `GoalsReactView.jsx` |
-| Estatisticas | ✅ Concluido | `StatsReactView.jsx` |
-| Assistente | ✅ Concluido | `AssistantReactDock.jsx` |
-| Tarefas | ✅ Concluido | `TasksReactView.jsx` + `TaskFormModal.jsx` |
-| Home | 🔜 Proximo | — |
-| Timer | 🔴 Pendente | — |
+| Metas | Concluido | `GoalsReactView.jsx` |
+| Estatisticas | Concluido | `StatsReactView.jsx` |
+| Assistente | Concluido | `AssistantReactDock.jsx` |
+| Home | Concluido | `HomeReactView.jsx` |
+| Timer | Concluido | `TimerReactPanel.jsx` |
+| Tarefas | Pendente | `legacy-renderer/tasks.js` |
+
+## Situacao atual do plano
+- Hardening da base com testes automatizados ainda nao foi concluido.
+- Metas, Estatisticas e Assistente ja migraram para React.
+- Home e Timer agora tambem operam por runtimes React.
+- Tarefas seguem como o ultimo dominio legado principal antes da consolidacao em shell React.
 
 ## Regra de seguranca para a trilha atual
 - So carregar modulo no `index.html` quando houver consumo explicito no `renderer.js`.
-- Reintroduzir ou limpar um dominio por vez.
+- Migrar ou limpar um dominio por vez.
 - Fazer smoke manual logo depois de cada integracao relevante.
 - Tratar os contratos globais ativos como obrigatorios no bootstrap.
 - Evitar novamente cleanup amplo multi-dominio.
 
-## Gate atual para abrir React
+## Gate atual para seguir a migracao
 - `renderer.js` deve atuar como coordenador, nao como dono simultaneo de regra de negocio e UI de dominio.
-- React entra em paralelo ao HTML legado atual, sem substituir o bootstrap principal nesta etapa.
 - React deve consumir contratos estaveis de `src/core/*` e `src/services/*`.
-- React nao deve depender de funcoes internas do `renderer.js`.
+- O proximo dominio a migrar por completo e Tarefas.
+- Shell React unico so deve ser aberto depois que Tarefas sair do legado.
 
 ## Nota sobre o renderer grande
-- O tamanho de `renderer.js` sozinho nao bloqueia a etapa 7.
+- O tamanho de `renderer.js` sozinho nao bloqueia a trilha.
 - O criterio principal para modularizacao continua sendo ownership estavel por responsabilidade, nao contagem de linhas.
-- Nao abrir agora uma refatoracao ampla apenas para quebrar o coordenador em varios arquivos.
-- Reavaliar um split pequeno do coordenador depois da etapa 7 e, idealmente, depois do piloto React da etapa 8.
-- Se esse split vier depois, priorizar helpers transversais:
-  - bootstrap/contracts
-  - navegacao e modais globais
-  - helpers de categorias/wizard
-  - answerers e contexto do assistente que nao pertencam ao `assistantCore`
+- A divisao final do coordenador deve acontecer depois do fechamento dos dominos restantes e da consolidacao do shell React.
