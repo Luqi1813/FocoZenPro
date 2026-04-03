@@ -8,7 +8,7 @@ const pipService = window.FocoZenPipService;
 const updateService = window.FocoZenUpdateService;
 const audioService = window.FocoZenAudioService;
 const taskSessionService = window.FocoZenTaskSessionService;
-const legacyHome = window.FocoZenLegacyHome;
+
 const legacyTimer = window.FocoZenLegacyTimer;
 const legacyTasks = window.FocoZenLegacyTasks;
 const assistantCore = window.FocoZenAssistantCore;
@@ -132,6 +132,7 @@ const GOALS_RUNTIME_CHANGE_EVENT = 'focozen:goals-runtime-change';
 const GOALS_RUNTIME_EDIT_EVENT = 'focozen:goals-runtime-edit';
 const STATS_RUNTIME_CHANGE_EVENT = 'focozen:stats-runtime-change';
 const ASSISTANT_RUNTIME_CHANGE_EVENT = 'focozen:assistant-runtime-change';
+const HOME_RUNTIME_CHANGE_EVENT = 'focozen:home-runtime-change';
 
 function cloneRuntimeData(value) {
     if (value === null || value === undefined) return value;
@@ -402,6 +403,145 @@ window.FocoZenAssistantRuntime = Object.freeze({
     }
 });
 
+function getHomeRuntimeSnapshot() {
+    const currentSound = soundsConfig.find((s) => s.id === currentSoundId) || null;
+    const soundTheme = currentSound ? (soundThemes[currentSound.id] || 'default') : 'default';
+
+    const taskProgressPercent = (() => {
+        let percent = 0;
+        if (currentTask?.pomodoros > 0) {
+            percent = (currentTask.completedPomodoros / currentTask.pomodoros) * 100;
+        }
+        if (currentMode === 'focus' && totalTimerTime > 0) {
+            const currentTimerFraction = timerCore?.getTimerProgress
+                ? (timerCore.getTimerProgress({ timeLeft, totalTime: totalTimerTime }) / 100)
+                : ((totalTimerTime - timeLeft) / totalTimerTime);
+            if (currentTask?.pomodoros > 0) {
+                percent = ((currentTask.completedPomodoros + currentTimerFraction) / currentTask.pomodoros) * 100;
+            } else {
+                percent = currentTimerFraction * 100;
+            }
+        }
+        return Math.max(0, Math.min(100, percent));
+    })();
+
+    return {
+        // Audio
+        currentSoundId,
+        currentSoundName: currentSound?.name || null,
+        soundTheme,
+        isPlaying,
+        masterVolume,
+        isMuted,
+        // Task & Mode
+        currentTask: currentTask ? cloneRuntimeData(currentTask) : null,
+        currentMode,
+        timeLeft,
+        totalTimerTime,
+        isTimerRunning,
+        // Progress
+        showBubbleText,
+        taskProgressPercent,
+        progressTitle: currentTask ? currentTask.name : 'Sessao Livre de Foco',
+        // Category
+        userCategories: cloneRuntimeData(userCategories),
+        activeCategory: document.getElementById('globalCategorySelect')?.value || 'Livre'
+    };
+}
+
+function notifyHomeRuntime() {
+    window.dispatchEvent(new CustomEvent(HOME_RUNTIME_CHANGE_EVENT, {
+        detail: getHomeRuntimeSnapshot()
+    }));
+}
+
+window.FocoZenHomeRuntime = Object.freeze({
+    getSnapshot: getHomeRuntimeSnapshot,
+    subscribe(listener) {
+        if (typeof listener !== 'function') return () => {};
+        const handler = (event) => listener(event.detail ?? getHomeRuntimeSnapshot());
+        window.addEventListener(HOME_RUNTIME_CHANGE_EVENT, handler);
+        return () => window.removeEventListener(HOME_RUNTIME_CHANGE_EVENT, handler);
+    },
+    refresh() {
+        notifyHomeRuntime();
+        return getHomeRuntimeSnapshot();
+    },
+    async selectSound(sound, card) {
+        const result = await audioService?.selectSound?.(sound, {
+            toggleOff: !!card,
+            autoplay: true
+        });
+        if (!result?.ok && result?.reason !== 'selection-superseded') {
+            console.error('Erro audio:', result?.error || result?.reason || 'falha desconhecida');
+        }
+        return result;
+    },
+    async toggleMasterPlay() {
+        if (!currentSoundId) {
+            showGlassToast('Selecione algum som para iniciar');
+            return { ok: false, reason: 'no-sound-selected' };
+        }
+        const result = await audioService?.togglePlay?.();
+        if (!result?.ok && result?.reason !== 'no-sound-selected') {
+            console.error('Erro ao alternar audio:', result?.error || result?.reason || 'falha desconhecida');
+        }
+        return result;
+    },
+    toggleMute() {
+        audioService?.toggleMute?.();
+    },
+    setVolume(percent) {
+        audioService?.setVolume?.(percent / 100);
+    },
+    async getSoundGroups() {
+        const groups = audioService?.getCategorizedAvailableSounds?.() ?? [];
+        return cloneRuntimeData(groups);
+    },
+    async initializeAudio() {
+        return audioService?.initialize?.() ?? [];
+    },
+    changeCategory(categoryName) {
+        const globalCategory = document.getElementById('globalCategorySelect');
+        if (globalCategory) globalCategory.value = categoryName;
+        notifyHomeRuntime();
+    },
+    handleFreeFocus() {
+        const hasProgress = currentMode === 'focus' && timeLeft < totalTimerTime;
+        if (hasProgress && typeof window.attemptDeselectTask === 'function') {
+            window.attemptDeselectTask(false);
+            return;
+        }
+        if (currentTask) {
+            taskSessionService?.deselectTask?.();
+        }
+    },
+    toggleBubbleText() {
+        showBubbleText = !showBubbleText;
+        if (storageService?.writeStorageValue) {
+            storageService.writeStorageValue(storageKeys.SHOW_BUBBLE_TEXT, showBubbleText);
+        } else {
+            localStorage.setItem(storageKeys.SHOW_BUBBLE_TEXT, showBubbleText);
+        }
+        notifyHomeRuntime();
+    },
+    openCreateModal() {
+        openCreateModal();
+    },
+    canChangeCategory() {
+        const hasProgress = currentMode === 'focus' && timeLeft < totalTimerTime;
+        if (isTimerRunning || hasProgress) {
+            customAlert('Sessao Ativa', 'Para mudar a categoria, reinicie o temporizador ou conclua a sessao atual.');
+            return false;
+        }
+        if (currentTask) {
+            customAlert('Tarefa Vinculada', 'Para mudar a categoria, edite a tarefa (botao de lapis na barra lateral).');
+            return false;
+        }
+        return true;
+    }
+});
+
 const motivationalRestartMessages = constantsService?.motivationalRestartMessages ?? [
     'Pausar nao e desistir. Voce pode recomecar com mais clareza depois.',
     'Seu progresso conta. Respire, recarregue e volte mais forte.',
@@ -427,7 +567,7 @@ function ensureRequiredContract(name, contract, methods = []) {
 function assertRequiredBootstrapContracts() {
     ensureRequiredContract('window.FocoZenAudioService', audioService, ['configure', 'initialize', 'selectSound', 'togglePlay', 'toggleMute', 'setVolume']);
     ensureRequiredContract('window.FocoZenTaskSessionService', taskSessionService, ['configure', 'readSavedSession', 'saveSavedSession', 'createTaskFromAssistant', 'deselectTask', 'promptResumeSession', 'startTask', 'selectTask', 'performTaskSelection', 'toggleTaskComplete']);
-    ensureRequiredContract('window.FocoZenLegacyHome', legacyHome, ['configure', 'init', 'renderProgress', 'updateTaskBubbleProgress', 'applyAudioStateToUi', 'applySelectedTaskUi', 'applyFreeFocusUi', 'renderTimerDropdown', 'updateCustomDropdownUI']);
+
     ensureRequiredContract('window.FocoZenLegacyTimer', legacyTimer, ['configure', 'init', 'syncUi', 'applyModeUi', 'setRunningUi', 'updateDisplay', 'updateProgressBar']);
     ensureRequiredContract('window.FocoZenLegacyTasks', legacyTasks, ['configure', 'updatePomodoroSuggestion', 'addTempSubtask', 'removeTempSubtask', 'renderTempSubtasks', 'createOrEditTask', 'renderTasksList', 'renderTasksSidebar', 'openTaskEdit', 'deleteTask', 'toggleSubtask', 'toggleTaskSelection', 'toggleSelectAllTasks', 'deleteSelectedTasks']);
     ensureRequiredContract('window.FocoZenAssistantCore', assistantCore, ['normalizeText', 'detectTemporalContext', 'detectCategory', 'detectDurationMinutes', 'detectSchedule', 'extractTaskDraft', 'getMissingTaskFields', 'expandFollowUp', 'buildReply']);
@@ -535,11 +675,13 @@ function checkWizardOnboarding() {
 }
 
 function applySelectedTaskUi(task) {
-    legacyHome.applySelectedTaskUi(task);
+    notifyHomeRuntime();
 }
 
 function applyFreeFocusUi({ category = 'Livre' } = {}) {
-    legacyHome.applyFreeFocusUi({ category });
+    const globalCategory = document.getElementById('globalCategorySelect');
+    if (globalCategory) globalCategory.value = category;
+    notifyHomeRuntime();
 }
 
 function applyTimerModeUi({ mode = 'focus', resetToggleButton = true } = {}) {
@@ -661,7 +803,6 @@ function getCurrentSoundConfig() {
 
 function applyAudioStateToUi() {
     const currentSound = getCurrentSoundConfig();
-    legacyHome.applyAudioStateToUi();
 
     const statsName = document.getElementById('statsPlayerSoundName');
     const goalsName = document.getElementById('goalsPlayerSoundName');
@@ -689,45 +830,10 @@ function applyAudioStateToUi() {
     updateVolumeDisplay();
     updateMasterPlayButton();
     syncStateToPip();
+    notifyHomeRuntime();
 }
 
-function configureLegacyHomeModule() {
-    const homeModule = ensureRequiredContract('window.FocoZenLegacyHome', legacyHome, ['configure']);
 
-    homeModule.configure({
-        audioService,
-        taskSessionService,
-        timerCore,
-        soundsConfig,
-        soundThemes,
-        getCurrentTask: () => currentTask,
-        getCurrentMode: () => currentMode,
-        getTimeLeft: () => timeLeft,
-        getTotalTimerTime: () => totalTimerTime,
-        getIsTimerRunning: () => isTimerRunning,
-        getShowBubbleText: () => showBubbleText,
-        getCurrentSoundId: () => currentSoundId,
-        getIsPlaying: () => isPlaying,
-        getMasterVolume: () => masterVolume,
-        getIsMuted: () => isMuted,
-        getUserCategories: () => userCategories,
-        setShowBubbleText: (value) => { showBubbleText = !!value; },
-        persistShowBubbleText: (value) => {
-            if (storageService?.writeStorageValue) {
-                storageService.writeStorageValue(storageKeys.SHOW_BUBBLE_TEXT, value);
-            } else {
-                localStorage.setItem(storageKeys.SHOW_BUBBLE_TEXT, value);
-            }
-        },
-        showGlassToast,
-        customAlert,
-        openCreateModal,
-        attemptDeselectTask: (isAppClosing) => window.attemptDeselectTask?.(isAppClosing),
-        saveTasks,
-        renderTasksSidebar,
-        syncStateToPip
-    });
-}
 
 function configureLegacyTimerModule() {
     const timerModule = ensureRequiredContract('window.FocoZenLegacyTimer', legacyTimer, ['configure']);
@@ -856,7 +962,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     try { updateSidebarProfile(); initNavigation(); } catch(e) { console.error('Erro Navegacao:', e); }
     try { loadDailyQuote(); } catch(e) { console.error('Erro Quote:', e); }
     try { configureAudioService(); } catch(e) { console.error('Erro Audio Service:', e); }
-    try { configureLegacyHomeModule(); } catch(e) { console.error('Erro Home Legacy:', e); }
+
     try { configureLegacyTimerModule(); } catch(e) { console.error('Erro Timer Legacy:', e); }
     try { initTimer(); } catch(e) { console.error('Erro Timer:', e); }
     try { initModals(); } catch(e) { console.error('Erro Modais:', e); }
@@ -866,7 +972,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     try { initSidebarControls(); } catch(e) { console.error('Erro Sidebar:', e); }
     try { initPipIntegration(); } catch(e) { console.error('Erro PIP:', e); }
     try { initAssistant(); } catch(e) { console.error('Erro Assistente:', e); }
-    try { await legacyHome.init(); } catch(e) { console.error('Erro Home Init:', e); }
+
 
     // ATUALIZACAO FORCADA DAS LISTAS PARA CORRIGIR O BUG "NENHUMA TAREFA"
     try {
@@ -912,11 +1018,13 @@ document.addEventListener('DOMContentLoaded', async () => {
 // CATEGORY ENGINE (V2)
 // ==========================================
 window.updateCustomDropdownUI = function(value) {
-    return legacyHome.updateCustomDropdownUI(value);
+    const globalCategory = document.getElementById('globalCategorySelect');
+    if (globalCategory) globalCategory.value = value;
+    notifyHomeRuntime();
 };
 
 window.renderTimerDropdown = function() {
-    return legacyHome.renderTimerDropdown();
+    notifyHomeRuntime();
 };
 
 window.renderCategoryChips = function() {
@@ -2925,7 +3033,7 @@ function deleteTask(taskId) {
 }
 
 function renderProgress() {
-    return legacyHome.renderProgress();
+    notifyHomeRuntime();
 }
 
 updatePomodoroSuggestion = function() {
@@ -2981,7 +3089,7 @@ window.deleteSelectedTasks = function() {
 };
 
 function updateTaskBubbleProgress() {
-    return legacyHome.updateTaskBubbleProgress();
+    notifyHomeRuntime();
 }
 
 function updateHeaderTaskCount() { const badge = document.getElementById('headerTaskCount'); if (badge) badge.textContent = tasks.filter(t => !t.completed).length; }

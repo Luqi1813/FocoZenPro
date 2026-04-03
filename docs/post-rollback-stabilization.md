@@ -1,4 +1,4 @@
-# Estabilizacao Pos-Rollback
+# Estabilizacao Pos-Rollback (Atualizado — Fase 2 concluida)
 
 ## Base ativa agora
 - `renderer.js` segue como coordenador principal do app.
@@ -19,9 +19,28 @@
 - `src/services/task-session.js`
 - `src/legacy-renderer/home.js`
 - `src/legacy-renderer/timer.js`
-- `src/legacy-renderer/goals-stats.js`
 - `src/legacy-renderer/tasks.js`
-- `src/legacy-renderer/assistant.js`
+
+> [!NOTE]
+> Ja **removidos** do bootstrap em fases anteriores:
+> - `src/legacy-renderer/goals-stats.js` (migrado p/ React — GoalsReactView + StatsReactView)
+> - `src/legacy-renderer/assistant.js` (migrado p/ React — AssistantReactDock)
+
+## Contratos publicos ativos (`window.*`)
+
+### Runtimes React (consumidos pelos componentes React)
+- `window.FocoZenGoalsRuntime`
+- `window.FocoZenStatsRuntime`
+- `window.FocoZenAssistantRuntime`
+
+### Services compartilhados
+- `window.FocoZenAudioService`
+- `window.FocoZenTaskSessionService`
+
+### Legacy renderers (ainda ativos)
+- `window.FocoZenLegacyHome`
+- `window.FocoZenLegacyTimer`
+- `window.FocoZenLegacyTasks`
 
 ## Donos atuais por responsabilidade
 - `renderer.js`
@@ -39,23 +58,16 @@
 - `src/legacy-renderer/*`
   - UI legado por dominio
 
-## Modulos reintroduzidos apos a estabilizacao inicial
-- `src/services/task-session.js`
-  - fluxo operacional de tarefas e sessao salva
-- `src/services/audio.js`
-  - selecao, persistencia e controle de audio
-- `src/legacy-renderer/home.js`
-  - UI legado restante da Home
-- `src/legacy-renderer/timer.js`
-  - UI legado do card de timer
-- `src/legacy-renderer/goals-stats.js`
-  - renderizacao e bindings de Metas/Estatisticas
-- `src/legacy-renderer/tasks.js`
-  - renderizacao e interacao visual de Tarefas
-- `src/core/assistant.js`
-  - parsing e decisao do assistente
-- `src/legacy-renderer/assistant.js`
-  - UI e wiring do assistente
+## Progresso da migracao React
+
+| Dominio | Status | Componente React |
+|---|---|---|
+| Metas | ✅ Concluido | `GoalsReactView.jsx` |
+| Estatisticas | ✅ Concluido | `StatsReactView.jsx` |
+| Assistente | ✅ Concluido | `AssistantReactDock.jsx` |
+| Tarefas | ✅ Concluido | `TasksReactView.jsx` + `TaskFormModal.jsx` |
+| Home | 🔜 Proximo | — |
+| Timer | 🔴 Pendente | — |
 
 ## Regra de seguranca para a trilha atual
 - So carregar modulo no `index.html` quando houver consumo explicito no `renderer.js`.

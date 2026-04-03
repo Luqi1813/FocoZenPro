@@ -77,120 +77,13 @@
         <!-- MAIN VIEWS AREA -->
         <div class="app-main-area">
 
-            <!-- HOME VIEW (Classic App) -->
+            <!-- HOME VIEW (React) -->
             <div id="view-home" class="view-container active">
                 <div class="app-container">
-                    <header class="app-header" style="justify-content: flex-end;">
-                        <div class="header-controls">
-                            <div id="nowPlaying" class="now-playing"><i class="fas fa-music"></i><span>Nenhum som selecionado</span></div>
-                            <button id="btnNewTaskHeader" class="btn-new-task-header"><i class="fas fa-plus"></i><span>Nova Tarefa</span></button>
-                            
-                            <button id="btnEnterPip" class="btn-new-task-header secondary-btn btn-pip-trigger" title="Modo PIP (Picture in Picture)">
-                                <i class="fas fa-external-link-alt"></i><span>PIP</span>
-                            </button>
-                        </div>
-                    </header>
+                    <div id="react-home-root" style="display: contents;"></div>
+                </div><!-- fechar app-container -->
+            </div><!-- fechar view-home -->
 
-        <main class="main-content">
-            <section class="panel panel-sounds">
-                <div class="panel-header panel-sounds-header">
-                    <div class="sounds-player-pill">
-                        <button id="masterPlayPause" class="btn-master-play-icon"><i class="fas fa-play"></i></button>
-                        <button id="btnMuteToggle" class="btn-master-play-icon"><i class="fas fa-volume-up"></i></button>
-                        <input type="range" id="masterVolume" min="0" max="100" value="70" class="header-vol-slider">
-                        <span id="volumeValue" class="header-vol-value">70%</span>
-                    </div>
-                </div>
-                <div class="sounds-section-label"><i class="fas fa-music"></i> Sons Ambientais</div>
-                <div id="soundGrid" class="sound-grid-container"></div>
-            </section>
-
-            <div class="center-column">
-                <section class="panel panel-controls">
-                    <div class="panel-header header-controls-wrap">
-                        <span><i class="fas fa-clock"></i> Timer Pomodoro</span>
-                        <div id="customCategoryDropdown" class="custom-dropdown-container">
-                            <div class="custom-dropdown-trigger" id="catTriggerBtn">
-                                <i id="catTriggerIcon" class="fas fa-infinity"></i>
-                                <span id="catTriggerText">Livre</span>
-                                <i class="fas fa-chevron-down" style="font-size: 0.6rem; margin-left: 4px; opacity: 0.6;"></i>
-                            </div>
-                            <div class="custom-dropdown-menu" id="catMenu">
-                                <div class="custom-dropdown-item active" data-val="Livre"><i class="fas fa-infinity"></i> Livre</div>
-                                <div class="custom-dropdown-item" data-val="Trabalho"><i class="fas fa-briefcase"></i> Trabalho</div>
-                                <div class="custom-dropdown-item" data-val="Estudos"><i class="fas fa-book"></i> Estudos</div>
-                                <div class="custom-dropdown-item" data-val="Projetos"><i class="fas fa-laptop-code"></i> Projetos</div>
-                                <div class="custom-dropdown-item" data-val="Leitura"><i class="fas fa-book-open"></i> Leitura</div>
-                                <div class="custom-dropdown-item" data-val="Hobbies"><i class="fas fa-palette"></i> Hobbies</div>
-                            </div>
-                            <input type="hidden" id="globalCategorySelect" value="Livre">
-                        </div>
-                        <div class="task-status-wrapper">
-                            <span id="currentTaskBadge" class="task-badge free-mode">Sessão Livre</span>
-                            <button id="btnFreeFocus" class="action-pill danger hidden" title="Sair da Tarefa Atual">
-                                <i class="fas fa-times"></i> Fechar
-                            </button>
-                        </div>
-                    </div>
-
-                    <div class="timer-modes">
-                        <button class="mode-btn active" data-mode="focus">Foco</button>
-                        <button class="mode-btn" data-mode="shortBreak">Pausa Curta</button>
-                        <button class="mode-btn" data-mode="longBreak">Pausa Longa</button>
-                    </div>
-
-                    <div class="timer-display">
-                        <div class="time-control-wrapper">
-                            <button id="decreaseTime5" class="time-adjust-btn"><i class="fas fa-minus"></i></button>
-                            <div class="time-big" id="timerDisplay">25:00</div>
-                            <button id="increaseTime5" class="time-adjust-btn"><i class="fas fa-plus"></i></button>
-                        </div>
-                        <div class="time-label" id="timeLabel">Período de Foco</div>
-                    </div>
-
-                    <div class="timer-controls">
-                        <button id="timerReset" class="ctrl-btn"><i class="fas fa-redo"></i></button>
-                        <button id="timerToggle" class="ctrl-btn btn-play"><i class="fas fa-play"></i></button>
-                    </div>
-                    <div class="timer-progress"><div id="timerProgress" class="progress-bar"></div></div>
-                </section>
-
-                <div class="bottom-tools-grid">
-                    <section class="panel panel-breath">
-                        <div class="panel-header">
-                            <span><i class="fas fa-lungs"></i> Respiração 4-7-8</span>
-                            <button id="breathInfo" class="btn-info"><i class="fas fa-info"></i></button>
-                        </div>
-                        <div class="breath-panel-graphic">
-                            <i class="fas fa-wind breath-hero-icon"></i>
-                            <p>Recupere o foco e a clareza mental instantaneamente com esta técnica.</p>
-                        </div>
-                        <button id="btnOpenBreathSession" class="btn-action">Iniciar Sessão</button>
-                    </section>
-
-                    <section class="panel panel-progress">
-                        <div class="panel-header">
-                            <span><i class="fas fa-chart-circle"></i> Progresso</span>
-                            <button id="btnToggleBubbleText" class="btn-info" title="Ocultar Percentagem"><i class="fas fa-eye"></i></button>
-                        </div>
-                        <div id="progressContent" class="progress-content"></div>
-                    </section>
-                </div>
-            </div>
-
-            <section class="panel panel-tasks sidebar-tasks">
-                <div class="panel-header">
-                    <span><i class="fas fa-clipboard-list"></i> Minhas Tarefas</span>
-                    <button id="btnAddTaskModal" class="btn-info"><i class="fas fa-plus"></i></button>
-                </div>
-                <div id="tasksListSidebar" class="tasks-list-sidebar"></div>
-                <div id="emptyStateSidebar" class="empty-state">
-                    <i class="fas fa-clipboard"></i><p>Nenhuma tarefa ainda</p><span>Clique em "Nova Tarefa" para começar</span>
-                </div>
-            </section>
-        </main>
-        </div><!-- fechar app-container -->
-        </div><!-- fechar view-home -->
 
         <!-- STATS VIEW -->
         <div id="view-stats" class="view-container stats-view">
@@ -674,31 +567,6 @@
         </div>
     </div>
 
-    <div id="breathInfoModal" class="modal-overlay">
-        <div class="modal-content-small">
-            <div class="modal-header-small"><h3><i class="fas fa-lungs"></i> Respiração 4-7-8</h3><button id="closeBreathInfoBtn" class="modal-close">×</button></div>
-            <p class="info-text">Técnica do Dr. Andrew Weil baseada em Pranayama do Yoga.</p>
-            <div class="breath-steps-info">
-                <div class="breath-step-info"><div class="step-time">4s</div><div class="step-desc"><strong>Inspire</strong> pelo nariz</div></div>
-                <div class="breath-step-info"><div class="step-time">7s</div><div class="step-desc"><strong>Segure</strong> o ar</div></div>
-                <div class="breath-step-info"><div class="step-time">8s</div><div class="step-desc"><strong>Expire</strong> pela boca</div></div>
-            </div>
-            <div class="info-benefits"><strong>Benefícios:</strong> Reduz ansiedade, melhora foco, acalma mente.</div>
-            <div class="modal-actions"><button id="closeBreathInfo" class="btn-modal primary btn-full">Entendi</button></div>
-        </div>
-    </div>
-
-    <div id="breathActiveModal" class="modal-overlay breath-fullscreen-overlay">
-        <button id="closeBreathActive" class="btn-restore-mini" style="position:fixed; top:12px; right:12px; width:36px; height:36px; background:rgba(255,255,255,0.1); border:1px solid rgba(255,255,255,0.2); border-radius:10px; color:#fff; cursor:pointer; z-index:10; transition:all 0.3s ease; backdrop-filter:blur(10px);" title="Sair da Respiração"><i class="fas fa-times"></i></button>
-        <div class="breath-active-container">
-            <h2 id="breathPhaseTitle" class="breath-phase-title">Prepare-se...</h2>
-            <div id="breathActiveCircle" class="breath-active-circle">
-                <span id="breathTimeText" class="breath-time-text"></span>
-            </div>
-            <p class="breath-tip">Concentre-se apenas no movimento do círculo.</p>
-        </div>
-    </div>
-
     <div id="appToast" class="glass-toast" role="status" aria-live="polite"></div>
 
     <div id="assistantBackdrop" class="assistant-backdrop"></div>
@@ -742,7 +610,6 @@
     <script src="src/services/updates.js"></script>
     <script src="src/services/audio.js"></script>
     <script src="src/services/task-session.js"></script>
-    <script src="src/legacy-renderer/home.js"></script>
     <script src="src/legacy-renderer/timer.js"></script>
     <script src="src/legacy-renderer/tasks.js"></script>
     <script src="src/core/assistant.js"></script>
