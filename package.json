@@ -4,8 +4,10 @@
   "description": "Estúdio de Foco Imersivo",
   "main": "main.js",
   "scripts": {
-    "start": "electron .",
-    "dist": "electron-builder"
+    "start": "npm run react:build && electron .",
+    "react:build": "vite build",
+    "react:watch": "vite build --watch",
+    "dist": "npm run react:build && electron-builder"
   },
   "build": {
     "appId": "com.luqi.focozenpro",
@@ -36,12 +38,16 @@
   "author": "FocoZen",
   "license": "MIT",
   "devDependencies": {
+    "@vitejs/plugin-react": "^6.0.1",
     "electron": "^28.0.0",
-    "electron-builder": "^24.13.3"
+    "electron-builder": "^24.13.3",
+    "vite": "^8.0.3"
   },
   "dependencies": {
     "chart.js": "^4.5.1",
     "electron-log": "^5.4.3",
-    "electron-updater": "^6.8.3"
+    "electron-updater": "^6.8.3",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0"
   }
 }

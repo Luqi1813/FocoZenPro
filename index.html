@@ -10,6 +10,7 @@
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="dist/react/react-app.css">
 </head>
 <body>
     <!-- ===== SVG LIQUID GLASS FILTERS (CodePen-inspired) ===== -->
@@ -310,6 +311,8 @@
                 </div>
             </div>
             <div class="app-container" style="padding-top: 20px; max-width: 1200px; margin: 0 auto; height: auto; min-height: unset; padding-bottom: 60px;">
+                <div id="react-goals-root"></div>
+                <div id="legacyGoalsRoot" style="display:none;">
                 <div style="margin-bottom: 20px; display: flex; justify-content: space-between; align-items: flex-end; gap: 16px; flex-wrap: wrap;">
                     <div>
                         <h2 style="font-size: 1rem; font-weight: 700; margin-bottom: 2px; color: var(--text-secondary); letter-spacing: 3px; text-transform: uppercase;">Metas /</h2>
@@ -419,6 +422,7 @@
                         <div class="goals-list" id="goalsList"></div>
                     </div>
                 </div>
+                </div>
             </div>
         </div>
 
@@ -494,6 +498,10 @@
                         <button id="btnTestMode" onclick="toggleTestMode()" style="padding:8px 18px;border-radius:10px;background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.15);color:var(--text-secondary);font-size:0.85rem;font-weight:600;cursor:pointer;transition:all 0.2s;">🧪 Modo Teste</button>
                         <p style="font-size:0.75rem;color:var(--text-muted);margin-top:6px;">Ativa timer de 5s para testar as fases</p>
                     </div>
+                </section>
+
+                <section class="panel glass-effect" style="padding: 30px; margin-bottom: 24px; border-radius: 20px;">
+                    <div id="react-settings-root"></div>
                 </section>
 
                 <section class="panel glass-effect" style="padding: 30px; border: 1px solid rgba(255,255,255,0.1); border-radius: 20px;">
@@ -753,5 +761,6 @@
     <script src="src/core/assistant.js"></script>
     <script src="src/legacy-renderer/assistant.js"></script>
     <script src="renderer.js"></script>
+    <script type="module" src="dist/react/react-app.js"></script>
 </body>
 </html>

@@ -130,6 +130,105 @@ let assistantSuggestions = [];
 let isAssistantOpen = false;
 let assistantConversationState = null;
 
+const GOALS_RUNTIME_CHANGE_EVENT = 'focozen:goals-runtime-change';
+const GOALS_RUNTIME_EDIT_EVENT = 'focozen:goals-runtime-edit';
+
+function cloneRuntimeData(value) {
+    if (value === null || value === undefined) return value;
+    if (typeof value !== 'object') return value;
+
+    if (typeof structuredClone === 'function') {
+        return structuredClone(value);
+    }
+
+    return JSON.parse(JSON.stringify(value));
+}
+
+function getGoalsRuntimeSnapshot() {
+    return {
+        focusGoals: cloneRuntimeData(focusGoals),
+        focusHistory: cloneRuntimeData(focusHistory),
+        userCategories: cloneRuntimeData(userCategories),
+        username,
+        goalsPeriod: window._goalsPeriod || 'week',
+        statsPeriod: window._statsPeriod || 'week'
+    };
+}
+
+function notifyGoalsRuntime() {
+    window.dispatchEvent(new CustomEvent(GOALS_RUNTIME_CHANGE_EVENT, {
+        detail: getGoalsRuntimeSnapshot()
+    }));
+}
+
+function emitGoalsRuntimeEdit(goalId) {
+    window.dispatchEvent(new CustomEvent(GOALS_RUNTIME_EDIT_EVENT, {
+        detail: { goalId }
+    }));
+}
+
+window.FocoZenGoalsRuntime = Object.freeze({
+    getSnapshot: getGoalsRuntimeSnapshot,
+    subscribe(listener) {
+        if (typeof listener !== 'function') return () => {};
+        const handler = (event) => listener(event.detail ?? getGoalsRuntimeSnapshot());
+        window.addEventListener(GOALS_RUNTIME_CHANGE_EVENT, handler);
+        return () => window.removeEventListener(GOALS_RUNTIME_CHANGE_EVENT, handler);
+    },
+    subscribeEdit(listener) {
+        if (typeof listener !== 'function') return () => {};
+        const handler = (event) => listener(event.detail ?? {});
+        window.addEventListener(GOALS_RUNTIME_EDIT_EVENT, handler);
+        return () => window.removeEventListener(GOALS_RUNTIME_EDIT_EVENT, handler);
+    },
+    refresh() {
+        notifyGoalsRuntime();
+        return getGoalsRuntimeSnapshot();
+    },
+    setGoalsPeriod(period) {
+        window._goalsPeriod = period || 'week';
+        notifyGoalsRuntime();
+        return window._goalsPeriod;
+    },
+    getGoalMomentumContent(overview) {
+        return getGoalMomentumContent(overview);
+    },
+    saveGoal({ goalId = null, category, dailyMinutes, schedule }) {
+        const result = saveGoalEntry({ goalId, category, dailyMinutes, schedule });
+        showGlassToast(result?.message || 'Nao foi possivel salvar a meta.');
+        return result;
+    },
+    deleteGoal(goalId) {
+        return new Promise((resolve) => {
+            const goal = focusGoals.find((item) => item.id === goalId);
+            if (!goal) {
+                resolve({ ok: false, message: 'Meta nao encontrada.' });
+                return;
+            }
+
+            customConfirm(
+                'Excluir Meta',
+                `Deseja excluir a meta da categoria "${goal.category}"?`,
+                () => {
+                    focusGoals = focusGoals.filter((item) => item.id !== goalId);
+                    saveFocusGoals();
+                    if (editingGoalId === goalId) resetGoalForm();
+                    renderStatsGoalsSummary(window._statsPeriod || 'week');
+                    window.compileGoalsData?.();
+                    showGlassToast('Meta removida');
+                    resolve({ ok: true, message: 'Meta removida.' });
+                },
+                () => resolve({ ok: false, cancelled: true, message: 'Acao cancelada.' })
+            );
+        });
+    },
+    startEdit(goalId) {
+        emitGoalsRuntimeEdit(goalId);
+        const goal = focusGoals.find((item) => item.id === goalId) ?? null;
+        return cloneRuntimeData(goal);
+    }
+});
+
 const motivationalRestartMessages = constantsService?.motivationalRestartMessages ?? [
     'Pausar nao e desistir. Voce pode recomecar com mais clareza depois.',
     'Seu progresso conta. Respire, recarregue e volte mais forte.',
@@ -230,14 +329,17 @@ function saveTasks() {
 
 function saveFocusHistory() {
     writeJsonStorage(storageKeys.HISTORY, focusHistory);
+    notifyGoalsRuntime();
 }
 
 function saveFocusGoals() {
     writeJsonStorage(storageKeys.GOALS, focusGoals);
+    notifyGoalsRuntime();
 }
 
 function saveUserCategories() {
     writeJsonStorage(storageKeys.CATEGORIES, userCategories);
+    notifyGoalsRuntime();
 }
 
 function readSavedSession() {
@@ -1869,7 +1971,7 @@ window.toggleTestMode = function() {
     setTimerMode(currentMode);
 };
 
-function customConfirm(title, message, onConfirm) {
+function customConfirm(title, message, onConfirm, onCancel) {
     const overlay = document.createElement('div'); overlay.className = 'modal-overlay active custom-popup';
     overlay.innerHTML = `
         <div class="elegant-popup" style="text-align: center; max-width: 400px;">
@@ -1882,7 +1984,10 @@ function customConfirm(title, message, onConfirm) {
             </div>
         </div>`;
     document.body.appendChild(overlay);
-    overlay.querySelector('.btn-cancel-popup').onclick = () => overlay.remove();
+    overlay.querySelector('.btn-cancel-popup').onclick = () => {
+        overlay.remove();
+        if (onCancel) onCancel();
+    };
     overlay.querySelector('.btn-confirm-popup').onclick = () => { overlay.remove(); if(onConfirm) onConfirm(); };
 }
 
@@ -4085,6 +4190,10 @@ window.editGoalItem = function(goalId) {
 };
 
 window.deleteGoalItem = function(goalId) {
+    if (document.getElementById('react-goals-root')) {
+        return window.FocoZenGoalsRuntime?.deleteGoal?.(goalId);
+    }
+
     const goal = focusGoals.find(item => item.id === goalId);
     if (!goal) return;
 
@@ -4150,14 +4259,27 @@ renderStatsGoalsSummary = function(period) {
 };
 
 renderGoalsComparisonChart = function(period) {
+    if (document.getElementById('react-goals-root')) {
+        if (period) window.FocoZenGoalsRuntime?.setGoalsPeriod?.(period);
+        return window.FocoZenGoalsRuntime?.refresh?.();
+    }
+
     return legacyGoalsStats.renderGoalsComparisonChart(period);
 };
 
 renderGoalsList = function() {
+    if (document.getElementById('react-goals-root')) {
+        return window.FocoZenGoalsRuntime?.refresh?.();
+    }
+
     return legacyGoalsStats.renderGoalsList();
 };
 
 window.compileGoalsData = function() {
+    if (document.getElementById('react-goals-root')) {
+        return window.FocoZenGoalsRuntime?.refresh?.();
+    }
+
     return legacyGoalsStats.compileGoalsData();
 };
 

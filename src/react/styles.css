@@ -1,0 +1,201 @@
+.react-sandbox-shell {
+    display: flex;
+    flex-direction: column;
+    gap: 18px;
+    color: #ffffff;
+}
+
+.react-sandbox-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 16px;
+}
+
+.react-sandbox-kicker {
+    color: var(--text-secondary);
+    font-size: 0.78rem;
+    font-weight: 700;
+    letter-spacing: 1.2px;
+    margin-bottom: 6px;
+    text-transform: uppercase;
+}
+
+.react-sandbox-title {
+    color: #ffffff;
+    font-size: 1.35rem;
+    font-weight: 800;
+    line-height: 1.2;
+    margin: 0;
+}
+
+.react-sandbox-status {
+    align-items: center;
+    background: rgba(124, 137, 217, 0.16);
+    border: 1px solid rgba(124, 137, 217, 0.35);
+    border-radius: 999px;
+    color: #dfe4ff;
+    display: inline-flex;
+    font-size: 0.75rem;
+    font-weight: 700;
+    padding: 7px 12px;
+    text-transform: uppercase;
+}
+
+.react-sandbox-copy {
+    color: var(--text-secondary);
+    font-size: 0.96rem;
+    line-height: 1.65;
+    margin: 0;
+}
+
+.react-sandbox-error {
+    background: rgba(239, 68, 68, 0.12);
+    border: 1px solid rgba(239, 68, 68, 0.25);
+    border-radius: 14px;
+    color: #fecaca;
+    font-size: 0.9rem;
+    padding: 12px 14px;
+}
+
+.react-sandbox-grid {
+    display: grid;
+    gap: 14px;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+}
+
+.react-sandbox-card {
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 18px;
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    min-height: 132px;
+    padding: 18px;
+}
+
+.react-sandbox-label {
+    color: var(--text-muted);
+    font-size: 0.78rem;
+    font-weight: 700;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+}
+
+.react-sandbox-value {
+    color: #ffffff;
+    font-size: 1.35rem;
+    font-weight: 800;
+    line-height: 1.2;
+}
+
+.react-sandbox-meta {
+    color: var(--text-secondary);
+    font-size: 0.83rem;
+    line-height: 1.5;
+    margin-top: auto;
+}
+
+.react-sandbox-contracts {
+    display: grid;
+    gap: 10px;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+}
+
+.react-sandbox-contract {
+    align-items: center;
+    background: rgba(255, 255, 255, 0.035);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 14px;
+    display: flex;
+    font-size: 0.88rem;
+    font-weight: 600;
+    justify-content: space-between;
+    padding: 12px 14px;
+}
+
+.react-sandbox-contract strong {
+    font-size: 0.78rem;
+    letter-spacing: 0.8px;
+    text-transform: uppercase;
+}
+
+.react-sandbox-contract.is-ready strong {
+    color: #86efac;
+}
+
+.react-sandbox-contract.is-missing strong {
+    color: #fca5a5;
+}
+
+@media (max-width: 720px) {
+    .react-sandbox-header {
+        flex-direction: column;
+    }
+
+    .react-sandbox-card {
+        min-height: unset;
+    }
+}
+
+.react-goals-shell {
+    color: #ffffff;
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+}
+
+.react-goals-header {
+    align-items: flex-end;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 16px;
+    justify-content: space-between;
+    margin-bottom: 4px;
+}
+
+.react-goals-toolbar {
+    align-items: center;
+    display: flex;
+    gap: 8px;
+    margin-bottom: 12px;
+}
+
+.react-goals-form-actions {
+    align-items: center;
+    display: flex;
+    gap: 12px;
+    justify-content: flex-end;
+}
+
+.react-goals-inline-error {
+    background: rgba(239, 68, 68, 0.1);
+    border: 1px solid rgba(248, 113, 113, 0.3);
+    border-radius: 16px;
+    color: #fecaca;
+    padding: 14px 16px;
+}
+
+@media (max-width: 768px) {
+    .react-goals-header {
+        align-items: stretch;
+        flex-direction: column;
+    }
+
+    .react-goals-toolbar {
+        justify-content: space-between;
+        margin-bottom: 0;
+    }
+
+    .react-goals-form-actions {
+        flex-direction: column;
+        justify-content: stretch;
+    }
+
+    .react-goals-form-actions .btn-modal {
+        justify-content: center;
+        width: 100%;
+    }
+}

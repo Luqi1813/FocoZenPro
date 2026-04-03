@@ -8,6 +8,8 @@
         return window.FocoZenLegacyGoalsStats;
     };
 
+    const hasReactGoalsMount = () => !!document.getElementById('react-goals-root');
+
     const getState = () => ({
         focusGoals: deps?.getFocusGoals?.() ?? [],
         focusHistory: deps?.getFocusHistory?.() ?? [],
@@ -70,6 +72,8 @@
     };
 
     const renderGoalsComparisonChart = (period) => {
+        if (hasReactGoalsMount()) return;
+
         const listEl = document.getElementById('goalsComparisonList');
         if (!listEl) return;
 
@@ -140,6 +144,8 @@
     };
 
     const renderGoalsList = () => {
+        if (hasReactGoalsMount()) return;
+
         const listEl = document.getElementById('goalsList');
         if (!listEl) return;
 
@@ -185,6 +191,8 @@
     };
 
     const compileGoalsData = () => {
+        if (hasReactGoalsMount()) return;
+
         const period = deps?.getCurrentGoalsPeriod?.() ?? 'week';
         const overview = deps?.getGoalOverviewData?.(period);
         if (!overview) return;
@@ -288,7 +296,7 @@
             });
         }
 
-        if (!goalsInteractionsBound) {
+        if (!goalsInteractionsBound && !hasReactGoalsMount()) {
             goalsInteractionsBound = true;
 
             document.querySelectorAll('#goalsPeriodSelector .goals-period-btn').forEach((button) => {
