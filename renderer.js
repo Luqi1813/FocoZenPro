@@ -12,7 +12,6 @@ const legacyHome = window.FocoZenLegacyHome;
 const legacyTimer = window.FocoZenLegacyTimer;
 const legacyTasks = window.FocoZenLegacyTasks;
 const assistantCore = window.FocoZenAssistantCore;
-const legacyAssistant = window.FocoZenLegacyAssistant;
 
 const storageKeys = storageService?.storageKeys ?? {
     TASKS: 'focozen_tasks',
@@ -132,6 +131,7 @@ let assistantConversationState = null;
 const GOALS_RUNTIME_CHANGE_EVENT = 'focozen:goals-runtime-change';
 const GOALS_RUNTIME_EDIT_EVENT = 'focozen:goals-runtime-edit';
 const STATS_RUNTIME_CHANGE_EVENT = 'focozen:stats-runtime-change';
+const ASSISTANT_RUNTIME_CHANGE_EVENT = 'focozen:assistant-runtime-change';
 
 function cloneRuntimeData(value) {
     if (value === null || value === undefined) return value;
@@ -266,6 +266,23 @@ function notifyStatsRuntime() {
     }));
 }
 
+function getAssistantRuntimeSnapshot() {
+    return {
+        messages: cloneRuntimeData(assistantMessages),
+        suggestions: cloneRuntimeData(assistantSuggestions),
+        isOpen: !!isAssistantOpen,
+        isTyping: !!window._assistantTyping,
+        username,
+        contextLabel: `${getAssistantViewLabel()} - respostas com base nos seus dados`
+    };
+}
+
+function notifyAssistantRuntime() {
+    window.dispatchEvent(new CustomEvent(ASSISTANT_RUNTIME_CHANGE_EVENT, {
+        detail: getAssistantRuntimeSnapshot()
+    }));
+}
+
 window.FocoZenGoalsRuntime = Object.freeze({
     getSnapshot: getGoalsRuntimeSnapshot,
     subscribe(listener) {
@@ -353,6 +370,38 @@ window.FocoZenStatsRuntime = Object.freeze({
     }
 });
 
+window.FocoZenAssistantRuntime = Object.freeze({
+    getSnapshot: getAssistantRuntimeSnapshot,
+    subscribe(listener) {
+        if (typeof listener !== 'function') return () => {};
+        const handler = (event) => listener(event.detail ?? getAssistantRuntimeSnapshot());
+        window.addEventListener(ASSISTANT_RUNTIME_CHANGE_EVENT, handler);
+        return () => window.removeEventListener(ASSISTANT_RUNTIME_CHANGE_EVENT, handler);
+    },
+    submit(text) {
+        return handleAssistantSubmit(text);
+    },
+    reset() {
+        return resetAssistantChat();
+    },
+    setOpen(open) {
+        return setAssistantOpen(open);
+    },
+    handleAction(actionType, actionValue) {
+        if (actionType === 'view' && actionValue) {
+            switchViewFromAssistant(actionValue, true);
+            return true;
+        }
+
+        if (actionType === 'prompt' && actionValue) {
+            handleAssistantSubmit(actionValue);
+            return true;
+        }
+
+        return false;
+    }
+});
+
 const motivationalRestartMessages = constantsService?.motivationalRestartMessages ?? [
     'Pausar nao e desistir. Voce pode recomecar com mais clareza depois.',
     'Seu progresso conta. Respire, recarregue e volte mais forte.',
@@ -382,7 +431,6 @@ function assertRequiredBootstrapContracts() {
     ensureRequiredContract('window.FocoZenLegacyTimer', legacyTimer, ['configure', 'init', 'syncUi', 'applyModeUi', 'setRunningUi', 'updateDisplay', 'updateProgressBar']);
     ensureRequiredContract('window.FocoZenLegacyTasks', legacyTasks, ['configure', 'updatePomodoroSuggestion', 'addTempSubtask', 'removeTempSubtask', 'renderTempSubtasks', 'createOrEditTask', 'renderTasksList', 'renderTasksSidebar', 'openTaskEdit', 'deleteTask', 'toggleSubtask', 'toggleTaskSelection', 'toggleSelectAllTasks', 'deleteSelectedTasks']);
     ensureRequiredContract('window.FocoZenAssistantCore', assistantCore, ['normalizeText', 'detectTemporalContext', 'detectCategory', 'detectDurationMinutes', 'detectSchedule', 'extractTaskDraft', 'getMissingTaskFields', 'expandFollowUp', 'buildReply']);
-    ensureRequiredContract('window.FocoZenLegacyAssistant', legacyAssistant, ['configure', 'init', 'renderMessages', 'renderSuggestions', 'setOpen', 'updateContext', 'resetChat', 'handleSubmit']);
 }
 
 function getTaskFocusDurationSeconds(task = currentTask) {
@@ -778,79 +826,6 @@ function configureLegacyTasksModule() {
     });
 }
 
-function configureLegacyAssistantModule() {
-    const assistantModule = ensureRequiredContract('window.FocoZenLegacyAssistant', legacyAssistant, ['configure']);
-
-    assistantModule.configure({
-        assistantCore,
-        getAssistantMessages: () => assistantMessages,
-        getAssistantSuggestions: () => assistantSuggestions,
-        getAssistantConversationState: () => assistantConversationState,
-        getIsAssistantOpen: () => isAssistantOpen,
-        getUsername: () => username,
-        setAssistantMessages: (value) => { assistantMessages = Array.isArray(value) ? value : []; },
-        setAssistantSuggestions: (value) => { assistantSuggestions = Array.isArray(value) ? value : []; },
-        setAssistantConversationState: (value) => { assistantConversationState = value; },
-        setIsAssistantOpen: (value) => { isAssistantOpen = !!value; },
-        persistAssistantMessages,
-        getIsTyping: () => !!window._assistantTyping,
-        setIsTyping: (value) => { window._assistantTyping = !!value; },
-        createAssistantWelcomeMessage,
-        getDefaultSuggestions: (viewId) => getAssistantDefaultSuggestions(viewId),
-        readStoredMessages: () => readJsonStorage(getAssistantStorageKey(), []),
-        getAssistantViewLabel: (viewId) => getAssistantViewLabel(viewId),
-        getFollowUpContext: () => ({
-            ...(assistantConversationState || {}),
-            defaultCategories,
-            userCategories,
-            focusGoals
-        }),
-        getReplyContext: () => ({
-            answerers: {
-                assistantHelp: () => answerAssistantHelp(),
-                broaderGuidance: (text) => answerBroaderGuidance(text),
-                focusNow: () => answerFocusNow(),
-                goalList: () => answerGoalList(),
-                removeAllGoals: () => removeAllGoalsFromAssistant(),
-                removeGoal: (text) => removeGoalFromAssistant(text),
-                saveGoal: (text) => saveGoalFromAssistant(text),
-                timerControl: (text) => answerTimerControl(text),
-                taskCreateOrStart: (text) => answerTaskCreateOrStart(text),
-                focusTotal: (text) => answerFocusTotal(text),
-                topCategory: (text) => answerTopCategory(text),
-                goalHits: (text) => answerGoalHits(text),
-                categoryStatus: (text) => answerCategoryStatus(text),
-                plannedVsActual: (text) => answerPlannedVsActual(text),
-                trend: (text) => answerTrend(text),
-                summary: (text) => answerSummary(text),
-                laggingGoal: (text) => answerLaggingGoal(text),
-                pomodoros: (text) => answerPomodoros(text),
-                performanceAssessment: (text) => answerPerformanceAssessment(text),
-                goalRealism: (text) => answerGoalRealism(text),
-                goalAdjustmentAdvice: () => answerGoalAdjustmentAdvice(),
-                categoryChangeAdvice: (text) => answerCategoryChangeAdvice(text),
-                goalCount: () => answerGoalCount(),
-                categoriesWithoutGoal: () => answerCategoriesWithoutGoal(),
-                tasks: () => answerTasks()
-            },
-            effects: {
-                switchView
-            },
-            conversationState: assistantConversationState,
-            defaultCategories,
-            userCategories,
-            focusGoals,
-            pomodoroMinutes: POMODORO_MINUTES,
-            findTaskByText: findAssistantTaskByText,
-            getDefaultSuggestions: (viewId) => getAssistantDefaultSuggestions(viewId),
-            getDefaultPeriod: () => getAssistantDefaultPeriod()
-        }),
-        personalizeAssistantReply,
-        switchViewFromAssistant,
-        customConfirm
-    });
-}
-
 // INICIALIZACAO BLINDADA
 document.addEventListener('DOMContentLoaded', async () => {
     console.log("Iniciando FocoZen Pro...");
@@ -887,7 +862,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     try { initModals(); } catch(e) { console.error('Erro Modais:', e); }
     try { configureTaskSessionService(); } catch(e) { console.error('Erro Task Session:', e); }
     try { configureLegacyTasksModule(); } catch(e) { console.error('Erro Tasks Legacy:', e); }
-    try { configureLegacyAssistantModule(); } catch(e) { console.error('Erro Assistant Legacy:', e); }
     try { initTaskForm(); } catch(e) { console.error('Erro Formulário:', e); }
     try { initSidebarControls(); } catch(e) { console.error('Erro Sidebar:', e); }
     try { initPipIntegration(); } catch(e) { console.error('Erro PIP:', e); }
@@ -1076,6 +1050,7 @@ window.finishWizard = function() {
     writeJsonStorage(storageKeys.WIZARD_CATEGORIES, wizSelectedCats);
     updateSidebarProfile();
     notifyStatsRuntime();
+    notifyAssistantRuntime();
     document.getElementById('wizardModal').classList.remove('active');
 };
 
@@ -1144,6 +1119,7 @@ function initNavigation() {
             }
             updateSidebarProfile();
             notifyStatsRuntime();
+            notifyAssistantRuntime();
             const msg = document.getElementById('settingsSavedMsg');
             if (msg) { msg.style.display = 'flex'; setTimeout(() => msg.style.display = 'none', 3000); }
         }
@@ -5095,64 +5071,11 @@ function pushAssistantMessage(role, content, actions = []) {
 }
 
 function renderAssistantMessages() {
-    const container = document.getElementById('assistantMessages');
-    if (!container) return;
-
-    const typingMarkup = window._assistantTyping
-        ? `
-            <div class="assistant-message assistant typing">
-                <span class="assistant-dot"></span>
-                <span class="assistant-dot"></span>
-                <span class="assistant-dot"></span>
-            </div>
-        `
-        : '';
-
-    container.innerHTML = assistantMessages.map(message => {
-        const actionsMarkup = Array.isArray(message.actions) && message.actions.length
-            ? `
-                <div class="assistant-message-actions">
-                    ${message.actions.map(action => `
-                        <button
-                            class="assistant-message-action"
-                            type="button"
-                            data-assistant-action-type="${escapeHtml(action.type)}"
-                            data-assistant-action-value="${encodeURIComponent(action.value || '')}">
-                            ${escapeHtml(action.label)}
-                        </button>
-                    `).join('')}
-                </div>
-            `
-            : '';
-
-        const metaMarkup = message.role === 'assistant'
-            ? `<div class="assistant-message-meta"><i class="fas fa-brain"></i><span>Assistente</span></div>`
-            : `<div class="assistant-message-meta"><i class="fas fa-user"></i><span>${escapeHtml((username || 'Voce').split(' ')[0])}</span></div>`;
-
-        return `
-            <div class="assistant-message ${message.role}">
-                ${metaMarkup}
-                <div>${formatAssistantContent(message.content)}</div>
-                ${actionsMarkup}
-            </div>
-        `;
-    }).join('') + typingMarkup;
-
-    container.scrollTop = container.scrollHeight;
+    notifyAssistantRuntime();
 }
 
 function renderAssistantSuggestions() {
-    const container = document.getElementById('assistantSuggestions');
-    if (!container) return;
-
-    container.innerHTML = assistantSuggestions.map(item => `
-        <button
-            class="assistant-suggestion-btn"
-            type="button"
-            data-assistant-prompt="${encodeURIComponent(item)}">
-            ${escapeHtml(item)}
-        </button>
-    `).join('');
+    notifyAssistantRuntime();
 }
 
 function setAssistantOpen(open) {
@@ -5160,10 +5083,8 @@ function setAssistantOpen(open) {
     document.body.classList.toggle('assistant-open', isAssistantOpen);
     const dock = document.getElementById('assistantDock');
     if (dock) dock.setAttribute('aria-hidden', String(!isAssistantOpen));
-    if (isAssistantOpen) {
-        document.getElementById('assistantInput')?.focus();
-        renderAssistantMessages();
-    }
+    notifyAssistantRuntime();
+    return isAssistantOpen;
 }
 
 function switchViewFromAssistant(viewId, closeAfter = true) {
@@ -5171,13 +5092,6 @@ function switchViewFromAssistant(viewId, closeAfter = true) {
     if (closeAfter) {
         requestAnimationFrame(() => setAssistantOpen(false));
     }
-}
-
-function autoResizeAssistantInput() {
-    const input = document.getElementById('assistantInput');
-    if (!input) return;
-    input.style.height = 'auto';
-    input.style.height = `${Math.min(input.scrollHeight, 140)}px`;
 }
 
 function updateAssistantContext() {
@@ -5217,14 +5131,17 @@ function initAssistant() {
     renderAssistantMessages();
     updateAssistantContext();
 
+    if (window._assistantInteractionsBound) {
+        notifyAssistantRuntime();
+        return;
+    }
+
+    window._assistantInteractionsBound = true;
+
     const fab = document.getElementById('assistantFab');
     const backdrop = document.getElementById('assistantBackdrop');
     const closeBtn = document.getElementById('assistantCloseBtn');
     const clearBtn = document.getElementById('assistantClearBtn');
-    const form = document.getElementById('assistantComposer');
-    const input = document.getElementById('assistantInput');
-    const messages = document.getElementById('assistantMessages');
-    const suggestions = document.getElementById('assistantSuggestions');
 
     fab?.addEventListener('click', () => setAssistantOpen(true));
     closeBtn?.addEventListener('click', () => setAssistantOpen(false));
@@ -5237,75 +5154,30 @@ function initAssistant() {
         });
     });
 
-    form?.addEventListener('submit', (event) => {
-        event.preventDefault();
-        handleAssistantSubmit();
-    });
-
-    input?.addEventListener('input', autoResizeAssistantInput);
-    input?.addEventListener('keydown', (event) => {
-        if (event.key === 'Enter' && !event.shiftKey) {
-            event.preventDefault();
-            handleAssistantSubmit();
-        }
-        if (event.key === 'Escape' && isAssistantOpen) {
-            setAssistantOpen(false);
-        }
-    });
-
-    suggestions?.addEventListener('click', (event) => {
-        const button = event.target.closest('[data-assistant-prompt]');
-        if (!button) return;
-        const prompt = decodeURIComponent(button.dataset.assistantPrompt || '');
-        if (!prompt) return;
-        input.value = prompt;
-        autoResizeAssistantInput();
-        handleAssistantSubmit();
-    });
-
-    messages?.addEventListener('click', (event) => {
-        const button = event.target.closest('[data-assistant-action-type]');
-        if (!button) return;
-        const type = button.dataset.assistantActionType;
-        const value = decodeURIComponent(button.dataset.assistantActionValue || '');
-        if (type === 'view' && value) {
-            switchViewFromAssistant(value, true);
-            return;
-        }
-        if (type === 'prompt' && value) {
-            input.value = value;
-            autoResizeAssistantInput();
-            handleAssistantSubmit();
-        }
-    });
-
     document.addEventListener('keydown', (event) => {
         if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'j') {
             event.preventDefault();
             setAssistantOpen(!isAssistantOpen);
         }
-    });
 
-    autoResizeAssistantInput();
+        if (event.key === 'Escape' && isAssistantOpen) {
+            setAssistantOpen(false);
+        }
+    });
 }
 
-function handleAssistantSubmit() {
-    const input = document.getElementById('assistantInput');
-    if (!input) return;
-
-    const rawText = input.value.trim();
-    if (!rawText) return;
+function handleAssistantSubmit(rawText = null) {
+    const text = String(rawText || '').trim();
+    if (!text) return;
 
     setAssistantOpen(true);
-    pushAssistantMessage('user', rawText);
-    input.value = '';
-    autoResizeAssistantInput();
+    pushAssistantMessage('user', text);
     window._assistantTyping = true;
     renderAssistantMessages();
 
     setTimeout(() => {
-        const expandedText = expandAssistantFollowUp(rawText);
-        const reply = personalizeAssistantReply(buildAssistantReply(expandedText, rawText));
+        const expandedText = expandAssistantFollowUp(text);
+        const reply = personalizeAssistantReply(buildAssistantReply(expandedText, text));
         window._assistantTyping = false;
         if (reply.context) assistantConversationState = reply.context;
         pushAssistantMessage('assistant', reply.content, reply.actions || []);
@@ -7262,36 +7134,6 @@ buildAssistantReply = function(text) {
         getDefaultSuggestions: (viewId) => getAssistantDefaultSuggestions(viewId),
         getDefaultPeriod: () => getAssistantDefaultPeriod()
     });
-};
-
-renderAssistantMessages = function() {
-    return legacyAssistant.renderMessages();
-};
-
-renderAssistantSuggestions = function() {
-    return legacyAssistant.renderSuggestions();
-};
-
-setAssistantOpen = function(open) {
-    return legacyAssistant.setOpen(open);
-};
-
-updateAssistantContext = function() {
-    return legacyAssistant.updateContext();
-};
-
-window.updateAssistantContext = updateAssistantContext;
-
-resetAssistantChat = function() {
-    return legacyAssistant.resetChat();
-};
-
-initAssistant = function() {
-    return legacyAssistant.init();
-};
-
-handleAssistantSubmit = function(rawText = null) {
-    return legacyAssistant.handleSubmit(rawText);
 };
 
 // TEST FUNCTION - Call from DevTools console: testChangelog()

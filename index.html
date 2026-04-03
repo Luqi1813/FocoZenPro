@@ -728,23 +728,7 @@
             </div>
         </div>
 
-        <div class="assistant-panel-note">
-            Pergunte de forma natural sobre metas, historico, foco, categorias e desempenho.
-        </div>
-
-        <div id="assistantMessages" class="assistant-messages" aria-live="polite"></div>
-
-        <div class="assistant-suggestions-block">
-            <div class="assistant-suggestions-label">Sugestoes</div>
-            <div id="assistantSuggestions" class="assistant-suggestions"></div>
-        </div>
-
-        <form id="assistantComposer" class="assistant-composer">
-            <textarea id="assistantInput" rows="1" placeholder="Ex: quanto foquei esta semana? ou crie uma meta de 2h por dia para Estudos"></textarea>
-            <button id="assistantSendBtn" class="assistant-send-btn" type="submit">
-                <i class="fas fa-paper-plane"></i>
-            </button>
-        </form>
+        <div id="react-assistant-root"></div>
     </aside>
 
     <script src="./node_modules/chart.js/dist/chart.umd.js"></script>
@@ -762,7 +746,6 @@
     <script src="src/legacy-renderer/timer.js"></script>
     <script src="src/legacy-renderer/tasks.js"></script>
     <script src="src/core/assistant.js"></script>
-    <script src="src/legacy-renderer/assistant.js"></script>
     <script src="renderer.js"></script>
     <script type="module" src="dist/react/react-app.js"></script>
 </body>

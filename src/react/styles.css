@@ -1,3 +1,9 @@
+#react-assistant-root {
+    display: flex;
+    flex: 1;
+    min-height: 0;
+}
+
 .react-sandbox-shell {
     display: flex;
     flex-direction: column;
@@ -206,6 +212,17 @@
     border-radius: 16px;
     color: #fecaca;
     padding: 14px 16px;
+}
+
+.react-assistant-shell {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    min-height: 0;
+}
+
+.react-assistant-shell .assistant-messages {
+    min-height: 0;
 }
 
 @media (max-width: 768px) {
