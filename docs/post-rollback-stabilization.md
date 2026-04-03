@@ -17,7 +17,6 @@
 - `src/services/updates.js`
 - `src/services/audio.js`
 - `src/services/task-session.js`
-- `src/legacy-renderer/tasks.js`
 
 > [!NOTE]
 > Ja removidos do bootstrap nas migracoes React:
@@ -25,6 +24,7 @@
 > - `src/legacy-renderer/assistant.js`
 > - `src/legacy-renderer/home.js`
 > - `src/legacy-renderer/timer.js`
+> - `src/legacy-renderer/tasks.js`
 
 ## Contratos publicos ativos (`window.*`)
 
@@ -34,13 +34,11 @@
 - `window.FocoZenAssistantRuntime`
 - `window.FocoZenHomeRuntime`
 - `window.FocoZenTimerRuntime`
+- `window.FocoZenTasksRuntime`
 
 ### Services compartilhados
 - `window.FocoZenAudioService`
 - `window.FocoZenTaskSessionService`
-
-### Legacy renderers ainda ativos
-- `window.FocoZenLegacyTasks`
 
 ## Donos atuais por responsabilidade
 - `renderer.js`
@@ -57,8 +55,6 @@
   - `storage`, `pip`, `updates`, `audio`, `task-session`
 - `src/react/*`
   - UI React de Metas, Estatisticas, Assistente, Home e Timer
-- `src/legacy-renderer/*`
-  - UI legado restante de Tarefas
 
 ## Progresso da migracao React
 
@@ -69,13 +65,14 @@
 | Assistente | Concluido | `AssistantReactDock.jsx` |
 | Home | Concluido | `HomeReactView.jsx` |
 | Timer | Concluido | `TimerReactPanel.jsx` |
-| Tarefas | Pendente | `legacy-renderer/tasks.js` |
+| Tarefas | Concluido | `TasksReactSidebar.jsx` + `FocoZenTasksRuntime` |
 
 ## Situacao atual do plano
 - Hardening da base com testes automatizados ainda nao foi concluido.
 - Metas, Estatisticas e Assistente ja migraram para React.
 - Home e Timer agora tambem operam por runtimes React.
-- Tarefas seguem como o ultimo dominio legado principal antes da consolidacao em shell React.
+- Tarefas agora tambem operam por runtime React e sairam do bootstrap legado.
+- O proximo passo arquitetural deixa de ser "migrar um dominio legado" e passa a ser consolidar o shell React e endurecer a base com testes.
 
 ## Regra de seguranca para a trilha atual
 - So carregar modulo no `index.html` quando houver consumo explicito no `renderer.js`.
@@ -87,8 +84,8 @@
 ## Gate atual para seguir a migracao
 - `renderer.js` deve atuar como coordenador, nao como dono simultaneo de regra de negocio e UI de dominio.
 - React deve consumir contratos estaveis de `src/core/*` e `src/services/*`.
-- O proximo dominio a migrar por completo e Tarefas.
-- Shell React unico so deve ser aberto depois que Tarefas sair do legado.
+- O proximo marco passa a ser consolidar o shell React unico.
+- Hardening da base com testes automatizados segue pendente e deve acontecer antes do cleanup final.
 
 ## Nota sobre o renderer grande
 - O tamanho de `renderer.js` sozinho nao bloqueia a trilha.
