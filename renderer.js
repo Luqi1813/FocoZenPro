@@ -10,7 +10,6 @@ const audioService = window.FocoZenAudioService;
 const taskSessionService = window.FocoZenTaskSessionService;
 const legacyHome = window.FocoZenLegacyHome;
 const legacyTimer = window.FocoZenLegacyTimer;
-const legacyGoalsStats = window.FocoZenLegacyGoalsStats;
 const legacyTasks = window.FocoZenLegacyTasks;
 const assistantCore = window.FocoZenAssistantCore;
 const legacyAssistant = window.FocoZenLegacyAssistant;
@@ -132,6 +131,7 @@ let assistantConversationState = null;
 
 const GOALS_RUNTIME_CHANGE_EVENT = 'focozen:goals-runtime-change';
 const GOALS_RUNTIME_EDIT_EVENT = 'focozen:goals-runtime-edit';
+const STATS_RUNTIME_CHANGE_EVENT = 'focozen:stats-runtime-change';
 
 function cloneRuntimeData(value) {
     if (value === null || value === undefined) return value;
@@ -164,6 +164,105 @@ function notifyGoalsRuntime() {
 function emitGoalsRuntimeEdit(goalId) {
     window.dispatchEvent(new CustomEvent(GOALS_RUNTIME_EDIT_EVENT, {
         detail: { goalId }
+    }));
+}
+
+function getStatsCompletionRate() {
+    const totalTasks = tasks.length;
+    const completedTasks = tasks.filter((task) => task.completed).length;
+
+    if (totalTasks === 0 && focusHistory.length > 0) {
+        return 80;
+    }
+
+    if (totalTasks > 0) {
+        return Math.round((completedTasks / totalTasks) * 100);
+    }
+
+    return 0;
+}
+
+function buildStatsGoalsSummaryData(period) {
+    const overview = getGoalOverviewData(period);
+    const momentum = getGoalMomentumContent(overview);
+    const series = getGoalEvolutionSeriesData(period);
+    const periodLabel = getPeriodLabel(period);
+
+    if (!overview.summaries.length || !series.length) {
+        return {
+            periodLabel,
+            badge: momentum.badge,
+            headline: momentum.headline,
+            caption: '',
+            isEmpty: true,
+            emptyMessage: 'Defina metas na aba Metas para acompanhar a evolucao do seu plano por periodo.',
+            totalActualLabel: formatMinutesToHours(overview.totalActual),
+            totalTargetLabel: formatMinutesToHours(overview.totalTarget),
+            overallPercent: 0
+        };
+    }
+
+    const overallPercent = overview.totalTarget > 0
+        ? Math.max(0, Math.round((overview.totalActual / overview.totalTarget) * 100))
+        : 0;
+
+    return {
+        periodLabel,
+        badge: momentum.badge,
+        headline: momentum.headline,
+        caption: '',
+        isEmpty: false,
+        emptyMessage: '',
+        totalActualLabel: formatMinutesToHours(overview.totalActual),
+        totalTargetLabel: formatMinutesToHours(overview.totalTarget),
+        overallPercent
+    };
+}
+
+function getStatsRuntimeSnapshot() {
+    const { todayMinutes, weekMinutes } = getFocusWindowSummaryData();
+    const greetingState = getFocusGreetingStateData({ todayMinutes, weekMinutes });
+    const { currentStreak, maxStreak } = getFocusStreakSummaryData();
+    const firstName = String(username || 'Convidado').split(' ')[0];
+    const statsPeriod = window._statsPeriod || 'week';
+
+    let greetingTitle = `Mandou bem, ${firstName}!`;
+    let greetingSubtitle = 'Aqui esta o resumo do seu foco.';
+
+    if (greetingState === 'master') {
+        greetingTitle = `Mestre do Foco, ${firstName}`;
+        greetingSubtitle = 'Seu desempenho hoje foi excepcional.';
+    } else if (greetingState === 'consistent') {
+        greetingTitle = `Consistente, ${firstName}`;
+        greetingSubtitle = 'Otimo ritmo, cada minuto focado conta.';
+    } else if (greetingState === 'start') {
+        greetingTitle = `Hora de focar, ${firstName}`;
+        greetingSubtitle = 'Inicie uma sessao de foco para registrar seu dia.';
+    }
+
+    return {
+        focusHistory: cloneRuntimeData(focusHistory),
+        tasks: cloneRuntimeData(tasks),
+        username,
+        statsPeriod,
+        cards: {
+            todayFocus: formatMinutesToHours(todayMinutes),
+            weekFocus: formatMinutesToHours(weekMinutes),
+            currentStreak,
+            maxStreak,
+            completionRate: getStatsCompletionRate()
+        },
+        greeting: {
+            title: greetingTitle,
+            subtitle: greetingSubtitle
+        },
+        goalsSummary: buildStatsGoalsSummaryData(statsPeriod)
+    };
+}
+
+function notifyStatsRuntime() {
+    window.dispatchEvent(new CustomEvent(STATS_RUNTIME_CHANGE_EVENT, {
+        detail: getStatsRuntimeSnapshot()
     }));
 }
 
@@ -229,6 +328,31 @@ window.FocoZenGoalsRuntime = Object.freeze({
     }
 });
 
+window.FocoZenStatsRuntime = Object.freeze({
+    getSnapshot: getStatsRuntimeSnapshot,
+    subscribe(listener) {
+        if (typeof listener !== 'function') return () => {};
+        const handler = (event) => listener(event.detail ?? getStatsRuntimeSnapshot());
+        window.addEventListener(STATS_RUNTIME_CHANGE_EVENT, handler);
+        return () => window.removeEventListener(STATS_RUNTIME_CHANGE_EVENT, handler);
+    },
+    refresh() {
+        notifyStatsRuntime();
+        return getStatsRuntimeSnapshot();
+    },
+    setStatsPeriod(period) {
+        window._statsPeriod = period || 'week';
+        notifyStatsRuntime();
+        return window._statsPeriod;
+    },
+    renderCategoriesChart(canvasEl, legendEl, history) {
+        return renderCategoriesChart(canvasEl, legendEl, history);
+    },
+    renderPeriodBarChart(canvasEl, history, period) {
+        return renderPeriodBarChart(canvasEl, history, period);
+    }
+});
+
 const motivationalRestartMessages = constantsService?.motivationalRestartMessages ?? [
     'Pausar nao e desistir. Voce pode recomecar com mais clareza depois.',
     'Seu progresso conta. Respire, recarregue e volte mais forte.',
@@ -256,7 +380,6 @@ function assertRequiredBootstrapContracts() {
     ensureRequiredContract('window.FocoZenTaskSessionService', taskSessionService, ['configure', 'readSavedSession', 'saveSavedSession', 'createTaskFromAssistant', 'deselectTask', 'promptResumeSession', 'startTask', 'selectTask', 'performTaskSelection', 'toggleTaskComplete']);
     ensureRequiredContract('window.FocoZenLegacyHome', legacyHome, ['configure', 'init', 'renderProgress', 'updateTaskBubbleProgress', 'applyAudioStateToUi', 'applySelectedTaskUi', 'applyFreeFocusUi', 'renderTimerDropdown', 'updateCustomDropdownUI']);
     ensureRequiredContract('window.FocoZenLegacyTimer', legacyTimer, ['configure', 'init', 'syncUi', 'applyModeUi', 'setRunningUi', 'updateDisplay', 'updateProgressBar']);
-    ensureRequiredContract('window.FocoZenLegacyGoalsStats', legacyGoalsStats, ['configure', 'bindGoalAndStatsInteractions', 'renderStatsGoalsSummary', 'renderGoalsComparisonChart', 'renderGoalsList', 'compileGoalsData']);
     ensureRequiredContract('window.FocoZenLegacyTasks', legacyTasks, ['configure', 'updatePomodoroSuggestion', 'addTempSubtask', 'removeTempSubtask', 'renderTempSubtasks', 'createOrEditTask', 'renderTasksList', 'renderTasksSidebar', 'openTaskEdit', 'deleteTask', 'toggleSubtask', 'toggleTaskSelection', 'toggleSelectAllTasks', 'deleteSelectedTasks']);
     ensureRequiredContract('window.FocoZenAssistantCore', assistantCore, ['normalizeText', 'detectTemporalContext', 'detectCategory', 'detectDurationMinutes', 'detectSchedule', 'extractTaskDraft', 'getMissingTaskFields', 'expandFollowUp', 'buildReply']);
     ensureRequiredContract('window.FocoZenLegacyAssistant', legacyAssistant, ['configure', 'init', 'renderMessages', 'renderSuggestions', 'setOpen', 'updateContext', 'resetChat', 'handleSubmit']);
@@ -325,16 +448,19 @@ function readNumberStorage(key, fallback = 0) {
 
 function saveTasks() {
     writeJsonStorage(storageKeys.TASKS, tasks);
+    notifyStatsRuntime();
 }
 
 function saveFocusHistory() {
     writeJsonStorage(storageKeys.HISTORY, focusHistory);
     notifyGoalsRuntime();
+    notifyStatsRuntime();
 }
 
 function saveFocusGoals() {
     writeJsonStorage(storageKeys.GOALS, focusGoals);
     notifyGoalsRuntime();
+    notifyStatsRuntime();
 }
 
 function saveUserCategories() {
@@ -609,43 +735,6 @@ function configureAudioService() {
     });
 }
 
-function configureLegacyGoalsStatsModule() {
-    const goalsStatsModule = ensureRequiredContract('window.FocoZenLegacyGoalsStats', legacyGoalsStats, ['configure', 'bindGoalAndStatsInteractions']);
-
-    goalsStatsModule.configure({
-        getFocusGoals: () => focusGoals,
-        getFocusHistory: () => focusHistory,
-        getTasks: () => tasks,
-        getUsername: () => username,
-        getCurrentStatsPeriod: () => window._statsPeriod || 'week',
-        getCurrentGoalsPeriod: () => window._goalsPeriod || 'week',
-        setCurrentStatsPeriod: (period) => { window._statsPeriod = period || 'week'; },
-        setCurrentGoalsPeriod: (period) => { window._goalsPeriod = period || 'week'; },
-        formatMinutesToHours,
-        getGoalOverviewData,
-        getGoalEvolutionSeriesData,
-        getGoalMomentumContent,
-        getFocusWindowSummaryData,
-        getFocusGreetingStateData,
-        getFocusStreakSummaryData,
-        filterHistoryForPeriod,
-        resolveCategoryPalette,
-        getPeriodLabel,
-        renderGoalCategoryOptions,
-        renderCategoriesChart,
-        renderPeriodBarChart,
-        compileDashboardData: () => window.compileDashboardData?.(),
-        updateGoalHoursDisplay,
-        saveGoalEntry,
-        resetGoalForm,
-        showGlassToast
-    });
-
-    goalsStatsModule.bindGoalAndStatsInteractions();
-    window._statsPeriodBound = true;
-    window._goalsPeriodBound = true;
-}
-
 function configureLegacyTasksModule() {
     const tasksModule = ensureRequiredContract('window.FocoZenLegacyTasks', legacyTasks, ['configure']);
 
@@ -797,7 +886,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     try { initTimer(); } catch(e) { console.error('Erro Timer:', e); }
     try { initModals(); } catch(e) { console.error('Erro Modais:', e); }
     try { configureTaskSessionService(); } catch(e) { console.error('Erro Task Session:', e); }
-    try { configureLegacyGoalsStatsModule(); } catch(e) { console.error('Erro Goals/Stats Legacy:', e); }
     try { configureLegacyTasksModule(); } catch(e) { console.error('Erro Tasks Legacy:', e); }
     try { configureLegacyAssistantModule(); } catch(e) { console.error('Erro Assistant Legacy:', e); }
     try { initTaskForm(); } catch(e) { console.error('Erro Formulário:', e); }
@@ -987,6 +1075,7 @@ window.finishWizard = function() {
 
     writeJsonStorage(storageKeys.WIZARD_CATEGORIES, wizSelectedCats);
     updateSidebarProfile();
+    notifyStatsRuntime();
     document.getElementById('wizardModal').classList.remove('active');
 };
 
@@ -1054,6 +1143,7 @@ function initNavigation() {
                 localStorage.setItem(storageKeys.USERNAME, username);
             }
             updateSidebarProfile();
+            notifyStatsRuntime();
             const msg = document.getElementById('settingsSavedMsg');
             if (msg) { msg.style.display = 'flex'; setTimeout(() => msg.style.display = 'none', 3000); }
         }
@@ -2926,8 +3016,8 @@ window.removeTempSubtask = removeTempSubtask; window.editTask = editTask;
 // ==========================================
 // BENTO BOX DASHBOARD
 // ==========================================
-let chartCatInstance = null;
-let chartWeekInstance = null;
+const radialChartFrames = new WeakMap();
+const periodChartInstances = new WeakMap();
 
 function formatMinutesToHours(minutes) {
     if (historyCore?.formatMinutesToHours) {
@@ -3608,6 +3698,9 @@ function injectFakeDataIfNeeded() {
 }
 
 window.compileDashboardData = function() {
+    injectFakeDataIfNeeded();
+    return window.FocoZenStatsRuntime?.refresh?.();
+
     if (typeof Chart === 'undefined') {
         console.warn("Chart.js not loaded yet");
         return;
@@ -3767,9 +3860,15 @@ const chartShadowPlugin = {
     }
 };
 
-function renderCategoriesChart(allHistory) {
-    const canvas = document.getElementById('categoriesChart');
-    const legend = document.getElementById('categoriesLegend');
+function renderCategoriesChart(canvasEl, legendEl, allHistory = []) {
+    if (Array.isArray(canvasEl) && legendEl === undefined) {
+        allHistory = canvasEl;
+        canvasEl = null;
+        legendEl = null;
+    }
+
+    const canvas = canvasEl instanceof HTMLCanvasElement ? canvasEl : document.getElementById('categoriesChart');
+    const legend = legendEl ?? document.getElementById('categoriesLegend');
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
     
@@ -3782,8 +3881,11 @@ function renderCategoriesChart(allHistory) {
     const data = Object.values(catMap);
     const total = data.reduce((a,b) => a+b, 0);
     
-    if (chartCatInstance) { chartCatInstance.destroy(); chartCatInstance = null; }
-    if (window._radialAnimFrame) cancelAnimationFrame(window._radialAnimFrame);
+    const activeFrame = radialChartFrames.get(canvas);
+    if (activeFrame) {
+        cancelAnimationFrame(activeFrame);
+        radialChartFrames.delete(canvas);
+    }
     
     const container = canvas.parentElement;
     const containerW = container.clientWidth || 400;
@@ -3885,11 +3987,11 @@ function renderCategoriesChart(allHistory) {
         });
         
         if (animProgress < 1) {
-            window._radialAnimFrame = requestAnimationFrame(drawFrame);
+            radialChartFrames.set(canvas, requestAnimationFrame(drawFrame));
         }
     }
     
-    window._radialAnimFrame = requestAnimationFrame(drawFrame);
+    radialChartFrames.set(canvas, requestAnimationFrame(drawFrame));
 }
 
 function drawArrowLabels(ctx, entries, total, cx, cy, maxRadius, ringWidth, ringGap, canvasW, canvasH) {
@@ -3959,6 +4061,11 @@ function drawArrowLabels(ctx, entries, total, cx, cy, maxRadius, ringWidth, ring
 }
 
 function renderStatsGoalsSummary(period) {
+    if (period) {
+        window._statsPeriod = period || 'week';
+    }
+    return window.FocoZenStatsRuntime?.refresh?.();
+
     const periodLabel = document.getElementById('statsGoalsPeriodLabel');
     const badgeEl = document.getElementById('statsGoalsStatusBadge');
     const headlineEl = document.getElementById('statsGoalsHeadline');
@@ -4255,32 +4362,23 @@ function renderGoalsList() {
 }
 
 renderStatsGoalsSummary = function(period) {
-    return legacyGoalsStats.renderStatsGoalsSummary(period);
+    if (period) {
+        window._statsPeriod = period || 'week';
+    }
+    return window.FocoZenStatsRuntime?.refresh?.();
 };
 
 renderGoalsComparisonChart = function(period) {
-    if (document.getElementById('react-goals-root')) {
-        if (period) window.FocoZenGoalsRuntime?.setGoalsPeriod?.(period);
-        return window.FocoZenGoalsRuntime?.refresh?.();
-    }
-
-    return legacyGoalsStats.renderGoalsComparisonChart(period);
+    if (period) window.FocoZenGoalsRuntime?.setGoalsPeriod?.(period);
+    return window.FocoZenGoalsRuntime?.refresh?.();
 };
 
 renderGoalsList = function() {
-    if (document.getElementById('react-goals-root')) {
-        return window.FocoZenGoalsRuntime?.refresh?.();
-    }
-
-    return legacyGoalsStats.renderGoalsList();
+    return window.FocoZenGoalsRuntime?.refresh?.();
 };
 
 window.compileGoalsData = function() {
-    if (document.getElementById('react-goals-root')) {
-        return window.FocoZenGoalsRuntime?.refresh?.();
-    }
-
-    return legacyGoalsStats.compileGoalsData();
+    return window.FocoZenGoalsRuntime?.refresh?.();
 };
 
 function getAccentColor() {
@@ -4288,8 +4386,14 @@ function getAccentColor() {
     return getComputedStyle(document.documentElement).getPropertyValue('--accent-primary').trim() || '#f97316';
 }
 
-function renderPeriodBarChart(allHistory, period) {
-    const ctx = document.getElementById('weekChart');
+function renderPeriodBarChart(canvasEl, allHistory = [], period = 'week') {
+    if (!(canvasEl instanceof HTMLCanvasElement)) {
+        period = typeof allHistory === 'string' ? allHistory : period;
+        allHistory = Array.isArray(canvasEl) ? canvasEl : [];
+        canvasEl = null;
+    }
+
+    const ctx = canvasEl instanceof HTMLCanvasElement ? canvasEl : document.getElementById('weekChart');
     if (!ctx) return;
     
     // Dynamic title based on period
@@ -4347,9 +4451,10 @@ function renderPeriodBarChart(allHistory, period) {
         }
     }
 
-    if (chartWeekInstance) chartWeekInstance.destroy();
+    const previousChart = periodChartInstances.get(ctx);
+    if (previousChart) previousChart.destroy();
     
-    chartWeekInstance = new Chart(ctx, {
+    const nextChart = new Chart(ctx, {
         type: 'bar',
         plugins: [chartShadowPlugin],
         data: {
@@ -4395,6 +4500,7 @@ function renderPeriodBarChart(allHistory, period) {
             }
         }
     });
+    periodChartInstances.set(ctx, nextChart);
 }
 
 function renderTimeline(allHistory) {

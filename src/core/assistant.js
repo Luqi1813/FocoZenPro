@@ -341,7 +341,9 @@
             return answerers.removeGoal?.(text);
         }
 
-        const looksLikeGoalCommand = detectedDuration &&
+        const explicitlyMentionsTask = includesAny(normalized, ['tarefa', 'tarefas']);
+        const looksLikeGoalCommand = !explicitlyMentionsTask &&
+            detectedDuration &&
             detectedCategory &&
             includesAny(normalized, ['meta', 'crie', 'criar', 'ajuste', 'ajustar', 'defina', 'definir', 'mude', 'altere', 'quero', 'planeje']);
 

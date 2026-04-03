@@ -178,12 +178,44 @@
     padding: 14px 16px;
 }
 
+.react-stats-shell {
+    color: #ffffff;
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+}
+
+.react-stats-header {
+    align-items: flex-end;
+    display: flex;
+    justify-content: space-between;
+    gap: 16px;
+    flex-wrap: wrap;
+}
+
+.react-stats-toolbar {
+    align-items: center;
+    display: flex;
+    gap: 8px;
+    margin-bottom: 12px;
+}
+
+.react-stats-inline-error {
+    background: rgba(239, 68, 68, 0.1);
+    border: 1px solid rgba(248, 113, 113, 0.3);
+    border-radius: 16px;
+    color: #fecaca;
+    padding: 14px 16px;
+}
+
 @media (max-width: 768px) {
+    .react-stats-header,
     .react-goals-header {
         align-items: stretch;
         flex-direction: column;
     }
 
+    .react-stats-toolbar,
     .react-goals-toolbar {
         justify-content: space-between;
         margin-bottom: 0;

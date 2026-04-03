@@ -209,6 +209,8 @@
                 </div>
             </div>
             <div class="app-container" style="padding-top: 20px; max-width: 1200px; margin: 0 auto; height: auto; min-height: unset; padding-bottom: 60px;">
+                <div id="react-stats-root"></div>
+                <div id="legacyStatsRoot" style="display:none;">
                 <div style="margin-bottom: 20px; display: flex; justify-content: space-between; align-items: flex-end;">
                     <div>
                         <h2 style="font-size: 1rem; font-weight: 700; margin-bottom: 2px; color: var(--text-secondary); letter-spacing: 3px; text-transform: uppercase;">Estatísticas /</h2>
@@ -290,6 +292,7 @@
                             <div class="goals-compact-list" id="statsGoalsSummaryList"></div>
                         </div>
                     </div>
+                </div>
                 </div>
             </div>
         </div>
@@ -421,6 +424,7 @@
                         </div>
                         <div class="goals-list" id="goalsList"></div>
                     </div>
+                </div>
                 </div>
                 </div>
             </div>
@@ -756,7 +760,6 @@
     <script src="src/services/task-session.js"></script>
     <script src="src/legacy-renderer/home.js"></script>
     <script src="src/legacy-renderer/timer.js"></script>
-    <script src="src/legacy-renderer/goals-stats.js"></script>
     <script src="src/legacy-renderer/tasks.js"></script>
     <script src="src/core/assistant.js"></script>
     <script src="src/legacy-renderer/assistant.js"></script>

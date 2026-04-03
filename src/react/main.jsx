@@ -2,6 +2,7 @@ import React from 'react';
 import { createRoot } from 'react-dom/client';
 import App from './App.jsx';
 import GoalsReactView from './components/GoalsReactView.jsx';
+import StatsReactView from './components/StatsReactView.jsx';
 import './styles.css';
 
 function mountIsland(containerId, element) {
@@ -17,6 +18,7 @@ function mountIsland(containerId, element) {
 
 function mountReactIslands() {
     mountIsland('react-settings-root', <App />);
+    mountIsland('react-stats-root', <StatsReactView />);
     mountIsland('react-goals-root', <GoalsReactView />);
 }
 
