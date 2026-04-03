@@ -138,6 +138,31 @@ const motivationalRestartMessages = constantsService?.motivationalRestartMessage
     'Disciplina também é saber a hora de recomeçar com energia.'
 ];
 
+function ensureRequiredContract(name, contract, methods = []) {
+    if (!contract) {
+        throw new Error(`Contrato obrigatorio ausente: ${name}`);
+    }
+
+    methods.forEach((method) => {
+        if (typeof contract[method] !== 'function') {
+            throw new Error(`Contrato obrigatorio invalido: ${name}.${method}`);
+        }
+    });
+
+    return contract;
+}
+
+function assertRequiredBootstrapContracts() {
+    ensureRequiredContract('window.FocoZenAudioService', audioService, ['configure', 'initialize', 'selectSound', 'togglePlay', 'toggleMute', 'setVolume']);
+    ensureRequiredContract('window.FocoZenTaskSessionService', taskSessionService, ['configure', 'readSavedSession', 'saveSavedSession', 'createTaskFromAssistant', 'deselectTask', 'promptResumeSession', 'startTask', 'selectTask', 'performTaskSelection', 'toggleTaskComplete']);
+    ensureRequiredContract('window.FocoZenLegacyHome', legacyHome, ['configure', 'init', 'renderProgress', 'updateTaskBubbleProgress', 'applyAudioStateToUi', 'applySelectedTaskUi', 'applyFreeFocusUi', 'renderTimerDropdown', 'updateCustomDropdownUI']);
+    ensureRequiredContract('window.FocoZenLegacyTimer', legacyTimer, ['configure', 'init', 'syncUi', 'applyModeUi', 'setRunningUi', 'updateDisplay', 'updateProgressBar']);
+    ensureRequiredContract('window.FocoZenLegacyGoalsStats', legacyGoalsStats, ['configure', 'bindGoalAndStatsInteractions', 'renderStatsGoalsSummary', 'renderGoalsComparisonChart', 'renderGoalsList', 'compileGoalsData']);
+    ensureRequiredContract('window.FocoZenLegacyTasks', legacyTasks, ['configure', 'updatePomodoroSuggestion', 'addTempSubtask', 'removeTempSubtask', 'renderTempSubtasks', 'createOrEditTask', 'renderTasksList', 'renderTasksSidebar', 'openTaskEdit', 'deleteTask', 'toggleSubtask', 'toggleTaskSelection', 'toggleSelectAllTasks', 'deleteSelectedTasks']);
+    ensureRequiredContract('window.FocoZenAssistantCore', assistantCore, ['normalizeText', 'detectTemporalContext', 'detectCategory', 'detectDurationMinutes', 'detectSchedule', 'extractTaskDraft', 'getMissingTaskFields', 'expandFollowUp', 'buildReply']);
+    ensureRequiredContract('window.FocoZenLegacyAssistant', legacyAssistant, ['configure', 'init', 'renderMessages', 'renderSuggestions', 'setOpen', 'updateContext', 'resetChat', 'handleSubmit']);
+}
+
 function getTaskFocusDurationSeconds(task = currentTask) {
     if (timerCore?.getTaskSessionDurationSeconds) {
         return timerCore.getTaskSessionDurationSeconds({
@@ -216,20 +241,11 @@ function saveUserCategories() {
 }
 
 function readSavedSession() {
-    if (taskSessionService?.readSavedSession) {
-        return taskSessionService.readSavedSession();
-    }
-
-    return readJsonStorage(storageKeys.SAVED_SESSION, null);
+    return taskSessionService.readSavedSession();
 }
 
 function saveSavedSession(session) {
-    if (taskSessionService?.saveSavedSession) {
-        taskSessionService.saveSavedSession(session);
-        return;
-    }
-
-    writeJsonStorage(storageKeys.SAVED_SESSION, session);
+    taskSessionService.saveSavedSession(session);
 }
 
 function checkWizardOnboarding() {
@@ -243,15 +259,15 @@ function checkWizardOnboarding() {
 }
 
 function applySelectedTaskUi(task) {
-    legacyHome?.applySelectedTaskUi?.(task);
+    legacyHome.applySelectedTaskUi(task);
 }
 
 function applyFreeFocusUi({ category = 'Livre' } = {}) {
-    legacyHome?.applyFreeFocusUi?.({ category });
+    legacyHome.applyFreeFocusUi({ category });
 }
 
 function applyTimerModeUi({ mode = 'focus', resetToggleButton = true } = {}) {
-    legacyTimer?.applyModeUi?.({ mode, resetToggleButton });
+    legacyTimer.applyModeUi({ mode, resetToggleButton });
 }
 
 function hideWelcomeModal() {
@@ -314,9 +330,9 @@ function showResumeSessionPrompt({ onDiscard, onResume }) {
 }
 
 function configureTaskSessionService() {
-    if (!taskSessionService?.configure) return;
+    const service = ensureRequiredContract('window.FocoZenTaskSessionService', taskSessionService, ['configure']);
 
-    taskSessionService.configure({
+    service.configure({
         getTasks: () => tasks,
         getCurrentTask: () => currentTask,
         getTimeLeft: () => timeLeft,
@@ -369,7 +385,7 @@ function getCurrentSoundConfig() {
 
 function applyAudioStateToUi() {
     const currentSound = getCurrentSoundConfig();
-    legacyHome?.applyAudioStateToUi?.();
+    legacyHome.applyAudioStateToUi();
 
     const statsName = document.getElementById('statsPlayerSoundName');
     const goalsName = document.getElementById('goalsPlayerSoundName');
@@ -400,9 +416,9 @@ function applyAudioStateToUi() {
 }
 
 function configureLegacyHomeModule() {
-    if (!legacyHome?.configure) return;
+    const homeModule = ensureRequiredContract('window.FocoZenLegacyHome', legacyHome, ['configure']);
 
-    legacyHome.configure({
+    homeModule.configure({
         audioService,
         taskSessionService,
         timerCore,
@@ -438,9 +454,9 @@ function configureLegacyHomeModule() {
 }
 
 function configureLegacyTimerModule() {
-    if (!legacyTimer?.configure) return;
+    const timerModule = ensureRequiredContract('window.FocoZenLegacyTimer', legacyTimer, ['configure']);
 
-    legacyTimer.configure({
+    timerModule.configure({
         timerCore,
         getCurrentMode: () => currentMode,
         getTimeLeft: () => timeLeft,
@@ -454,9 +470,9 @@ function configureLegacyTimerModule() {
 }
 
 function configureAudioService() {
-    if (!audioService?.configure) return;
+    const service = ensureRequiredContract('window.FocoZenAudioService', audioService, ['configure']);
 
-    audioService.configure({
+    service.configure({
         storageService,
         storageKeys,
         soundsConfig,
@@ -492,9 +508,9 @@ function configureAudioService() {
 }
 
 function configureLegacyGoalsStatsModule() {
-    if (!legacyGoalsStats?.configure) return;
+    const goalsStatsModule = ensureRequiredContract('window.FocoZenLegacyGoalsStats', legacyGoalsStats, ['configure', 'bindGoalAndStatsInteractions']);
 
-    legacyGoalsStats.configure({
+    goalsStatsModule.configure({
         getFocusGoals: () => focusGoals,
         getFocusHistory: () => focusHistory,
         getTasks: () => tasks,
@@ -523,15 +539,15 @@ function configureLegacyGoalsStatsModule() {
         showGlassToast
     });
 
-    legacyGoalsStats.bindGoalAndStatsInteractions?.();
+    goalsStatsModule.bindGoalAndStatsInteractions();
     window._statsPeriodBound = true;
     window._goalsPeriodBound = true;
 }
 
 function configureLegacyTasksModule() {
-    if (!legacyTasks?.configure) return;
+    const tasksModule = ensureRequiredContract('window.FocoZenLegacyTasks', legacyTasks, ['configure']);
 
-    legacyTasks.configure({
+    tasksModule.configure({
         getTasks: () => tasks,
         getCurrentTask: () => currentTask,
         getTimeLeft: () => timeLeft,
@@ -572,9 +588,9 @@ function configureLegacyTasksModule() {
 }
 
 function configureLegacyAssistantModule() {
-    if (!legacyAssistant?.configure) return;
+    const assistantModule = ensureRequiredContract('window.FocoZenLegacyAssistant', legacyAssistant, ['configure']);
 
-    legacyAssistant.configure({
+    assistantModule.configure({
         assistantCore,
         getAssistantMessages: () => assistantMessages,
         getAssistantSuggestions: () => assistantSuggestions,
@@ -669,6 +685,8 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
     } catch(e) { console.error('Erro de Storage:', e); tasks = []; }
 
+    assertRequiredBootstrapContracts();
+
     try { updateSidebarProfile(); initNavigation(); } catch(e) { console.error('Erro Navegacao:', e); }
     try { loadDailyQuote(); } catch(e) { console.error('Erro Quote:', e); }
     try { configureAudioService(); } catch(e) { console.error('Erro Audio Service:', e); }
@@ -684,7 +702,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     try { initSidebarControls(); } catch(e) { console.error('Erro Sidebar:', e); }
     try { initPipIntegration(); } catch(e) { console.error('Erro PIP:', e); }
     try { initAssistant(); } catch(e) { console.error('Erro Assistente:', e); }
-    try { await legacyHome?.init?.(); } catch(e) { console.error('Erro Home Init:', e); }
+    try { await legacyHome.init(); } catch(e) { console.error('Erro Home Init:', e); }
 
     // ATUALIZACAO FORCADA DAS LISTAS PARA CORRIGIR O BUG "NENHUMA TAREFA"
     try {
@@ -697,8 +715,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     try { updateHeaderTaskCount(); } catch(e) { console.error('Erro Count:', e); }
 
     try {
-        if (window.renderTimerDropdown) window.renderTimerDropdown();
-        if (window.renderCategoryChips) window.renderCategoryChips();
+        window.renderTimerDropdown();
+        window.renderCategoryChips();
         resetGoalForm();
         
         document.getElementById('btnEditCategories')?.addEventListener('click', () => {
@@ -730,11 +748,11 @@ document.addEventListener('DOMContentLoaded', async () => {
 // CATEGORY ENGINE (V2)
 // ==========================================
 window.updateCustomDropdownUI = function(value) {
-    return legacyHome?.updateCustomDropdownUI?.(value);
+    return legacyHome.updateCustomDropdownUI(value);
 };
 
 window.renderTimerDropdown = function() {
-    return legacyHome?.renderTimerDropdown?.();
+    return legacyHome.renderTimerDropdown();
 };
 
 window.renderCategoryChips = function() {
@@ -840,7 +858,7 @@ window.nextWizard = function(currentStep) {
         if (wizSelectedCats.length > 0) {
              const primaryCat = wizSelectedCats[0];
              document.getElementById('globalCategorySelect').value = primaryCat;
-             if(window.updateCustomDropdownUI) window.updateCustomDropdownUI(primaryCat);
+             window.updateCustomDropdownUI(primaryCat);
         }
     }
     document.getElementById(`wizardStep${currentStep}`).classList.remove('active');
@@ -906,14 +924,14 @@ function switchView(viewId) {
         });
     }
     if (viewId === 'view-goals') {
-        if (window.compileGoalsData) window.compileGoalsData();
+        window.compileGoalsData();
     }
     if (viewId === 'view-settings') {
         const input = document.getElementById('settingsNameInput');
         if (input) input.value = username;
     }
 
-    if (window.updateAssistantContext) window.updateAssistantContext();
+    window.updateAssistantContext();
 }
 
 function initNavigation() {
@@ -1225,7 +1243,7 @@ function updateVolumeDisplay() {
 }
 
 function initTimer() {
-    legacyTimer?.init?.();
+    legacyTimer.init();
 }
 
 function adjustTime(minutes) {
@@ -1270,13 +1288,13 @@ let targetEndTime = 0;
 function toggleTimer() {
     if (isTimerRunning) {
         pauseTimer();
-        legacyTimer?.setRunningUi?.(false);
+        legacyTimer.setRunningUi(false);
         renderProgress();
         renderTasksSidebar();
         syncStateToPip();
     } else {
         isTimerRunning = true;
-        legacyTimer?.setRunningUi?.(true);
+        legacyTimer.setRunningUi(true);
         renderProgress();
         renderTasksSidebar();
         syncStateToPip();
@@ -1309,7 +1327,7 @@ function toggleTimer() {
 function pauseTimer() {
     isTimerRunning = false;
     clearInterval(timerInterval);
-    legacyTimer?.setRunningUi?.(false);
+    legacyTimer.setRunningUi(false);
 }
 
 function resetTimer() {
@@ -1343,7 +1361,7 @@ function resetToFreeFocusSession() {
     document.getElementById('btnFreeFocus')?.classList.add('hidden');
     const globalCat = document.getElementById('globalCategorySelect');
     if (globalCat) globalCat.value = 'Livre';
-    if (window.updateCustomDropdownUI) window.updateCustomDropdownUI('Livre');
+    window.updateCustomDropdownUI('Livre');
     timeLeft = timerCore?.getModeDurationSeconds
         ? timerCore.getModeDurationSeconds({
             mode: 'focus',
@@ -1646,30 +1664,10 @@ function completeTimer() {
 }
 
 function updateTimerDisplay() {
-    if (legacyTimer?.updateDisplay) {
-        legacyTimer.updateDisplay();
-        return;
-    }
-
-    const timeString = timerCore?.formatTimerLabel
-        ? timerCore.formatTimerLabel(timeLeft)
-        : (utilsService?.formatClockTime
-            ? utilsService.formatClockTime(timeLeft)
-            : `${Math.floor(timeLeft / 60).toString().padStart(2, '0')}:${(timeLeft % 60).toString().padStart(2, '0')}`);
-    document.getElementById('timerDisplay').textContent = timeString; document.title = `${timeString} - FocoZen Pro`;
+    legacyTimer.updateDisplay();
 }
 function updateProgressBar() {
-    if (legacyTimer?.updateProgressBar) {
-        legacyTimer.updateProgressBar();
-        return;
-    }
-
-    const progress = timerCore?.getTimerProgress
-        ? timerCore.getTimerProgress({ timeLeft, totalTime: totalTimerTime })
-        : (utilsService?.calculateProgressPercentage
-            ? utilsService.calculateProgressPercentage({ timeLeft, totalTime: totalTimerTime })
-            : (totalTimerTime > 0 ? ((totalTimerTime - timeLeft) / totalTimerTime) * 100 : 0));
-    document.getElementById('timerProgress').style.width = `${progress}%`;
+    legacyTimer.updateProgressBar();
 }
 
 function showTransitionModal(nextPhase) {
@@ -2099,7 +2097,7 @@ function criarOuEditarTarefa() {
                 currentTask = t;
                 const globalCat = document.getElementById('globalCategorySelect');
                 if (globalCat) globalCat.value = category;
-                if(window.updateCustomDropdownUI) window.updateCustomDropdownUI(category);
+                window.updateCustomDropdownUI(category);
                 
                 // Resync active timer if the user edited active task time!
                 if (currentMode === 'focus') {
@@ -2327,7 +2325,7 @@ window.deleteTask = function(taskId) {
 };
 
 function deselectTask() {
-    taskSessionService?.deselectTask?.();
+    taskSessionService.deselectTask();
 }
 
 window.attemptDeselectTask = function(isAppClosing) {
@@ -2461,7 +2459,7 @@ window.attemptDeselectTask = function(isAppClosing) {
             document.getElementById('btnFreeFocus')?.classList.add('hidden');
             const globalCat = document.getElementById('globalCategorySelect');
             if (globalCat) globalCat.value = 'Livre';
-            if (window.updateCustomDropdownUI) window.updateCustomDropdownUI('Livre');
+            window.updateCustomDropdownUI('Livre');
             applyTimerModeUi({ mode: 'focus', resetToggleButton: true });
             updateTimerDisplay(); updateProgressBar();
             renderProgress(); renderTasksSidebar(); renderTasksList();
@@ -2548,7 +2546,7 @@ window.promptResumeSession = function() {
                 deselectTask();
                 const globalCat = document.getElementById('globalCategorySelect');
                 if (globalCat) globalCat.value = session.category;
-                if(window.updateCustomDropdownUI) window.updateCustomDropdownUI(session.category);
+                window.updateCustomDropdownUI(session.category);
                 
                 // Restore timer directly without setTimerMode
                 currentMode = 'focus';
@@ -2692,7 +2690,7 @@ function _doSelectTask(taskId, skipTimerSyncInput) {
         badge.textContent = currentTask.name.substring(0, 15) + (currentTask.name.length > 15 ? '...' : '');
         badge.className = 'task-badge task-mode'; document.getElementById('btnFreeFocus').classList.remove('hidden');
         document.getElementById('globalCategorySelect').value = currentTask.category || "Livre";
-        if(window.updateCustomDropdownUI) window.updateCustomDropdownUI(currentTask.category || "Livre");
+        window.updateCustomDropdownUI(currentTask.category || "Livre");
         
         // If not restoring from the physical localstorage session, we can mathematically restore from the decimal fraction!
         if (!skipTimerSync) {
@@ -2724,28 +2722,28 @@ function toggleTaskComplete(taskId) {
 }
 
 window.promptResumeSession = function() {
-    taskSessionService?.promptResumeSession?.();
+    taskSessionService.promptResumeSession();
 };
 
 function startTask(taskId) {
-    taskSessionService?.startTask?.(taskId);
+    taskSessionService.startTask(taskId);
 }
 
 function selectTask(taskId, skipTimerSync = false, onComplete = null) {
-    taskSessionService?.selectTask?.(taskId, {
+    taskSessionService.selectTask(taskId, {
         skipTimerSync: !!skipTimerSync,
         onComplete
     });
 }
 
 function _doSelectTask(taskId, skipTimerSyncInput = false) {
-    taskSessionService?.performTaskSelection?.(taskId, {
+    taskSessionService.performTaskSelection(taskId, {
         skipTimerSync: !!skipTimerSyncInput
     });
 }
 
 function toggleTaskComplete(taskId) {
-    taskSessionService?.toggleTaskComplete?.(taskId);
+    taskSessionService.toggleTaskComplete(taskId);
 }
 
 function deleteTask(taskId) {
@@ -2756,134 +2754,63 @@ function deleteTask(taskId) {
 }
 
 function renderProgress() {
-    return legacyHome?.renderProgress?.();
+    return legacyHome.renderProgress();
 }
 
-const legacyUpdatePomodoroSuggestionImpl = updatePomodoroSuggestion;
-const legacyAddTempSubtaskImpl = addTempSubtask;
-const legacyRemoveTempSubtaskImpl = removeTempSubtask;
-const legacyRenderTempSubtasksImpl = renderTempSubtasks;
-const legacyCreateOrEditTaskImpl = criarOuEditarTarefa;
-const legacyRenderTasksListImpl = renderTasksList;
-const legacyRenderTasksSidebarImpl = renderTasksSidebar;
-const legacyRenderProgressImpl = renderProgress;
-const legacyEditTaskImpl = window.editTask;
-const legacyDeleteTaskImpl = window.deleteTask;
-const legacyToggleSubtaskImpl = window.toggleSubtask;
-const legacyToggleTaskSelectionImpl = window.toggleTaskSelection;
-const legacyToggleSelectAllTasksImpl = window.toggleSelectAllTasks;
-const legacyDeleteSelectedTasksImpl = window.deleteSelectedTasks;
-
 updatePomodoroSuggestion = function() {
-    if (legacyTasks?.updatePomodoroSuggestion) {
-        return legacyTasks.updatePomodoroSuggestion();
-    }
-
-    return legacyUpdatePomodoroSuggestionImpl();
+    return legacyTasks.updatePomodoroSuggestion();
 };
 
 addTempSubtask = function() {
-    if (legacyTasks?.addTempSubtask) {
-        return legacyTasks.addTempSubtask();
-    }
-
-    return legacyAddTempSubtaskImpl();
+    return legacyTasks.addTempSubtask();
 };
 
 removeTempSubtask = function(id) {
-    if (legacyTasks?.removeTempSubtask) {
-        return legacyTasks.removeTempSubtask(id);
-    }
-
-    return legacyRemoveTempSubtaskImpl(id);
+    return legacyTasks.removeTempSubtask(id);
 };
 
 renderTempSubtasks = function() {
-    if (legacyTasks?.renderTempSubtasks) {
-        return legacyTasks.renderTempSubtasks();
-    }
-
-    return legacyRenderTempSubtasksImpl();
+    return legacyTasks.renderTempSubtasks();
 };
 
 criarOuEditarTarefa = function() {
-    if (legacyTasks?.createOrEditTask) {
-        return legacyTasks.createOrEditTask();
-    }
-
-    return legacyCreateOrEditTaskImpl();
+    return legacyTasks.createOrEditTask();
 };
 
 renderTasksList = function() {
-    if (legacyTasks?.renderTasksList) {
-        return legacyTasks.renderTasksList();
-    }
-
-    return legacyRenderTasksListImpl();
+    return legacyTasks.renderTasksList();
 };
 
 renderTasksSidebar = function() {
-    if (legacyTasks?.renderTasksSidebar) {
-        return legacyTasks.renderTasksSidebar();
-    }
-
-    return legacyRenderTasksSidebarImpl();
-};
-
-renderProgress = function() {
-    return legacyHome?.renderProgress?.() ?? legacyRenderProgressImpl?.();
+    return legacyTasks.renderTasksSidebar();
 };
 
 window.editTask = function(taskId) {
-    if (legacyTasks?.openTaskEdit) {
-        return legacyTasks.openTaskEdit(taskId);
-    }
-
-    return legacyEditTaskImpl?.(taskId);
+    return legacyTasks.openTaskEdit(taskId);
 };
 
 window.deleteTask = function(taskId) {
-    if (legacyTasks?.deleteTask) {
-        return legacyTasks.deleteTask(taskId);
-    }
-
-    return legacyDeleteTaskImpl?.(taskId);
+    return legacyTasks.deleteTask(taskId);
 };
 
 window.toggleSubtask = function(taskId, subtaskId) {
-    if (legacyTasks?.toggleSubtask) {
-        return legacyTasks.toggleSubtask(taskId, subtaskId);
-    }
-
-    return legacyToggleSubtaskImpl?.(taskId, subtaskId);
+    return legacyTasks.toggleSubtask(taskId, subtaskId);
 };
 
 window.toggleTaskSelection = function(taskId, isChecked) {
-    if (legacyTasks?.toggleTaskSelection) {
-        return legacyTasks.toggleTaskSelection(taskId, isChecked);
-    }
-
-    return legacyToggleTaskSelectionImpl?.(taskId, isChecked);
+    return legacyTasks.toggleTaskSelection(taskId, isChecked);
 };
 
 window.toggleSelectAllTasks = function(isChecked) {
-    if (legacyTasks?.toggleSelectAllTasks) {
-        return legacyTasks.toggleSelectAllTasks(isChecked);
-    }
-
-    return legacyToggleSelectAllTasksImpl?.(isChecked);
+    return legacyTasks.toggleSelectAllTasks(isChecked);
 };
 
 window.deleteSelectedTasks = function() {
-    if (legacyTasks?.deleteSelectedTasks) {
-        return legacyTasks.deleteSelectedTasks();
-    }
-
-    return legacyDeleteSelectedTasksImpl?.();
+    return legacyTasks.deleteSelectedTasks();
 };
 
 function updateTaskBubbleProgress() {
-    return legacyHome?.updateTaskBubbleProgress?.();
+    return legacyHome.updateTaskBubbleProgress();
 }
 
 function updateHeaderTaskCount() { const badge = document.getElementById('headerTaskCount'); if (badge) badge.textContent = tasks.filter(t => !t.completed).length; }
@@ -4218,41 +4145,20 @@ function renderGoalsList() {
         }).join('');
 }
 
-const legacyRenderStatsGoalsSummaryImpl = renderStatsGoalsSummary;
-const legacyRenderGoalsComparisonChartImpl = renderGoalsComparisonChart;
-const legacyRenderGoalsListImpl = renderGoalsList;
-const legacyCompileGoalsDataImpl = window.compileGoalsData;
-
 renderStatsGoalsSummary = function(period) {
-    if (legacyGoalsStats?.renderStatsGoalsSummary) {
-        return legacyGoalsStats.renderStatsGoalsSummary(period);
-    }
-
-    return legacyRenderStatsGoalsSummaryImpl(period);
+    return legacyGoalsStats.renderStatsGoalsSummary(period);
 };
 
 renderGoalsComparisonChart = function(period) {
-    if (legacyGoalsStats?.renderGoalsComparisonChart) {
-        return legacyGoalsStats.renderGoalsComparisonChart(period);
-    }
-
-    return legacyRenderGoalsComparisonChartImpl(period);
+    return legacyGoalsStats.renderGoalsComparisonChart(period);
 };
 
 renderGoalsList = function() {
-    if (legacyGoalsStats?.renderGoalsList) {
-        return legacyGoalsStats.renderGoalsList();
-    }
-
-    return legacyRenderGoalsListImpl();
+    return legacyGoalsStats.renderGoalsList();
 };
 
 window.compileGoalsData = function() {
-    if (legacyGoalsStats?.compileGoalsData) {
-        return legacyGoalsStats.compileGoalsData();
-    }
-
-    return legacyCompileGoalsDataImpl?.();
+    return legacyGoalsStats.compileGoalsData();
 };
 
 function getAccentColor() {
@@ -5429,7 +5335,7 @@ function createTaskFromAssistant(draft, startNow = true) {
 }
 
 function createTaskFromAssistant(draft, startNow = true) {
-    return taskSessionService?.createTaskFromAssistant?.(draft, startNow);
+    return taskSessionService.createTaskFromAssistant(draft, startNow);
 }
 
 function applyAssistantFreeFocus(durationMinutes = null, category = null) {
@@ -5442,7 +5348,7 @@ function applyAssistantFreeFocus(durationMinutes = null, category = null) {
     const globalCategorySelect = document.getElementById('globalCategorySelect');
     if (globalCategorySelect) {
         globalCategorySelect.value = resolvedCategory;
-        if (window.updateCustomDropdownUI) window.updateCustomDropdownUI(resolvedCategory);
+        window.updateCustomDropdownUI(resolvedCategory);
     }
 
     currentMode = 'focus';
@@ -7034,211 +6940,130 @@ function buildAssistantReply(text) {
     };
 }
 
-const legacyNormalizeAssistantTextImpl = normalizeAssistantText;
-const legacyDetectAssistantTemporalContextImpl = detectAssistantTemporalContext;
-const legacyDetectAssistantCategoryImpl = detectAssistantCategory;
-const legacyDetectAssistantDurationMinutesImpl = detectAssistantDurationMinutes;
-const legacyDetectAssistantScheduleImpl = detectAssistantSchedule;
-const legacyExtractAssistantTaskDraftImpl = extractAssistantTaskDraft;
-const legacyGetAssistantMissingTaskFieldsImpl = getAssistantMissingTaskFields;
-const legacyExpandAssistantFollowUpImpl = expandAssistantFollowUp;
-const legacyBuildAssistantReplyImpl = buildAssistantReply;
-const legacyRenderAssistantMessagesImpl = renderAssistantMessages;
-const legacyRenderAssistantSuggestionsImpl = renderAssistantSuggestions;
-const legacySetAssistantOpenImpl = setAssistantOpen;
-const legacyUpdateAssistantContextImpl = updateAssistantContext;
-const legacyResetAssistantChatImpl = resetAssistantChat;
-const legacyInitAssistantImpl = initAssistant;
-const legacyHandleAssistantSubmitImpl = handleAssistantSubmit;
-
 normalizeAssistantText = function(value = '') {
-    if (assistantCore?.normalizeText) {
-        return assistantCore.normalizeText(value);
-    }
-
-    return legacyNormalizeAssistantTextImpl(value);
+    return assistantCore.normalizeText(value);
 };
 
 detectAssistantTemporalContext = function(text, fallback = null) {
-    if (assistantCore?.detectTemporalContext) {
-        return assistantCore.detectTemporalContext(
-            text,
-            fallback || { period: getAssistantDefaultPeriod(), previous: false }
-        );
-    }
-
-    return legacyDetectAssistantTemporalContextImpl(text, fallback);
+    return assistantCore.detectTemporalContext(
+        text,
+        fallback || { period: getAssistantDefaultPeriod(), previous: false }
+    );
 };
 
 detectAssistantCategory = function(text) {
-    if (assistantCore?.detectCategory) {
-        return assistantCore.detectCategory(text, {
-            defaultCategories,
-            userCategories,
-            focusGoals
-        });
-    }
-
-    return legacyDetectAssistantCategoryImpl(text);
+    return assistantCore.detectCategory(text, {
+        defaultCategories,
+        userCategories,
+        focusGoals
+    });
 };
 
 detectAssistantDurationMinutes = function(text) {
-    if (assistantCore?.detectDurationMinutes) {
-        return assistantCore.detectDurationMinutes(text, {
-            pomodoroMinutes: POMODORO_MINUTES
-        });
-    }
-
-    return legacyDetectAssistantDurationMinutesImpl(text);
+    return assistantCore.detectDurationMinutes(text, {
+        pomodoroMinutes: POMODORO_MINUTES
+    });
 };
 
 detectAssistantSchedule = function(text) {
-    if (assistantCore?.detectSchedule) {
-        return assistantCore.detectSchedule(text);
-    }
-
-    return legacyDetectAssistantScheduleImpl(text);
+    return assistantCore.detectSchedule(text);
 };
 
 extractAssistantTaskDraft = function(text, baseDraft = null) {
-    if (assistantCore?.extractTaskDraft) {
-        return assistantCore.extractTaskDraft(text, baseDraft, {
-            defaultCategories,
-            userCategories,
-            focusGoals,
-            pomodoroMinutes: POMODORO_MINUTES,
-            findExistingTask: findAssistantTaskByText
-        });
-    }
-
-    return legacyExtractAssistantTaskDraftImpl(text, baseDraft);
+    return assistantCore.extractTaskDraft(text, baseDraft, {
+        defaultCategories,
+        userCategories,
+        focusGoals,
+        pomodoroMinutes: POMODORO_MINUTES,
+        findExistingTask: findAssistantTaskByText
+    });
 };
 
 getAssistantMissingTaskFields = function(draft) {
-    if (assistantCore?.getMissingTaskFields) {
-        return assistantCore.getMissingTaskFields(draft);
-    }
-
-    return legacyGetAssistantMissingTaskFieldsImpl(draft);
+    return assistantCore.getMissingTaskFields(draft);
 };
 
 expandAssistantFollowUp = function(text) {
-    if (assistantCore?.expandFollowUp) {
-        return assistantCore.expandFollowUp(text, {
-            ...(assistantConversationState || {}),
-            defaultPeriod: getAssistantDefaultPeriod(),
-            defaultCategories,
-            userCategories,
-            focusGoals
-        });
-    }
-
-    return legacyExpandAssistantFollowUpImpl(text);
+    return assistantCore.expandFollowUp(text, {
+        ...(assistantConversationState || {}),
+        defaultPeriod: getAssistantDefaultPeriod(),
+        defaultCategories,
+        userCategories,
+        focusGoals
+    });
 };
 
 buildAssistantReply = function(text) {
-    if (assistantCore?.buildReply) {
-        return assistantCore.buildReply(text, {
-            answerers: {
-                assistantHelp: () => answerAssistantHelp(),
-                broaderGuidance: (input) => answerBroaderGuidance(input),
-                focusNow: () => answerFocusNow(),
-                goalList: () => answerGoalList(),
-                removeAllGoals: () => removeAllGoalsFromAssistant(),
-                removeGoal: (input) => removeGoalFromAssistant(input),
-                saveGoal: (input) => saveGoalFromAssistant(input),
-                timerControl: (input) => answerTimerControl(input),
-                taskCreateOrStart: (input) => answerTaskCreateOrStart(input),
-                focusTotal: (input) => answerFocusTotal(input),
-                topCategory: (input) => answerTopCategory(input),
-                goalHits: (input) => answerGoalHits(input),
-                categoryStatus: (input) => answerCategoryStatus(input),
-                plannedVsActual: (input) => answerPlannedVsActual(input),
-                trend: (input) => answerTrend(input),
-                summary: (input) => answerSummary(input),
-                laggingGoal: (input) => answerLaggingGoal(input),
-                pomodoros: (input) => answerPomodoros(input),
-                performanceAssessment: (input) => answerPerformanceAssessment(input),
-                goalRealism: (input) => answerGoalRealism(input),
-                goalAdjustmentAdvice: () => answerGoalAdjustmentAdvice(),
-                categoryChangeAdvice: (input) => answerCategoryChangeAdvice(input),
-                goalCount: () => answerGoalCount(),
-                categoriesWithoutGoal: () => answerCategoriesWithoutGoal(),
-                tasks: () => answerTasks()
-            },
-            effects: {
-                switchView
-            },
-            conversationState: assistantConversationState,
-            defaultCategories,
-            userCategories,
-            focusGoals,
-            pomodoroMinutes: POMODORO_MINUTES,
-            findTaskByText: findAssistantTaskByText,
-            getDefaultSuggestions: (viewId) => getAssistantDefaultSuggestions(viewId),
-            getDefaultPeriod: () => getAssistantDefaultPeriod()
-        });
-    }
-
-    return legacyBuildAssistantReplyImpl(text);
+    return assistantCore.buildReply(text, {
+        answerers: {
+            assistantHelp: () => answerAssistantHelp(),
+            broaderGuidance: (input) => answerBroaderGuidance(input),
+            focusNow: () => answerFocusNow(),
+            goalList: () => answerGoalList(),
+            removeAllGoals: () => removeAllGoalsFromAssistant(),
+            removeGoal: (input) => removeGoalFromAssistant(input),
+            saveGoal: (input) => saveGoalFromAssistant(input),
+            timerControl: (input) => answerTimerControl(input),
+            taskCreateOrStart: (input) => answerTaskCreateOrStart(input),
+            focusTotal: (input) => answerFocusTotal(input),
+            topCategory: (input) => answerTopCategory(input),
+            goalHits: (input) => answerGoalHits(input),
+            categoryStatus: (input) => answerCategoryStatus(input),
+            plannedVsActual: (input) => answerPlannedVsActual(input),
+            trend: (input) => answerTrend(input),
+            summary: (input) => answerSummary(input),
+            laggingGoal: (input) => answerLaggingGoal(input),
+            pomodoros: (input) => answerPomodoros(input),
+            performanceAssessment: (input) => answerPerformanceAssessment(input),
+            goalRealism: (input) => answerGoalRealism(input),
+            goalAdjustmentAdvice: () => answerGoalAdjustmentAdvice(),
+            categoryChangeAdvice: (input) => answerCategoryChangeAdvice(input),
+            goalCount: () => answerGoalCount(),
+            categoriesWithoutGoal: () => answerCategoriesWithoutGoal(),
+            tasks: () => answerTasks()
+        },
+        effects: {
+            switchView
+        },
+        conversationState: assistantConversationState,
+        defaultCategories,
+        userCategories,
+        focusGoals,
+        pomodoroMinutes: POMODORO_MINUTES,
+        findTaskByText: findAssistantTaskByText,
+        getDefaultSuggestions: (viewId) => getAssistantDefaultSuggestions(viewId),
+        getDefaultPeriod: () => getAssistantDefaultPeriod()
+    });
 };
 
 renderAssistantMessages = function() {
-    if (legacyAssistant?.renderMessages) {
-        return legacyAssistant.renderMessages();
-    }
-
-    return legacyRenderAssistantMessagesImpl();
+    return legacyAssistant.renderMessages();
 };
 
 renderAssistantSuggestions = function() {
-    if (legacyAssistant?.renderSuggestions) {
-        return legacyAssistant.renderSuggestions();
-    }
-
-    return legacyRenderAssistantSuggestionsImpl();
+    return legacyAssistant.renderSuggestions();
 };
 
 setAssistantOpen = function(open) {
-    if (legacyAssistant?.setOpen) {
-        return legacyAssistant.setOpen(open);
-    }
-
-    return legacySetAssistantOpenImpl(open);
+    return legacyAssistant.setOpen(open);
 };
 
 updateAssistantContext = function() {
-    if (legacyAssistant?.updateContext) {
-        return legacyAssistant.updateContext();
-    }
-
-    return legacyUpdateAssistantContextImpl();
+    return legacyAssistant.updateContext();
 };
 
 window.updateAssistantContext = updateAssistantContext;
 
 resetAssistantChat = function() {
-    if (legacyAssistant?.resetChat) {
-        return legacyAssistant.resetChat();
-    }
-
-    return legacyResetAssistantChatImpl();
+    return legacyAssistant.resetChat();
 };
 
 initAssistant = function() {
-    if (legacyAssistant?.init) {
-        return legacyAssistant.init();
-    }
-
-    return legacyInitAssistantImpl();
+    return legacyAssistant.init();
 };
 
 handleAssistantSubmit = function(rawText = null) {
-    if (legacyAssistant?.handleSubmit) {
-        return legacyAssistant.handleSubmit(rawText);
-    }
-
-    return legacyHandleAssistantSubmitImpl(rawText);
+    return legacyAssistant.handleSubmit(rawText);
 };
 
 // TEST FUNCTION - Call from DevTools console: testChangelog()
