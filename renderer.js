@@ -9,7 +9,6 @@ const updateService = window.FocoZenUpdateService;
 const audioService = window.FocoZenAudioService;
 const taskSessionService = window.FocoZenTaskSessionService;
 
-const legacyTasks = window.FocoZenLegacyTasks;
 const assistantCore = window.FocoZenAssistantCore;
 
 const storageKeys = storageService?.storageKeys ?? {
@@ -133,6 +132,7 @@ const STATS_RUNTIME_CHANGE_EVENT = 'focozen:stats-runtime-change';
 const ASSISTANT_RUNTIME_CHANGE_EVENT = 'focozen:assistant-runtime-change';
 const HOME_RUNTIME_CHANGE_EVENT = 'focozen:home-runtime-change';
 const TIMER_RUNTIME_CHANGE_EVENT = 'focozen:timer-runtime-change';
+const TASKS_RUNTIME_CHANGE_EVENT = 'focozen:tasks-runtime-change';
 
 function cloneRuntimeData(value) {
     if (value === null || value === undefined) return value;
@@ -585,6 +585,7 @@ function notifyTimerRuntime() {
     }));
     // We also notify Home so the progress bubble (liquid glass) updates its "percent" based on the new timer tick
     notifyHomeRuntime();
+    notifyTasksRuntime();
 }
 
 window.FocoZenTimerRuntime = Object.freeze({
@@ -599,6 +600,74 @@ window.FocoZenTimerRuntime = Object.freeze({
     onToggleTimer: () => toggleTimer(),
     onResetTimer: () => resetTimer(),
     onAdjustTime: (minutes) => adjustTime(minutes)
+});
+
+function getTasksRuntimeSnapshot() {
+    return {
+        tasks: cloneRuntimeData(tasks),
+        currentTaskId: currentTask?.id ?? null,
+        currentMode,
+        isTimerRunning,
+        timeLeft,
+        totalTimerTime,
+        isDeleteMode: !!isDeleteMode,
+        selectedTaskIds: [...selectedTasksForDelete]
+    };
+}
+
+function notifyTasksRuntime() {
+    window.dispatchEvent(new CustomEvent(TASKS_RUNTIME_CHANGE_EVENT, {
+        detail: getTasksRuntimeSnapshot()
+    }));
+}
+
+window.FocoZenTasksRuntime = Object.freeze({
+    getSnapshot: getTasksRuntimeSnapshot,
+    subscribe(listener) {
+        if (typeof listener !== 'function') return () => {};
+        const handler = (event) => listener(event.detail ?? getTasksRuntimeSnapshot());
+        window.addEventListener(TASKS_RUNTIME_CHANGE_EVENT, handler);
+        return () => window.removeEventListener(TASKS_RUNTIME_CHANGE_EVENT, handler);
+    },
+    selectTask(taskId) {
+        return selectTask(taskId);
+    },
+    startTask(taskId) {
+        return startTask(taskId);
+    },
+    editTask(taskId) {
+        return editTask(taskId);
+    },
+    toggleTaskComplete(taskId) {
+        return toggleTaskComplete(taskId);
+    },
+    toggleTaskTimer() {
+        return toggleTaskTimer();
+    },
+    toggleSubtask(taskId, subtaskId) {
+        return window.toggleSubtask(taskId, subtaskId);
+    },
+    toggleDeleteMode() {
+        isDeleteMode = !isDeleteMode;
+        selectedTasksForDelete.clear();
+        renderTasksSidebar();
+        return isDeleteMode;
+    },
+    deleteTask(taskId) {
+        return window.deleteTask(taskId);
+    },
+    deleteSelectedTasks() {
+        return window.deleteSelectedTasks();
+    },
+    toggleTaskSelection(taskId, isSelected) {
+        return window.toggleTaskSelection(taskId, isSelected);
+    },
+    toggleSelectAllTasks(isSelected) {
+        return window.toggleSelectAllTasks(isSelected);
+    },
+    openCreateTaskModal() {
+        return openCreateModal();
+    }
 });
 
 const motivationalRestartMessages = constantsService?.motivationalRestartMessages ?? [
@@ -626,8 +695,6 @@ function ensureRequiredContract(name, contract, methods = []) {
 function assertRequiredBootstrapContracts() {
     ensureRequiredContract('window.FocoZenAudioService', audioService, ['configure', 'initialize', 'selectSound', 'togglePlay', 'toggleMute', 'setVolume']);
     ensureRequiredContract('window.FocoZenTaskSessionService', taskSessionService, ['configure', 'readSavedSession', 'saveSavedSession', 'createTaskFromAssistant', 'deselectTask', 'promptResumeSession', 'startTask', 'selectTask', 'performTaskSelection', 'toggleTaskComplete']);
-
-    ensureRequiredContract('window.FocoZenLegacyTasks', legacyTasks, ['configure', 'updatePomodoroSuggestion', 'addTempSubtask', 'removeTempSubtask', 'renderTempSubtasks', 'createOrEditTask', 'renderTasksList', 'renderTasksSidebar', 'openTaskEdit', 'deleteTask', 'toggleSubtask', 'toggleTaskSelection', 'toggleSelectAllTasks', 'deleteSelectedTasks']);
     ensureRequiredContract('window.FocoZenAssistantCore', assistantCore, ['normalizeText', 'detectTemporalContext', 'detectCategory', 'detectDurationMinutes', 'detectSchedule', 'extractTaskDraft', 'getMissingTaskFields', 'expandFollowUp', 'buildReply']);
 }
 
@@ -695,6 +762,7 @@ function readNumberStorage(key, fallback = 0) {
 function saveTasks() {
     writeJsonStorage(storageKeys.TASKS, tasks);
     notifyStatsRuntime();
+    notifyTasksRuntime();
 }
 
 function saveFocusHistory() {
@@ -932,49 +1000,6 @@ function configureAudioService() {
     });
 }
 
-function configureLegacyTasksModule() {
-    const tasksModule = ensureRequiredContract('window.FocoZenLegacyTasks', legacyTasks, ['configure']);
-
-    tasksModule.configure({
-        getTasks: () => tasks,
-        getCurrentTask: () => currentTask,
-        getTimeLeft: () => timeLeft,
-        getTotalTimerTime: () => totalTimerTime,
-        getCurrentMode: () => currentMode,
-        getIsTimerRunning: () => isTimerRunning,
-        getTempSubtasks: () => tempSubtasks,
-        getEditingTaskId: () => editingTaskId,
-        getSelectedTasksForDelete: () => selectedTasksForDelete,
-        getIsDeleteMode: () => isDeleteMode,
-        getShowBubbleText: () => showBubbleText,
-        getTestMode: () => testMode,
-        setCurrentTask: (value) => { currentTask = value; },
-        setTimeLeft: (value) => { timeLeft = value; },
-        setTotalTimerTime: (value) => { totalTimerTime = value; },
-        setTempSubtasks: (value) => { tempSubtasks = value; },
-        setEditingTaskId: (value) => { editingTaskId = value; },
-        setIsDeleteMode: (value) => { isDeleteMode = !!value; },
-        saveTasks,
-        startTask: (taskId) => startTask(taskId),
-        toggleTaskComplete: (taskId) => toggleTaskComplete(taskId),
-        resetTimer,
-        pauseTimer,
-        deselectTask: () => deselectTask(),
-        syncStateToPip,
-        updateHeaderTaskCount,
-        updateTimerDisplay,
-        customAlert,
-        customConfirm,
-        renderTasksList: () => renderTasksList(),
-        renderTasksSidebar: () => renderTasksSidebar(),
-        renderProgress: () => renderProgress(),
-        toggleTimer,
-        getTaskFocusDurationSeconds,
-        formatMinutesToHours,
-        pomodoroMinutes: POMODORO_MINUTES
-    });
-}
-
 // INICIALIZACAO BLINDADA
 document.addEventListener('DOMContentLoaded', async () => {
     console.log("Iniciando FocoZen Pro...");
@@ -1009,7 +1034,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     try { initTimer(); } catch(e) { console.error('Erro Timer:', e); }
     try { initModals(); } catch(e) { console.error('Erro Modais:', e); }
     try { configureTaskSessionService(); } catch(e) { console.error('Erro Task Session:', e); }
-    try { configureLegacyTasksModule(); } catch(e) { console.error('Erro Tasks Legacy:', e); }
     try { initTaskForm(); } catch(e) { console.error('Erro Formulário:', e); }
     try { initSidebarControls(); } catch(e) { console.error('Erro Sidebar:', e); }
     try { setupPipActions(); } catch(e) { console.error('Erro PIP Actions:', e); }
@@ -2470,8 +2494,12 @@ function renderTasksList() {
 function renderTasksSidebar() {
     const list = document.getElementById('tasksListSidebar');
     const empty = document.getElementById('emptyStateSidebar');
-    if (!list) return; list.innerHTML = '';
     document.body.classList.toggle('bulk-delete-mode', !!isDeleteMode);
+    if (!list) {
+        notifyTasksRuntime();
+        return;
+    }
+    list.innerHTML = '';
 
     if (tasks.length === 0) {
         if (empty) empty.style.setProperty('display', 'flex', 'important');
@@ -2557,6 +2585,8 @@ function renderTasksSidebar() {
         actionBar.innerHTML = `<label style="color: var(--text-secondary); font-size: 0.8rem; cursor: pointer; display:flex; align-items:center; gap:5px;"><input type="checkbox" id="selectAllTasks" onchange="window.toggleSelectAllTasks(this.checked)" ${selectedTasksForDelete.size === tasks.length ? 'checked' : ''} style="accent-color: #ef4444;"> Selecionar Todas</label><button class="btn-danger-sm" onclick="window.deleteSelectedTasks()"><i class="fas fa-trash"></i> Excluir</button>`;
         list.appendChild(actionBar);
     }
+
+    notifyTasksRuntime();
 }
 
 window.editTask = function(taskId) {
@@ -2610,10 +2640,19 @@ window.toggleSubtask = function(taskId, subtaskId) {
 
 window.toggleTaskSelection = function(taskId, isChecked) {
     if (isChecked) selectedTasksForDelete.add(taskId); else selectedTasksForDelete.delete(taskId);
-    document.getElementById('selectAllTasks').checked = selectedTasksForDelete.size === tasks.length;
+    const selectAllCheckbox = document.getElementById('selectAllTasks');
+    if (selectAllCheckbox) {
+        selectAllCheckbox.checked = selectedTasksForDelete.size === tasks.length;
+    }
+    notifyTasksRuntime();
 };
 window.toggleSelectAllTasks = function(isChecked) {
-    if (isChecked) tasks.forEach(t => selectedTasksForDelete.add(t.id)); else selectedTasksForDelete.clear(); renderTasksSidebar();
+    if (isChecked) {
+        tasks.forEach(t => selectedTasksForDelete.add(t.id));
+    } else {
+        selectedTasksForDelete.clear();
+    }
+    renderTasksSidebar();
 };
 window.deleteSelectedTasks = function() {
     if (selectedTasksForDelete.size === 0) return;
@@ -3070,58 +3109,6 @@ function deleteTask(taskId) {
 function renderProgress() {
     notifyHomeRuntime();
 }
-
-updatePomodoroSuggestion = function() {
-    return legacyTasks.updatePomodoroSuggestion();
-};
-
-addTempSubtask = function() {
-    return legacyTasks.addTempSubtask();
-};
-
-removeTempSubtask = function(id) {
-    return legacyTasks.removeTempSubtask(id);
-};
-
-renderTempSubtasks = function() {
-    return legacyTasks.renderTempSubtasks();
-};
-
-criarOuEditarTarefa = function() {
-    return legacyTasks.createOrEditTask();
-};
-
-renderTasksList = function() {
-    return legacyTasks.renderTasksList();
-};
-
-renderTasksSidebar = function() {
-    return legacyTasks.renderTasksSidebar();
-};
-
-window.editTask = function(taskId) {
-    return legacyTasks.openTaskEdit(taskId);
-};
-
-window.deleteTask = function(taskId) {
-    return legacyTasks.deleteTask(taskId);
-};
-
-window.toggleSubtask = function(taskId, subtaskId) {
-    return legacyTasks.toggleSubtask(taskId, subtaskId);
-};
-
-window.toggleTaskSelection = function(taskId, isChecked) {
-    return legacyTasks.toggleTaskSelection(taskId, isChecked);
-};
-
-window.toggleSelectAllTasks = function(isChecked) {
-    return legacyTasks.toggleSelectAllTasks(isChecked);
-};
-
-window.deleteSelectedTasks = function() {
-    return legacyTasks.deleteSelectedTasks();
-};
 
 function updateTaskBubbleProgress() {
     notifyHomeRuntime();

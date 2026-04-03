@@ -1,5 +1,6 @@
 import React, { startTransition, useCallback, useEffect, useRef, useState } from 'react';
 import { TimerReactPanel } from './TimerReactPanel.jsx';
+import TasksReactSidebar from './TasksReactSidebar.jsx';
 import {
     subscribeHomeViewModel,
     selectSound,
@@ -471,16 +472,7 @@ export default function HomeReactView() {
                 </div>
 
                 {/* Tasks sidebar — rendered by legacyTasks */}
-                <section className="panel panel-tasks sidebar-tasks">
-                    <div className="panel-header">
-                        <span><i className="fas fa-clipboard-list"></i> Minhas Tarefas</span>
-                        <button id="btnAddTaskModal" className="btn-info" onClick={() => openCreateModal()}><i className="fas fa-plus"></i></button>
-                    </div>
-                    <div id="tasksListSidebar" className="tasks-list-sidebar"></div>
-                    <div id="emptyStateSidebar" className="empty-state">
-                        <i className="fas fa-clipboard"></i><p>Nenhuma tarefa ainda</p><span>Clique em "Nova Tarefa" para comecar</span>
-                    </div>
-                </section>
+                <TasksReactSidebar />
             </main>
         </>
     );
