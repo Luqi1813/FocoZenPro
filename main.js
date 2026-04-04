@@ -31,7 +31,7 @@ function getChangelogForVersion(version) {
 // OTIMIZAÇÕES AGRESSIVAS DE MEMÓRIA RAM (CHROMIUM)
 app.commandLine.appendSwitch('disable-site-isolation-trials'); // Remove multiprocesso de abas soltas (poupa ~80MB)
 app.commandLine.appendSwitch('disable-features', 'HardwareMediaKeyHandling'); 
-app.commandLine.appendSwitch('js-flags', '--max-old-space-size=256'); // Força lixeiro do V8 rodar mais cedo
+app.commandLine.appendSwitch('js-flags', '--max-old-space-size=512'); // Balance between memory and GC frequency
 
 let mainWindow;
 let pipWindow;

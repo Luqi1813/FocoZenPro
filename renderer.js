@@ -109,82 +109,17 @@ const taskSessionService = window.FocoZenTaskSessionService;
 
 const assistantCore = window.FocoZenAssistantCore;
 
-const storageKeys = storageService?.storageKeys ?? {
-    TASKS: 'focozen_tasks',
-    HISTORY: 'focozen_history',
-    GOALS: 'focozen_goals',
-    CATEGORIES: 'focozen_categories',
-    SAVED_SESSION: 'focozen_saved_session',
-    TOTAL_POMODOROS: 'focozen_total_pomodoros',
-    SHOW_BUBBLE_TEXT: 'focozen_show_bubble_text',
-    USERNAME: 'focozen_username',
-    WIZARD_CATEGORIES: 'focozen_wizard_categories',
-    QUOTE_INDEX: 'focozen_quote_index',
-    LAST_QUOTE_DATE: 'focozen_last_quote_date',
-    AUDIO_SOUND_ID: 'focozen_audio_sound_id',
-    AUDIO_VOLUME: 'focozen_audio_volume',
-    AUDIO_MUTED: 'focozen_audio_muted',
-    AUDIO_PREVIOUS_VOLUME: 'focozen_audio_previous_volume',
-    UPDATED_VERSION: 'focozen_updated_version',
-    CHANGELOG: 'focozen_changelog',
-    LAST_VERSION: 'focozen_last_version',
-    LAST_CHANGELOG: 'focozen_last_changelog'
-};
+const storageKeys = storageService.storageKeys;
 
-const soundsConfig = constantsService?.soundsConfig ?? [
-    { id: 'chuva', name: 'Chuva', icon: 'fa-cloud-rain', image: 'chuva.jpg', file: 'chuva.mp3' },
-    { id: 'oceano', name: 'Oceano', icon: 'fa-water', image: 'oceano.jpg', file: 'oceano.mp3' },
-    { id: 'floresta', name: 'Floresta', icon: 'fa-tree', image: 'floresta.jpg', file: 'floresta.mp3' },
-    { id: 'fogueira', name: 'Fogueira', icon: 'fa-fire', image: 'fogueira.jpg', file: 'fogueira.mp3' },
-    { id: 'teclado', name: 'Teclado', icon: 'fa-keyboard', image: 'teclado.jpg', file: 'teclado.mp3' },
-    { id: 'classica', name: 'Clássica', icon: 'fa-music', image: 'classica.jpg', file: 'classica.mp3' },
-    { id: 'Jazz', name: 'Jazz', icon: 'fa-music', image: 'jazz.jpg', file: 'Jazz.mp3' },
-    { id: 'Lo-fi', name: 'Lo-Fi', icon: 'fa-headphones', image: 'lofi.jpg', file: 'Lo-fi.mp3' },
-    { id: 'Brown noise', name: 'Brown Noise', icon: 'fa-wave-square', image: 'default.jpg', file: 'Brown noise.mp3' },
-    { id: 'Pink noise', name: 'Pink Noise', icon: 'fa-wave-square', image: 'default.jpg', file: 'Pink noise.mp3' },
-    { id: '40hz', name: '40Hz Gama', icon: 'fa-wave-square', image: 'default.jpg', file: '40hz (Ondas Gama).mp3' }
-];
-
-const soundCategories = constantsService?.soundCategories ?? {
-    'Natureza': { icon: 'fa-leaf', ids: ['chuva', 'oceano', 'floresta', 'fogueira'] },
-    'Música & Foco': { icon: 'fa-headphones', ids: ['teclado', 'classica', 'Jazz', 'Lo-fi'] },
-    'Frequências': { icon: 'fa-wave-square', ids: ['Brown noise', 'Pink noise', '40hz'] }
-};
-
-const soundThemes = constantsService?.soundThemes ?? {
-    'chuva': 'water', 'oceano': 'water', 'floresta': 'nature', 'fogueira': 'fire',
-    'teclado': 'yellow', 'classica': 'classica', 'Jazz': 'jazz', 'Lo-fi': 'lofi',
-    'Brown noise': 'brown', 'Pink noise': 'pink', '40hz': 'sky'
-};
-
-const quotes = constantsService?.quotes ?? [
-    { text: "A mente que se abre a uma nova ideia jamais voltará ao seu tamanho original.", author: "Albert Einstein" },
-    { text: "O conhecimento é a única riqueza que se expande quando compartilhada.", author: "Sócrates" },
-    { text: "Nao espere por circunstancias ideais. Comece agora.", author: "Seneca" }
-];
-
-const successQuotes = constantsService?.successQuotes ?? [
-    { text: "A vitoria pertence ao mais perseverante.", author: "Napoleao Bonaparte" },
-    { text: "Nao e porque as coisas sao dificeis que nao ousamos; e porque nao ousamos que elas sao dificeis.", author: "Seneca" },
-    { text: "O sucesso é ir de fracasso em fracasso sem perder o entusiasmo.", author: "Winston Churchill" },
-    { text: "Faça o que puder, com o que tiver, onde estiver.", author: "Theodore Roosevelt" },
-    { text: "A disciplina é a ponte entre metas e realizações.", author: "Jim Rohn" },
-    { text: "Voce nao precisa ser grande para comecar, mas precisa comecar para ser grande.", author: "Zig Ziglar" }
-];
-
-const POMODORO_MINUTES = constantsService?.POMODORO_MINUTES ?? 25;
-const SHORT_BREAK_MINUTES = constantsService?.SHORT_BREAK_MINUTES ?? 5;
-const LONG_BREAK_MINUTES = constantsService?.LONG_BREAK_MINUTES ?? 15;
-
-const defaultCategories = constantsService?.defaultCategories ?? [
-    { name: 'Livre', icon: 'fa-infinity' },
-    { name: 'Trabalho', icon: 'fa-briefcase' },
-    { name: 'Estudos', icon: 'fa-book' },
-    { name: 'Projetos', icon: 'fa-laptop-code' },
-    { name: 'Leitura', icon: 'fa-book-open' },
-    { name: 'Hobbies', icon: 'fa-palette' },
-    { name: 'Exercício', icon: 'fa-dumbbell' }
-];
+const soundsConfig = constantsService.soundsConfig;
+const soundCategories = constantsService.soundCategories;
+const soundThemes = constantsService.soundThemes;
+const quotes = constantsService.quotes;
+const successQuotes = constantsService.successQuotes;
+const POMODORO_MINUTES = constantsService.POMODORO_MINUTES;
+const SHORT_BREAK_MINUTES = constantsService.SHORT_BREAK_MINUTES;
+const LONG_BREAK_MINUTES = constantsService.LONG_BREAK_MINUTES;
+const defaultCategories = constantsService.defaultCategories;
 let userCategories = [];
 let isEditingCategories = false;
 
@@ -772,13 +707,17 @@ window.FocoZenTasksRuntime = Object.freeze({
     }
 });
 
-const motivationalRestartMessages = constantsService?.motivationalRestartMessages ?? [
-    'Pausar nao e desistir. Voce pode recomecar com mais clareza depois.',
-    'Seu progresso conta. Respire, recarregue e volte mais forte.',
-    'Todo grande avanço também respeita pausas inteligentes.',
-    'Voce nao perdeu o ritmo. So esta escolhendo o melhor momento para continuar.',
-    'Disciplina também é saber a hora de recomeçar com energia.'
-];
+const motivationalRestartMessages = constantsService.motivationalRestartMessages;
+
+function escapeHtml(str) {
+    if (str === null || str === undefined) return '';
+    return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#x27;');
+}
 
 function ensureRequiredContract(name, contract, methods = []) {
     if (!contract) {
@@ -2428,7 +2367,7 @@ function renderTempSubtasks() {
     const list = document.getElementById('tempSubtasksList'); list.innerHTML = '';
     tempSubtasks.forEach(sub => {
         const div = document.createElement('div'); div.className = 'temp-subtask-item';
-        div.innerHTML = `<span>${sub.name}</span><button onclick="window.removeTempSubtask(${sub.id})"><i class="fas fa-times"></i></button>`;
+        div.innerHTML = `<span>${escapeHtml(sub.name)}</span><button onclick="window.removeTempSubtask(${sub.id})"><i class="fas fa-times"></i></button>`;
         list.appendChild(div);
     });
 }
@@ -2497,7 +2436,7 @@ function renderTasksList() {
         allTasks.forEach(task => {
             const item = document.createElement('div'); item.className = `task-item ${task.completed ? 'completed' : ''}`;
             item.innerHTML = `
-                <div class="task-item-info" onclick="window.selectTask(${task.id})"><div class="task-item-name">${task.name}</div><div class="task-item-meta"><span>${task.estimatedMinutes < 1 ? '5s' : task.estimatedMinutes + ' min'}</span></div></div>
+                <div class="task-item-info" onclick="window.selectTask(${task.id})"><div class="task-item-name">${escapeHtml(task.name)}</div><div class="task-item-meta"><span>${task.estimatedMinutes < 1 ? '5s' : task.estimatedMinutes + ' min'}</span></div></div>
                 <div class="task-item-actions-modal" style="display:flex; align-items:center; gap:8px;">
                     <div class="task-item-check" onclick="window.toggleTaskComplete(${task.id})">${task.completed ? '<i class="fas fa-check"></i>' : ''}</div>
                     <button class="action-pill danger" onclick="event.stopPropagation(); window.deleteTask(${task.id})" style="border:none; border-radius:50%; width:28px; height:28px; background:rgba(239,68,68,0.2); color:#ef4444; cursor:pointer; display:flex; align-items:center; justify-content:center; padding:0;"><i class="fas fa-trash"></i></button>
@@ -2554,7 +2493,7 @@ function renderTasksSidebar() {
                     <label class="modern-subtask ${sub.completed ? 'completed' : ''}">
                         <input type="checkbox" ${sub.completed ? 'checked' : ''} onchange="window.toggleSubtask(${task.id}, ${sub.id})">
                         <span class="custom-checkbox"><i class="fas fa-check"></i></span>
-                        <span class="subtask-text">${sub.name}</span>
+                        <span class="subtask-text">${escapeHtml(sub.name)}</span>
                     </label>
                 `;
             });
@@ -2579,8 +2518,8 @@ function renderTasksSidebar() {
             <div class="task-info-area" onclick="${isDeleteMode ? `window.toggleTaskSelectionWrap(${task.id})` : `window.selectTask(${task.id})`}">
                 <div class="task-sidebar-header">
                     <div class="task-sidebar-title-block">
-                        <span class="task-sidebar-name">${task.name}</span>
-                        <span class="task-sidebar-cat"><i class="fas fa-tag"></i> ${task.category || 'Livre'}</span>
+                        <span class="task-sidebar-name">${escapeHtml(task.name)}</span>
+                        <span class="task-sidebar-cat"><i class="fas fa-tag"></i> ${escapeHtml(task.category || 'Livre')}</span>
                     </div>
                     <div style="display:flex; align-items:center; gap:8px;">
                         ${isCurrent && !task.completed ? '<span class="task-sidebar-badge">Ativa</span>' : ''}
