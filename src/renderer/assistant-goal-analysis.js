@@ -1,3 +1,10 @@
+function isGoalApplicableOnDate(goal, date) {
+    if (!goal || !date) return false;
+    const dayOfWeek = date.getDay();
+    if (goal.schedule === 'everyday') return true;
+    return dayOfWeek >= 1 && dayOfWeek <= 5;
+}
+
 function buildAssistantOpenInsight() {
     if (currentTask && currentMode === 'focus') {
         return `Agora, eu manteria o foco em ${currentTask.category || 'Livre'} para fechar a tarefa "${currentTask.name}".`;
@@ -151,7 +158,9 @@ function getAssistantGoalOverview(period, previous = false) {
         totalActual,
         averageProgress,
         bestCategory,
-        streak: getGoalStreak()
+        streak: goalsCore?.getGoalStreak
+            ? goalsCore.getGoalStreak({ focusGoals, focusHistory, now: new Date() })
+            : 0
     };
 }
 

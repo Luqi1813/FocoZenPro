@@ -266,16 +266,12 @@ function createTaskFromAssistant(draft, startNow = true) {
     return task;
 }
 
-function createTaskFromAssistant(draft, startNow = true) {
-    return taskSessionService.createTaskFromAssistant(draft, startNow);
-}
-
 function applyAssistantFreeFocus(durationMinutes = null, category = null) {
     switchView('view-home');
     if (isTimerRunning) pauseTimer();
     if (currentTask) deselectTask();
 
-    const resolvedMinutes = Math.max(1, Math.round(Number(durationMinutes) || FOCUS_TIME));
+    const resolvedMinutes = Math.max(1, Math.round(Number(durationMinutes) || POMODORO_MINUTES));
     const resolvedCategory = category || document.getElementById('globalCategorySelect')?.value || 'Livre';
     const globalCategorySelect = document.getElementById('globalCategorySelect');
     if (globalCategorySelect) {

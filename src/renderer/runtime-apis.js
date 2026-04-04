@@ -47,6 +47,15 @@ function getStatsCompletionRate() {
     return 0;
 }
 
+function getPeriodLabel(period) {
+    switch (period) {
+        case 'day': return 'Hoje';
+        case 'week': return 'Esta semana';
+        case 'month': return 'Este mês';
+        default: return 'Esta semana';
+    }
+}
+
 function buildStatsGoalsSummaryData(period) {
     const overview = getGoalOverviewData(period);
     const momentum = getGoalMomentumContent(overview);
@@ -504,7 +513,7 @@ window.FocoZenTasksRuntime = Object.freeze({
         return startTask(taskId);
     },
     editTask(taskId) {
-        return editTask(taskId);
+        return window.editTask(taskId);
     },
     toggleTaskComplete(taskId) {
         return toggleTaskComplete(taskId);

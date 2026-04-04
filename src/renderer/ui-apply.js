@@ -218,13 +218,9 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     assertRequiredBootstrapContracts();
 
-    try { updateSidebarProfile(); initNavigation(); } catch(e) { console.error('Erro Navegacao:', e); }
-    try { loadDailyQuote(); } catch(e) { console.error('Erro Quote:', e); }
-    try { configureAudioService(); } catch(e) { console.error('Erro Audio Service:', e); }
-
-    try { initTimer(); } catch(e) { console.error('Erro Timer:', e); }
     try { initModals(); } catch(e) { console.error('Erro Modais:', e); }
     try { configureTaskSessionService(); } catch(e) { console.error('Erro Task Session:', e); }
+    try { configureAudioService(); } catch(e) { console.error('Erro Audio Service:', e); }
     try { initTaskForm(); } catch(e) { console.error('Erro Formulário:', e); }
     try { initSidebarControls(); } catch(e) { console.error('Erro Sidebar:', e); }
     try { setupPipActions(); } catch(e) { console.error('Erro PIP Actions:', e); }

@@ -10,10 +10,6 @@ function initNavigation() {
     window.updateSidebarProfile = updateSidebarProfile;
 }
 
-function initNavigation() {
-    window.updateSidebarProfile = updateSidebarProfile;
-}
-
 function updateSidebarProfile() {
     const nameEl = document.getElementById('sidebarUserName');
     const initEl = document.getElementById('sidebarUserInitials');

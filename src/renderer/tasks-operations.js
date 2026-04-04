@@ -75,17 +75,6 @@ window.deleteSelectedTasks = function() {
     });
 };
 
-window.deleteTask = function(taskId) {
-    customConfirm('Excluir Tarefa', 'Deseja excluir esta tarefa?', () => {
-        if (currentTask && currentTask.id === taskId) {
-            resetTimer();
-            deselectTask();
-        }
-        tasks = tasks.filter(t => t.id !== taskId);
-        saveTasks(); renderTasksList(); renderTasksSidebar(); renderProgress(); updateHeaderTaskCount();
-    });
-};
-
 function deselectTask() {
     taskSessionService.deselectTask();
 }

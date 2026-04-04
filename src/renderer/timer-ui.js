@@ -158,36 +158,6 @@ function showAddTimePopup() {
     };
 }
 
-function showContinueLaterPopup() {
-    const msgs = [
-        "Voce nao desistiu, apenas pausou. Isso e forca!",
-        "O progresso acontece um passo de cada vez. Volte quando estiver pronto! 🌟",
-        "Descansar também faz parte do sucesso. Você está no caminho certo! 🚀",
-        "Cada pausa e uma preparacao para o proximo avanco. Ate logo!",
-        "Grandes conquistas levam tempo. Nao desista! "
-    ];
-    const msg = msgs[Math.floor(Math.random() * msgs.length)];
-    const overlay = document.createElement('div');
-    overlay.className = 'modal-overlay active custom-popup';
-    overlay.innerHTML = `
-        <div class="modal-content-small elegant-popup" style="text-align:center;max-width:420px;">
-            <div class="elegant-icon" style="background:linear-gradient(135deg,#8b5cf6,#7c3aed);">
-                <i class="fas fa-heart"></i>
-            </div>
-            <h2 class="elegant-title">Até logo! 👋</h2>
-            <p class="elegant-message" style="font-style:italic;">"${msg}"</p>
-            <button class="btn-modal primary" onclick="this.closest('.modal-overlay').remove();" style="width:100%;margin-top:16px;background:linear-gradient(135deg,#8b5cf6,#7c3aed);">
-                Entendido
-            </button>
-        </div>`;
-    document.body.appendChild(overlay);
-    
-    if (currentTask) {
-        clearForcedTaskCompletion(currentTask);
-        saveTasks(); renderTasksSidebar(); renderTasksList(); renderProgress();
-    }
-}
-
 window.toggleTestMode = function() {
     testMode = !testMode;
     const btn = document.getElementById('btnTestMode');

@@ -6,15 +6,6 @@ function persistAssistantMessages() {
     writeJsonStorage(getAssistantStorageKey(), assistantMessages.slice(-24));
 }
 
-function escapeHtml(value) {
-    return String(value || '')
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;')
-        .replace(/"/g, '&quot;')
-        .replace(/'/g, '&#39;');
-}
-
 function formatAssistantContent(text) {
     return escapeHtml(text)
         .replace(/\n/g, '<br>')

@@ -98,8 +98,4 @@ function updateVolumeDisplay() {
         if (slider && !slider.matches(':active')) slider.value = vol;
     });
 }
-
-function initTimer() {
-
-}
 
