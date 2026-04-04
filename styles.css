@@ -628,7 +628,7 @@ LAYOUT PRINCIPAL E TRANSIÇÕES FLUIDAS
 .time-label { text-align: center; font-size: 0.7rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 2px; font-weight: 700; margin-top: 0px; text-shadow: 0 1px 2px rgba(0,0,0,0.5); }
 
 .timer-controls { position: relative; display: flex; justify-content: center; align-items: center; margin: 10px 0; height: 50px; }
-.ctrl-btn { width: 30px; height: 30px; border-radius: 50%; border: 1px solid var(--border-color); background: rgba(0, 0, 0, 0.3); color: var(--text-primary); cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all 0.3s ease; }
+.ctrl-btn { width: 34px; height: 34px; border-radius: 50%; border: 1px solid var(--border-color); background: rgba(0, 0, 0, 0.3); color: var(--text-primary); cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all 0.3s ease; }
 .ctrl-btn:hover { border-color: var(--accent-primary); color: var(--accent-primary); }
 
 .ctrl-btn.btn-play { position: absolute; left: 50%; transform: translateX(-50%); width: 54px; height: 54px; background: linear-gradient(135deg, var(--accent-primary), var(--accent-secondary)); border: none; box-shadow: 0 0 20px var(--accent-glow); padding: 0; z-index: 2; margin: 0; }

@@ -1,3 +1,101 @@
+/**
+ * FocoZen Pro — Renderer (Main Process Coordinator)
+ * ==================================================
+ * 
+ * SECTION INDEX (for AI navigation):
+ * 
+ * LINES    | SECTION
+ * ---------|--------
+ * 1-90     | Service refs, constants, state declarations
+ * 90-145   | Runtime snapshot builders (Goals, Stats)
+ * 145-400  | Runtime API objects (Goals, Stats, Assistant, Home)
+ * 400-560  | Timer & Tasks Runtime APIs
+ * 560-730  | Contract validation, storage wrappers, bootstrap helpers
+ * 730-1000 | UI apply functions, audio config, service configuration
+ * 1000-1080| DOMContentLoaded bootstrap
+ * 1080-1165| Category Engine (V2)
+ * 1165-1230| Wizard Onboarding (V2)
+ * 1230-1255| Routing (switchView, initNavigation)
+ * 1255-1370| PiP Integration
+ * 1370-1500| Audio Controls (selectSound, toggleMute, toggleMasterPlay)
+ * 1500-1640| Timer Core (adjustTime, setTimerMode, toggleTimer, pauseTimer, resetTimer)
+ * 1640-1920| Timer Completion & Task Resolution Flow
+ * 1920-2125| Timer UI & Transition Modals
+ * 2125-2205| Dialog/Toast Utilities (customConfirm, customAlert, resetAppData, showGlassToast)
+ * 2205-2385| Task Modal & Form (openCreateModal, criarOuEditarTarefa)
+ * 2385-2510| Task Rendering (renderTasksList, renderTasksSidebar)
+ * 2510-2845| Task Operations (editTask, toggleSubtask, deleteTask, attemptDeselectTask)
+ * 2845-2900| Task Operations (delegated to taskSessionService)
+ * 2900-3045| Dashboard Data Helpers (getFocusWindowSummaryData, getGoalOverview, etc.)
+ * 3045-3260| Goal Computation Functions (getGoalSummaries, getDailyGoalOutcome, etc.)
+ * 3260-3505| Goal UI & Dashboard Compilation (compileDashboardData, compileGoalsData)
+ * 3505-3850| Chart Rendering (renderCategoriesChart, renderStatsGoalsSummary)
+ * 3850-4020| Chart Helpers & Goals Summary (drawArrowLabels, renderGoalsComparisonChart)
+ * 4020-4200| Goals List & Period Bar Chart (renderGoalsList, renderPeriodBarChart)
+ * 4200-4410| Timeline Chart (renderTimeline)
+ * 4410-4620| Sound Carousel (buildSoundCarousel, toggleSoundCarousel)
+ * 4620-4860| Update System (setupUpdateListeners, showUpdateNotification, showChangelogModal)
+ * 4860-5170| Assistant Infrastructure (messages, suggestions, context, init)
+ * 5170-5450| Assistant NLP & Task Extraction (detectCategory, detectDuration, extractTaskDraft)
+ * 5450-5740| Assistant Goal & History Analysis (getGoalSummaries, getGoalOverview)
+ * 5740-5975| Assistant Goal Status & Reply Personalization
+ * 5975-6490| Assistant Answer Handlers (18 intent handlers)
+ * 6490-6920| Assistant Advanced Answer Handlers + Router (buildAssistantReply)
+ * 6920-7052| Test Utilities
+ * 
+ * NOTE: Many sections reference HTML elements that no longer exist (Stats/Goals views
+ * are now React). All references are safely guarded with ?. or if() checks.
+ */
+
+/**
+ * FocoZen Pro — Renderer (Main Process Coordinator)
+ * ==================================================
+ * 
+ * SECTION INDEX (for AI navigation):
+ * 
+ * LINES    | SECTION
+ * ---------|--------
+ * 1-90     | Service refs, constants, state declarations
+ * 90-145   | Runtime snapshot builders (Goals, Stats)
+ * 145-400  | Runtime API objects (Goals, Stats, Assistant, Home)
+ * 400-560  | Timer & Tasks Runtime APIs
+ * 560-730  | Contract validation, storage wrappers, bootstrap helpers
+ * 730-1000 | UI apply functions, audio config, service configuration
+ * 1000-1080| DOMContentLoaded bootstrap
+ * 1080-1165| Category Engine (V2)
+ * 1165-1230| Wizard Onboarding (V2)
+ * 1230-1255| Routing (switchView, initNavigation)
+ * 1255-1370| PiP Integration
+ * 1370-1500| Audio Controls (selectSound, toggleMute, toggleMasterPlay)
+ * 1500-1640| Timer Core (adjustTime, setTimerMode, toggleTimer, pauseTimer, resetTimer)
+ * 1640-1920| Timer Completion & Task Resolution Flow
+ * 1920-2125| Timer UI & Transition Modals
+ * 2125-2205| Dialog/Toast Utilities (customConfirm, customAlert, resetAppData, showGlassToast)
+ * 2205-2385| Task Modal & Form (openCreateModal, criarOuEditarTarefa)
+ * 2385-2510| Task Rendering (renderTasksList, renderTasksSidebar)
+ * 2510-2845| Task Operations (editTask, toggleSubtask, deleteTask, attemptDeselectTask)
+ * 2845-2900| Task Operations (delegated to taskSessionService)
+ * 2900-3045| Dashboard Data Helpers (getFocusWindowSummaryData, getGoalOverview, etc.)
+ * 3045-3260| Goal Computation Functions (getGoalSummaries, getDailyGoalOutcome, etc.)
+ * 3260-3505| Goal UI & Dashboard Compilation (compileDashboardData, compileGoalsData)
+ * 3505-3850| Chart Rendering (renderCategoriesChart, renderStatsGoalsSummary)
+ * 3850-4020| Chart Helpers & Goals Summary (drawArrowLabels, renderGoalsComparisonChart)
+ * 4020-4200| Goals List & Period Bar Chart (renderGoalsList, renderPeriodBarChart)
+ * 4200-4410| Timeline Chart (renderTimeline)
+ * 4410-4620| Sound Carousel (buildSoundCarousel, toggleSoundCarousel)
+ * 4620-4860| Update System (setupUpdateListeners, showUpdateNotification, showChangelogModal)
+ * 4860-5170| Assistant Infrastructure (messages, suggestions, context, init)
+ * 5170-5450| Assistant NLP & Task Extraction (detectCategory, detectDuration, extractTaskDraft)
+ * 5450-5740| Assistant Goal & History Analysis (getGoalSummaries, getGoalOverview)
+ * 5740-5975| Assistant Goal Status & Reply Personalization
+ * 5975-6490| Assistant Answer Handlers (18 intent handlers)
+ * 6490-6920| Assistant Advanced Answer Handlers + Router (buildAssistantReply)
+ * 6920-7052| Test Utilities
+ * 
+ * NOTE: Many sections reference HTML elements that no longer exist (Stats/Goals views
+ * are now React). All references are safely guarded with ?. or if() checks.
+ */
+
 const constantsService = window.FocoZenConstants;
 const storageService = window.FocoZenStorage;
 const utilsService = window.FocoZenUtils;
@@ -621,6 +719,10 @@ function notifyTasksRuntime() {
     }));
 }
 
+function toggleTaskTimer() {
+    return toggleTimer();
+}
+
 window.FocoZenTasksRuntime = Object.freeze({
     getSnapshot: getTasksRuntimeSnapshot,
     subscribe(listener) {
@@ -930,13 +1032,6 @@ function getCurrentSoundConfig() {
 function applyAudioStateToUi() {
     const currentSound = getCurrentSoundConfig();
 
-    const statsName = document.getElementById('statsPlayerSoundName');
-    const goalsName = document.getElementById('goalsPlayerSoundName');
-    const settingsName = document.getElementById('settingsPlayerSoundName');
-    if (statsName) statsName.textContent = currentSound?.name || 'Nenhum som';
-    if (goalsName) goalsName.textContent = currentSound?.name || 'Nenhum som';
-    if (settingsName) settingsName.textContent = currentSound?.name || 'Nenhum som';
-
     document.querySelectorAll('.vpa-sound-item').forEach((item) => {
         item.classList.toggle('active', item.dataset.soundId === currentSoundId);
     });
@@ -1232,98 +1327,19 @@ window.finishWizard = function() {
 // ROTEAMENTO V2
 // ==========================================
 function switchView(viewId) {
-    // Sync view player panels
-    const nowPlayingSpan = document.getElementById('nowPlaying')?.querySelector('span');
-    const titleText = nowPlayingSpan ? nowPlayingSpan.textContent : 'Nenhum som';
-    const statsName = document.getElementById('statsPlayerSoundName');
-    const goalsName = document.getElementById('goalsPlayerSoundName');
-    const settingsName = document.getElementById('settingsPlayerSoundName');
-    if (statsName) statsName.textContent = titleText;
-    if (goalsName) goalsName.textContent = titleText;
-    if (settingsName) settingsName.textContent = titleText;
-    buildViewPlayerSounds('statsPlayerSounds');
-    buildViewPlayerSounds('goalsPlayerSounds');
-    buildViewPlayerSounds('settingsPlayerSounds');
-
-    const statsEl = document.getElementById('view-stats');
-    if (statsEl) statsEl.classList.remove('stats-anim-in');
-
     document.querySelectorAll('.view-container').forEach(v => v.classList.remove('active'));
-    document.querySelectorAll('.sidebar-item').forEach(i => i.classList.remove('active'));
-    
     document.getElementById(viewId)?.classList.add('active');
-    document.querySelector(`.sidebar-item[data-view="${viewId}"]`)?.classList.add('active');
-    
-    if (viewId === 'view-stats') {
-        const title = document.getElementById('statsGreetingTitle');
-        if (title) title.innerHTML = `Mandou bem, ${username.split(' ')[0]}!`;
-        if (window.compileDashboardData) window.compileDashboardData();
-        // Trigger entry animation after a micro-tick so the browser registers the DOM change
-        requestAnimationFrame(() => {
-            if (statsEl) statsEl.classList.add('stats-anim-in');
-        });
-    }
-    if (viewId === 'view-goals') {
-        window.compileGoalsData();
-    }
-    if (viewId === 'view-settings') {
-        const input = document.getElementById('settingsNameInput');
-        if (input) input.value = username;
-    }
-
+    if (viewId === 'view-stats' && window.compileDashboardData) window.compileDashboardData();
+    if (viewId === 'view-goals') window.compileGoalsData();
     window.updateAssistantContext();
 }
 
 function initNavigation() {
-    document.querySelectorAll('.sidebar-item').forEach(item => {
-        item.addEventListener('click', (e) => {
-            const viewId = e.currentTarget.dataset.view;
-            if (viewId) switchView(viewId);
-        });
-    });
+    window.updateSidebarProfile = updateSidebarProfile;
+}
 
-    document.getElementById('btnSaveSettings')?.addEventListener('click', () => {
-        const input = document.getElementById('settingsNameInput');
-        if (input && input.value.trim()) {
-            username = input.value.trim();
-            if (storageService?.writeStorageValue) {
-                storageService.writeStorageValue(storageKeys.USERNAME, username);
-            } else {
-                localStorage.setItem(storageKeys.USERNAME, username);
-            }
-            updateSidebarProfile();
-            notifyStatsRuntime();
-            notifyAssistantRuntime();
-            const msg = document.getElementById('settingsSavedMsg');
-            if (msg) { msg.style.display = 'flex'; setTimeout(() => msg.style.display = 'none', 3000); }
-        }
-    });
-
-    document.getElementById('btnSettingsResetData')?.addEventListener('click', resetAppData);
-    
-    document.getElementById('btnCheckUpdates')?.addEventListener('click', () => {
-        const btn = document.getElementById('btnCheckUpdates');
-        const status = document.getElementById('updateCheckStatus');
-        
-        if (btn && status) {
-            btn.disabled = true;
-            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Verificando...';
-            status.style.display = 'none';
-            window._manualUpdateTriggered = true;
-            
-            if (updateService?.checkForUpdates && updateService.checkForUpdates()) {
-                return;
-            } else {
-                setTimeout(() => {
-                    window._manualUpdateTriggered = false;
-                    handleUpdateCheckResult({ 
-                        available: false, 
-                        message: 'Sistema de atualizacao nao disponivel em modo desenvolvimento.' 
-                    });
-                }, 500);
-            }
-        }
-    });
+function initNavigation() {
+    window.updateSidebarProfile = updateSidebarProfile;
 }
 
 function updateSidebarProfile() {
@@ -1341,6 +1357,7 @@ function setupPipActions() {
         pipService.onAction((action, data) => {
             if (action === 'toggle-play') toggleTimer();
             else if (action === 'reset') resetTimer();
+            else if (action === 'reset-timer') resetTimer();
             else if (action === 'toggle-audio') toggleMasterPlay();
             else if (action === 'change-sound') {
                 const targetSound = soundsConfig.find(s => s.id === data);
@@ -2921,158 +2938,9 @@ window.promptResumeSession = function() {
     }
 };
 
-function startTask(taskId) {
-    // If we're already on this task, just toggle play
-    if (currentTask && currentTask.id === taskId) {
-        // Se ainda está em modo break, muda para focus
-        if (currentMode !== 'focus') setTimerMode('focus');
-        if (!isTimerRunning) toggleTimer();
-        return;
-    }
-    
-    // Otherwise, we want to select it, then immediately start it. 
-    // We pass a callback to selectTask so it runs after the switch (and after any save modals).
-    selectTask(taskId, false, () => {
-        if (currentTask && !currentTask.completed && !isTimerRunning) {
-            // Garantir que está em modo focus antes de iniciar
-            if (currentMode !== 'focus') setTimerMode('focus');
-            toggleTimer(); 
-        }
-    });
-}
-
-function selectTask(taskId, skipTimerSync, onComplete) {
-    // If we are currently in Free Mode (no current task) but with progress, silently log to history and switch instantly!
-    if (!currentTask && currentMode === 'focus' && timeLeft < totalTimerTime) {
-        const elapsedSecs = totalTimerTime - timeLeft;
-        if (elapsedSecs >= 60) { // Only log if at least 1 minute was spent
-            const activeCategory = document.getElementById('globalCategorySelect')?.value || "Livre";
-            const todayStr = new Date().toISOString().split('T')[0];
-            focusHistory.push({
-                id: Date.now(), date: todayStr,
-                durationMinutes: Math.max(1, Math.round(elapsedSecs / 60)),
-                category: activeCategory, taskId: null
-            });
-            saveFocusHistory();
-        }
-        pauseTimer();
-        _doSelectTask(taskId, skipTimerSync);
-        if (onComplete) onComplete();
-        return;
-    }
-
-    // Offer to save if there's progress on a DIFFERENT TASK
-    const isCurrentTaskDifferent = currentTask ? currentTask.id !== taskId : false;
-    const hasProgress = isCurrentTaskDifferent && currentMode === 'focus' && timeLeft < totalTimerTime;
-    
-    if (hasProgress) {
-        const doSwitch = () => {
-            _doSelectTask(taskId, skipTimerSync);
-            if (onComplete) onComplete();
-        };
-        const overlay = document.createElement('div'); overlay.className = 'modal-overlay active custom-popup';
-        overlay.innerHTML = `
-            <div class="elegant-popup" style="text-align:center; max-width:400px;">
-                <div class="elegant-icon" style="color:#f59e0b;"><i class="fas fa-exchange-alt"></i></div>
-                <h3 class="elegant-title">Trocar Tarefa?</h3>
-                <p class="elegant-message">Você tem progresso na tarefa atual. O que deseja fazer?</p>
-                <div class="elegant-actions">
-                    <button class="btn-modal danger btn-discard-sw">Desistir e Trocar</button>
-                    <button class="btn-modal primary btn-save-sw">Salvar e Trocar</button>
-                </div>
-                <button class="btn-modal secondary" style="margin-top:10px;width:100%;" onclick="this.closest('.modal-overlay').remove()">Cancelar</button>
-            </div>`;
-        document.body.appendChild(overlay);
-        overlay.querySelector('.btn-discard-sw').onclick = () => { overlay.remove(); resetTimer(); doSwitch(); };
-        overlay.querySelector('.btn-save-sw').onclick = () => {
-            overlay.remove();
-            if (currentMode === 'focus') {
-                if (currentTask) {
-                    const partialPomodoro = (totalTimerTime - timeLeft) / totalTimerTime;
-                    currentTask.completedPomodoros = Math.floor(currentTask.completedPomodoros) + partialPomodoro;
-                    saveTasks();
-                }
-                // Also save session state so it can be resumed
-                const stateObj = { 
-                    taskId: currentTask ? currentTask.id : null, 
-                    category: currentTask ? currentTask.category : (document.getElementById('globalCategorySelect')?.value || 'Livre'), 
-                    timeLeft, 
-                    totalTimerTime, 
-                    mode: currentMode 
-                };
-                saveSavedSession(stateObj);
-            }
-            // Now do a clean reset and switch
-            pauseTimer();
-            currentTask = null; // Clear without calling deselectTask (which would resetTimer)
-            _doSelectTask(taskId, skipTimerSync);
-            if (onComplete) onComplete();
-        };
-        return; // Wait for user choice
-    }
-    
-    _doSelectTask(taskId, skipTimerSync);
-    if (onComplete) onComplete();
-}
-
-function _doSelectTask(taskId, skipTimerSyncInput) {
-    currentTask = tasks.find(t => t.id === taskId);
-    if (currentTask && !currentTask.completed) {
-        let skipTimerSync = skipTimerSyncInput;
-        // Check if there's a saved session for this newly selected task
-        const session = readSavedSession();
-        
-        if (session && session.taskId === taskId) {
-            // Restore exact saved timer state for this task
-            skipTimerSync = true;
-            currentMode = session.mode || 'focus';
-            timeLeft = session.timeLeft;
-            totalTimerTime = session.totalTimerTime;
-            applyTimerModeUi({ mode: currentMode, resetToggleButton: true });
-            updateTimerDisplay();
-            updateProgressBar();
-            // Clear the session so we don't infinitely restore it if closed without saving
-            if (storageService?.removeStorageValue) {
-                storageService.removeStorageValue(storageKeys.SAVED_SESSION);
-            } else {
-                localStorage.removeItem(storageKeys.SAVED_SESSION);
-            }
-        }
-
-        const badge = document.getElementById('currentTaskBadge');
-        badge.textContent = currentTask.name.substring(0, 15) + (currentTask.name.length > 15 ? '...' : '');
-        badge.className = 'task-badge task-mode'; document.getElementById('btnFreeFocus').classList.remove('hidden');
-        document.getElementById('globalCategorySelect').value = currentTask.category || "Livre";
-        window.updateCustomDropdownUI(currentTask.category || "Livre");
-        
-        // If not restoring from the physical localstorage session, we can mathematically restore from the decimal fraction!
-        if (!skipTimerSync) {
-            totalTimerTime = getTaskFocusDurationSeconds(currentTask);
-            const fractionDone = currentTask.completedPomodoros % 1; // get the decimal part (e.g., 0.2 means 20% done)
-            
-            // Reconstruct the exact timeLeft from the fraction!
-            if (fractionDone > 0) {
-                timeLeft = Math.round(totalTimerTime * (1 - fractionDone));
-            } else {
-                timeLeft = totalTimerTime; // fresh start
-            }
-            
-            updateTimerDisplay();
-            updateProgressBar();
-        }
-    } else { deselectTask(); }
-    renderProgress(); renderTasksList(); renderTasksSidebar(); document.getElementById('welcomeModal')?.classList.remove('active');
-    syncStateToPip();
-}
-
-function toggleTaskComplete(taskId) {
-    const task = tasks.find(t => t.id === taskId);
-    if (task) {
-        task.completed = !task.completed; saveTasks();
-        if(task.completed) { showTaskSuccessModal(task.name); if(currentTask?.id === taskId) deselectTask(); }
-        renderTasksList(); renderTasksSidebar(); updateHeaderTaskCount();
-    }
-}
+// ==========================================
+// TASK OPERATIONS (delegated to taskSessionService)
+// ==========================================
 
 window.promptResumeSession = function() {
     taskSessionService.promptResumeSession();
@@ -3082,14 +2950,14 @@ function startTask(taskId) {
     taskSessionService.startTask(taskId);
 }
 
-function selectTask(taskId, skipTimerSync = false, onComplete = null) {
+function selectTask(taskId, skipTimerSync, onComplete) {
     taskSessionService.selectTask(taskId, {
         skipTimerSync: !!skipTimerSync,
         onComplete
     });
 }
 
-function _doSelectTask(taskId, skipTimerSyncInput = false) {
+function _doSelectTask(taskId, skipTimerSyncInput) {
     taskSessionService.performTaskSelection(taskId, {
         skipTimerSync: !!skipTimerSyncInput
     });

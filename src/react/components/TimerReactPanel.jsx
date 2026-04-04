@@ -75,7 +75,7 @@ export function TimerReactPanel({ snapshot: homeSnapshot, CategoryDropdown, Task
             </div>
 
             <div className="timer-controls">
-                <button className="ctrl-btn" onClick={resetTimer}>
+                <button className="ctrl-btn" id="timerReset" onClick={resetTimer}>
                     <i className="fas fa-redo"></i>
                 </button>
                 <button className="ctrl-btn btn-play" onClick={toggleTimer}>

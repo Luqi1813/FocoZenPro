@@ -186,6 +186,26 @@ function createWindow() {
         mainWindow.show();
     });
 
+    // HOT RELOADING: watch React bundle and reload when it changes
+    if (!app.isPackaged) {
+        const bundlePath = path.join(__dirname, 'dist/react/react-app.js');
+        let reloadTimer = null;
+        try {
+            fs.watchFile(bundlePath, { interval: 500 }, () => {
+                clearTimeout(reloadTimer);
+                reloadTimer = setTimeout(() => {
+                    if (mainWindow && !mainWindow.isDestroyed()) {
+                        console.log('[Hot Reload] Bundle changed, reloading renderer...');
+                        mainWindow.webContents.reload();
+                    }
+                }, 300);
+            });
+            console.log('[Hot Reload] Watching for bundle changes...');
+        } catch (err) {
+            console.warn('[Hot Reload] Could not watch bundle:', err.message);
+        }
+    }
+
     mainWindow.on('restore', (e) => {
         if (isPipMode) {
             e.preventDefault();

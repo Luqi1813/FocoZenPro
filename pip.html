@@ -194,7 +194,8 @@
 
         .sound-wrapper { position: relative; display: none; gap: 6px; align-items: center; }
         
-        .main-controls { display: flex; gap: 10px; }
+        .main-controls { position: relative; display: flex; justify-content: center; align-items: center; width: 44px; height: 44px; }
+        .main-controls .btn-action#btnPipReset { position: absolute; left: -50px; width: 34px; height: 34px; }
         .btn-action {
             background: rgba(0,0,0,0.4); border: 1px solid rgba(255,255,255,0.15);
             border-radius: 50%; width: 34px; height: 34px; color: #fff;
@@ -697,6 +698,7 @@
                 <div class="sound-list" id="soundList"></div>
             </div>
             <div class="main-controls">
+                <button id="btnPipReset" class="btn-action" title="Resetar Timer"><i class="fas fa-redo"></i></button>
                 <button id="btnPipPlay" class="btn-action"><i class="fas fa-play" id="playIcon"></i></button>
             </div>
         </div>
@@ -899,6 +901,8 @@
         });
 
         document.getElementById('btnPipPlay').addEventListener('click', () => window.electronAPI.sendPipAction('toggle-play'));
+        document.getElementById('btnPipReset').addEventListener('click', () => window.electronAPI.sendPipAction('reset-timer'));
+        document.getElementById('btnPipReset').addEventListener('click', () => window.electronAPI.sendPipAction('reset-timer'));
         function showPipToast(message) {
             pipInlineToast.textContent = message;
             pipInlineToast.classList.remove('show');

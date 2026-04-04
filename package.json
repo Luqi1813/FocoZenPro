@@ -7,7 +7,10 @@
     "start": "npm run react:build && electron .",
     "react:build": "vite build",
     "react:watch": "vite build --watch",
-    "dist": "npm run react:build && electron-builder"
+    "dist": "npm run react:build && electron-builder",
+    "test": "vitest run",
+    "test:unit": "vitest run --dir tests/contracts tests/react",
+    "test:watch": "vitest"
   },
   "build": {
     "appId": "com.luqi.focozenpro",
@@ -38,10 +41,14 @@
   "author": "FocoZen",
   "license": "MIT",
   "devDependencies": {
+    "@testing-library/jest-dom": "^6.9.1",
+    "@testing-library/react": "^16.3.2",
     "@vitejs/plugin-react": "^6.0.1",
     "electron": "^28.0.0",
     "electron-builder": "^24.13.3",
-    "vite": "^8.0.3"
+    "jsdom": "^26.1.0",
+    "vite": "^8.0.3",
+    "vitest": "^3.2.4"
   },
   "dependencies": {
     "chart.js": "^4.5.1",
