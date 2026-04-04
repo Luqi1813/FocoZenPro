@@ -236,6 +236,8 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     try { applyAudioStateToUi(); } catch(e) { console.error('Erro Audio UI:', e); }
     try { updateHeaderTaskCount(); } catch(e) { console.error('Erro Count:', e); }
+    try { setupUpdateListeners(); } catch(e) { console.error('Erro Updates:', e); }
+    try { setupUpdateListeners(); } catch(e) { console.error('Erro Updates:', e); }
 
     try {
         window.renderTimerDropdown();

@@ -1,17 +1,3 @@
-function filterHistoryByPeriod(history, period) {
-    const now = new Date();
-    if (period === 'day') {
-        const todayStr = now.toISOString().split('T')[0];
-        return history.filter(h => h.date === todayStr);
-    } else if (period === 'month') {
-        const cutoff = new Date(now); cutoff.setDate(cutoff.getDate() - 29); cutoff.setHours(0,0,0,0);
-        return history.filter(h => new Date(h.date) >= cutoff);
-    } else {
-        const cutoff = new Date(now); cutoff.setDate(cutoff.getDate() - 6); cutoff.setHours(0,0,0,0);
-        return history.filter(h => new Date(h.date) >= cutoff);
-    }
-}
-
 function formatMinsToHours(mins) {
     const h = Math.floor(mins / 60);
     const m = Math.floor(mins % 60);

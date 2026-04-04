@@ -9,14 +9,6 @@ function formatMinutesToHours(minutes) {
     return hours > 0 ? `${hours}h ${remainingMinutes}m` : `${remainingMinutes}m`;
 }
 
-function filterHistoryForPeriod(history, period) {
-    if (historyCore?.filterHistoryByPeriod) {
-        return historyCore.filterHistoryByPeriod(history, period, new Date());
-    }
-
-    return Array.isArray(history) ? history : [];
-}
-
 function getFocusWindowSummaryData() {
     if (historyCore?.getFocusWindowSummary) {
         return historyCore.getFocusWindowSummary({ history: focusHistory, now: new Date() });
@@ -68,37 +60,6 @@ function getActiveGoalsData() {
     }
 
     return [];
-}
-
-function getGoalSummariesData(period) {
-    if (goalsCore?.getGoalSummaries) {
-        return goalsCore.getGoalSummaries({
-            focusGoals,
-            focusHistory,
-            period,
-            now: new Date()
-        });
-    }
-
-    return [];
-}
-
-function getDailyGoalOutcomeData(date) {
-    if (goalsCore?.getDailyGoalOutcome) {
-        return goalsCore.getDailyGoalOutcome({
-            focusGoals,
-            focusHistory,
-            date
-        });
-    }
-
-    return {
-        targetMinutes: 0,
-        actualMinutes: 0,
-        activeCategories: 0,
-        hitCategories: 0,
-        hitAll: false
-    };
 }
 
 function getGoalOverviewData(period) {
@@ -234,22 +195,6 @@ function resetGoalForm() {
     });
     if (cancelBtn) cancelBtn.classList.add('hidden');
     updateGoalHoursDisplay(1);
-}
-
-function populateGoalForm(goalId) {
-    const goal = focusGoals.find(item => item.id === goalId);
-    if (!goal) return;
-
-    editingGoalId = goal.id;
-    renderGoalCategoryOptions();
-    document.getElementById('goalCategorySelect').value = goal.category;
-    document.getElementById('goalDailyMinutesInput').value = ((Number(goal.dailyMinutes) || 0) / 60).toString();
-    document.getElementById('goalScheduleInput').value = goal.schedule || 'weekdays';
-    document.querySelectorAll('.goal-schedule-btn').forEach(btn => {
-        btn.classList.toggle('active', btn.dataset.schedule === (goal.schedule || 'weekdays'));
-    });
-    document.getElementById('btnCancelGoalEdit')?.classList.remove('hidden');
-    updateGoalHoursDisplay(goal.dailyMinutes / 60);
 }
 
 function normalizeGoalHours(value) {
