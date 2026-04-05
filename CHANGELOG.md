@@ -2,6 +2,31 @@
 
 Todas as mudancas notaveis do FocoZen Pro serao documentadas neste arquivo.
 
+## [1.2.0] - 2026-04-04
+
+### Adicionado
+- README.md completo com documentacao de arquitetura, stack tecnologico e instrucoes de uso
+- 85 testes automatizados (de 38 originais) cobrindo core modules e runtime contracts
+- Testes para timer, history, goals, stats, tasks, assistant e home runtimes
+
+### Melhorado
+- Migracao completa para React: todos os 6 dominios (Home, Timer, Tarefas, Metas, Estatisticas, Assistente) agora usam React
+- Arquitetura em 4 camadas: core (logica pura), services (bridges), react (UI), renderer (coordenacao)
+- Runtime contracts padronizados via `window.FocoZen*Runtime`
+- Performance otimizada: N+1 query fix em chart-rendering.js (O(n*m) → O(m))
+- React.memo em componentes folha (SoundCard, TaskRow, StatsCard, GoalCard) para reduzir re-renders
+- Chart.js cleanup no unmount para evitar memory leaks
+- XSS mitigados: `escapeHtml()` verificado em todos os innerHTML com dados do usuario
+- Codigo morto removido: ~1,100 linhas de funcoes e modulos nao utilizados
+- Cache-busting `?v=2` removido de todos os scripts
+- Legibilidade melhorada: `main.js` reformatted, `README.md` criado
+
+### Corrigido
+- Listener `maximize` duplicado em `main.js` removido
+- Modulos mortos deletados: `timeline.js`, `sound-carousel.js`, `test-utils.js`
+- Funcoes mortas removidas de `dashboard.js`: `filterHistoryForPeriod`, `getGoalSummariesData`, `getDailyGoalOutcomeData`, `populateGoalForm`
+- `setupUpdateListeners()` movido para bootstrap correto em `ui-apply.js`
+
 ## [1.1.1] - 2026-04-02
 
 ### Adicionado
