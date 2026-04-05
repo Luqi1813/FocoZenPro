@@ -19,7 +19,7 @@ window.renderCategoryChips = function() {
         const div = document.createElement('div');
         div.className = `cat-chip ${cat.name === currentVal ? 'active' : ''} ${isEditingCategories ? 'editing' : ''}`;
         div.setAttribute('data-val', cat.name);
-        div.innerHTML = `<i class="fas ${cat.icon || 'fa-tag'}"></i> ${cat.name}`;
+        div.innerHTML = `<i class="fas ${cat.icon || 'fa-tag'}"></i> ${escapeHtml(cat.name)}`;
         
         if (isEditingCategories && cat.name !== 'Livre') {
             const delBtn = document.createElement('span');

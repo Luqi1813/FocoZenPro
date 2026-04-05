@@ -133,17 +133,6 @@ function createWindow() {
         }
     });
 
-    mainWindow.on('maximize', (e) => {
-        if (isPipMode) {
-            e.preventDefault();
-            mainWindow.minimize();
-            if (pipWindow && !pipWindow.isVisible()) {
-                pipWindow.show();
-                pipWindow.focus();
-            }
-        }
-    });
-
     mainWindow.on('close', (e) => {
         if (isQuitting) return;
         if (mainWindow) {

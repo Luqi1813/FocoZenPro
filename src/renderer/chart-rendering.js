@@ -97,7 +97,7 @@ function renderCategoriesChart(canvasEl, legendEl, allHistory = []) {
                     <div class="stats-legend-item">
                         <span class="stats-legend-dot" style="color:${entry.color.from}; background:${entry.color.from};"></span>
                         <div class="stats-legend-main">
-                            <span class="stats-legend-name">${entry.label}</span>
+                            <span class="stats-legend-name">${escapeHtml(entry.label)}</span>
                             <span class="stats-legend-meta">${pct}% do foco no periodo</span>
                         </div>
                         <span class="stats-legend-value">${formatMinutesToHours(entry.value)}</span>
