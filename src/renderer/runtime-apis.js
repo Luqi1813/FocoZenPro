@@ -160,13 +160,13 @@ function notifyAssistantRuntime() {
 window.FocoZenGoalsRuntime = Object.freeze({
     getSnapshot: getGoalsRuntimeSnapshot,
     subscribe(listener) {
-        if (typeof listener !== 'function') return () => {};
+        if (typeof listener !== 'function') return () => { };
         const handler = (event) => listener(event.detail ?? getGoalsRuntimeSnapshot());
         window.addEventListener(GOALS_RUNTIME_CHANGE_EVENT, handler);
         return () => window.removeEventListener(GOALS_RUNTIME_CHANGE_EVENT, handler);
     },
     subscribeEdit(listener) {
-        if (typeof listener !== 'function') return () => {};
+        if (typeof listener !== 'function') return () => { };
         const handler = (event) => listener(event.detail ?? {});
         window.addEventListener(GOALS_RUNTIME_EDIT_EVENT, handler);
         return () => window.removeEventListener(GOALS_RUNTIME_EDIT_EVENT, handler);
@@ -222,7 +222,7 @@ window.FocoZenGoalsRuntime = Object.freeze({
 window.FocoZenStatsRuntime = Object.freeze({
     getSnapshot: getStatsRuntimeSnapshot,
     subscribe(listener) {
-        if (typeof listener !== 'function') return () => {};
+        if (typeof listener !== 'function') return () => { };
         const handler = (event) => listener(event.detail ?? getStatsRuntimeSnapshot());
         window.addEventListener(STATS_RUNTIME_CHANGE_EVENT, handler);
         return () => window.removeEventListener(STATS_RUNTIME_CHANGE_EVENT, handler);
@@ -247,7 +247,7 @@ window.FocoZenStatsRuntime = Object.freeze({
 window.FocoZenAssistantRuntime = Object.freeze({
     getSnapshot: getAssistantRuntimeSnapshot,
     subscribe(listener) {
-        if (typeof listener !== 'function') return () => {};
+        if (typeof listener !== 'function') return () => { };
         const handler = (event) => listener(event.detail ?? getAssistantRuntimeSnapshot());
         window.addEventListener(ASSISTANT_RUNTIME_CHANGE_EVENT, handler);
         return () => window.removeEventListener(ASSISTANT_RUNTIME_CHANGE_EVENT, handler);
@@ -331,7 +331,7 @@ function notifyHomeRuntime() {
 window.FocoZenHomeRuntime = Object.freeze({
     getSnapshot: getHomeRuntimeSnapshot,
     subscribe(listener) {
-        if (typeof listener !== 'function') return () => {};
+        if (typeof listener !== 'function') return () => { };
         const handler = (event) => listener(event.detail ?? getHomeRuntimeSnapshot());
         window.addEventListener(HOME_RUNTIME_CHANGE_EVENT, handler);
         return () => window.removeEventListener(HOME_RUNTIME_CHANGE_EVENT, handler);
@@ -464,7 +464,7 @@ function notifyTimerRuntime() {
 window.FocoZenTimerRuntime = Object.freeze({
     getSnapshot: getTimerRuntimeSnapshot,
     subscribe(listener) {
-        if (typeof listener !== 'function') return () => {};
+        if (typeof listener !== 'function') return () => { };
         const handler = (event) => listener(event.detail ?? getTimerRuntimeSnapshot());
         window.addEventListener(TIMER_RUNTIME_CHANGE_EVENT, handler);
         return () => window.removeEventListener(TIMER_RUNTIME_CHANGE_EVENT, handler);
@@ -501,7 +501,7 @@ function toggleTaskTimer() {
 window.FocoZenTasksRuntime = Object.freeze({
     getSnapshot: getTasksRuntimeSnapshot,
     subscribe(listener) {
-        if (typeof listener !== 'function') return () => {};
+        if (typeof listener !== 'function') return () => { };
         const handler = (event) => listener(event.detail ?? getTasksRuntimeSnapshot());
         window.addEventListener(TASKS_RUNTIME_CHANGE_EVENT, handler);
         return () => window.removeEventListener(TASKS_RUNTIME_CHANGE_EVENT, handler);
@@ -548,4 +548,4 @@ window.FocoZenTasksRuntime = Object.freeze({
 });
 
 const motivationalRestartMessages = constantsService.motivationalRestartMessages;
-
+

@@ -15,7 +15,7 @@ export function subscribeHomeViewModel(listener) {
     const runtime = readRuntime();
     const emit = (snapshot) => listener(snapshot ?? runtime.getSnapshot?.());
     emit(runtime.getSnapshot?.());
-    return runtime.subscribe?.(emit) ?? (() => {});
+    return runtime.subscribe?.(emit) ?? (() => { });
 }
 
 // ── Audio controls ──

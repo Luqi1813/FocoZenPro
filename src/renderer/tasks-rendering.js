@@ -7,9 +7,9 @@ function renderTasksList() {
     const allTasks = [...tasks.filter(t => !t.completed), ...tasks.filter(t => t.completed)];
 
     if (allTasks.length === 0) {
-        if(empty) empty.style.setProperty('display', 'flex', 'important');
+        if (empty) empty.style.setProperty('display', 'flex', 'important');
     } else {
-        if(empty) empty.style.setProperty('display', 'none', 'important');
+        if (empty) empty.style.setProperty('display', 'none', 'important');
         allTasks.forEach(task => {
             const item = document.createElement('div'); item.className = `task-item ${task.completed ? 'completed' : ''}`;
             item.innerHTML = `
@@ -41,15 +41,15 @@ function renderTasksSidebar() {
 
     if (empty) empty.style.setProperty('display', 'none', 'important');
 
-    const displayTasks = isDeleteMode ? tasks : [...tasks.filter(t=>!t.completed), ...tasks.filter(t=>t.completed)];
+    const displayTasks = isDeleteMode ? tasks : [...tasks.filter(t => !t.completed), ...tasks.filter(t => t.completed)];
 
     displayTasks.forEach(task => {
         const isCurrent = currentTask?.id === task.id;
         const rawPercent = task.pomodoros > 0 ? ((task.completedPomodoros / task.pomodoros) * 100) : 0;
         const percent = Math.max(0, Math.min(100, rawPercent));
-        const item = document.createElement('div'); 
+        const item = document.createElement('div');
         item.className = `task-item-sidebar ${isCurrent ? 'active' : ''} ${task.completed ? 'completed' : ''} ${isDeleteMode ? 'delete-mode-active' : ''}`;
-        
+
         // Calculate elapsed using estimatedMinutes (not pomodoros x 25)
         const taskTotalMins = task.estimatedMinutes || (task.pomodoros * 25);
         const elapsedFraction = task.pomodoros > 0 ? (task.completedPomodoros / task.pomodoros) : 0;
@@ -76,15 +76,15 @@ function renderTasksSidebar() {
             });
             subtasksHtml += `</div>`;
         }
-        
+
         const actionRowHtml = `
             <div class="task-sidebar-action-row">
                 ${isCurrent && currentMode === 'focus' && !task.completed
-                    ? (isTimerRunning
-                        ? `<button class="action-pill" style="background:#f59e0b; color:white; box-shadow: 0 4px 15px rgba(245,158,11,0.4);" onclick="event.stopPropagation(); window.toggleTaskTimer()" title="Pausar"><i class="fas fa-pause"></i></button>`
-                        : `<button class="action-pill primary" onclick="event.stopPropagation(); window.toggleTaskTimer()" title="Retomar"><i class="fas fa-play"></i></button>`)
-                    : `<button class="action-pill primary" onclick="event.stopPropagation(); window.startTask(${task.id})" title="Iniciar"><i class="fas fa-play"></i></button>`
-                }
+                ? (isTimerRunning
+                    ? `<button class="action-pill" style="background:#f59e0b; color:white; box-shadow: 0 4px 15px rgba(245,158,11,0.4);" onclick="event.stopPropagation(); window.toggleTaskTimer()" title="Pausar"><i class="fas fa-pause"></i></button>`
+                    : `<button class="action-pill primary" onclick="event.stopPropagation(); window.toggleTaskTimer()" title="Retomar"><i class="fas fa-play"></i></button>`)
+                : `<button class="action-pill primary" onclick="event.stopPropagation(); window.startTask(${task.id})" title="Iniciar"><i class="fas fa-play"></i></button>`
+            }
                 <button class="action-pill warning" onclick="event.stopPropagation(); window.editTask(${task.id})" title="Editar"><i class="fas fa-pen"></i></button>
                 <button class="action-pill success" onclick="event.stopPropagation(); window.toggleTaskComplete(${task.id})" title="${task.completed ? 'Reabrir' : 'Concluir'}"><i class="fas ${task.completed ? 'fa-undo' : 'fa-check'}"></i></button>
                 <button class="action-pill danger" onclick="event.stopPropagation(); window.deleteTask(${task.id})" title="Excluir"><i class="fas fa-trash"></i></button>
@@ -121,4 +121,4 @@ function renderTasksSidebar() {
 
     notifyTasksRuntime();
 }
-
+
