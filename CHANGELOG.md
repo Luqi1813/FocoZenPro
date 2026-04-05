@@ -2,7 +2,7 @@
 
 Todas as mudancas notaveis do FocoZen Pro serao documentadas neste arquivo.
 
-## [1.2.0] - 2026-04-04
+## [2.0.0] - 2026-04-04
 
 ### Adicionado
 - README.md completo com documentacao de arquitetura, stack tecnologico e instrucoes de uso
