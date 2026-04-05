@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
 
 const STORAGE_KEY_USERNAME = 'foczen_username';
+const STORAGE_KEY_ACCENT = 'focozen_custom_accent_color';
 
 function readStorage(key) {
     try {
@@ -20,9 +21,46 @@ function writeStorage(key, value) {
     } catch { /* noop */ }
 }
 
+function hexToHSL(hex) {
+    let r = parseInt(hex.slice(1, 3), 16) / 255;
+    let g = parseInt(hex.slice(3, 5), 16) / 255;
+    let b = parseInt(hex.slice(5, 7), 16) / 255;
+    const max = Math.max(r, g, b), min = Math.min(r, g, b);
+    let h, s, l = (max + min) / 2;
+    if (max === min) { h = s = 0; } else {
+        const d = max - min;
+        s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+        switch (max) {
+            case r: h = ((g - b) / d + (g < b ? 6 : 0)) / 6; break;
+            case g: h = ((b - r) / d + 2) / 6; break;
+            case b: h = ((r - g) / d + 4) / 6; break;
+        }
+    }
+    return { h: Math.round(h * 360), s: Math.round(s * 100), l: Math.round(l * 100) };
+}
+
+export function applyAccentColor(hex) {
+    if (!hex) {
+        document.documentElement.removeAttribute('data-custom-accent');
+        document.documentElement.style.removeProperty('--accent-primary');
+        document.documentElement.style.removeProperty('--accent-secondary');
+        document.documentElement.style.removeProperty('--accent-glow');
+        return;
+    }
+    document.documentElement.setAttribute('data-custom-accent', hex);
+    const { h, s, l } = hexToHSL(hex);
+    const l2 = Math.max(0, l - 12);
+    const glowA = Math.min(0.4, Math.max(0.15, s / 100 * 0.4));
+    document.documentElement.style.setProperty('--accent-primary', hex);
+    document.documentElement.style.setProperty('--accent-secondary', `hsl(${h}, ${s}%, ${l2}%)`);
+    document.documentElement.style.setProperty('--accent-glow', `hsla(${h}, ${s}%, ${l}%, ${glowA})`);
+}
+
 export default function SettingsReactView() {
     const [username, setUsername] = useState(() => readStorage(STORAGE_KEY_USERNAME) || '');
+    const [accentColor, setAccentColor] = useState(() => readStorage(STORAGE_KEY_ACCENT) || '');
     const [savedMsg, setSavedMsg] = useState(false);
+    const [accentSaved, setAccentSaved] = useState(false);
     const [updateChecking, setUpdateChecking] = useState(false);
     const [updateStatus, setUpdateStatus] = useState(null);
     const [appVersion, setAppVersion] = useState('—');
@@ -75,6 +113,20 @@ export default function SettingsReactView() {
         if (window.FocoZenAssistantRuntime?.refresh) window.FocoZenAssistantRuntime.refresh();
     }, [username]);
 
+    const handleSaveAccent = useCallback(() => {
+        writeStorage(STORAGE_KEY_ACCENT, accentColor || '');
+        setAccentSaved(true);
+        setTimeout(() => setAccentSaved(false), 3000);
+    }, [accentColor]);
+
+    const handleResetAccent = useCallback(() => {
+        setAccentColor('');
+        writeStorage(STORAGE_KEY_ACCENT, '');
+        applyAccentColor('');
+        setAccentSaved(true);
+        setTimeout(() => setAccentSaved(false), 3000);
+    }, []);
+
     const handleCheckUpdates = useCallback(() => {
         setUpdateChecking(true);
         setUpdateStatus(null);
@@ -123,6 +175,52 @@ export default function SettingsReactView() {
                     {savedMsg ? (
                         <div style={{ color: '#10b981', fontSize: '0.9rem', fontWeight: 'bold', background: 'rgba(16,185,129,0.1)', padding: '8px 16px', borderRadius: '20px', display: 'flex', alignItems: 'center', gap: '8px' }}>
                             <i className="fas fa-check-circle"></i> Atualizado!
+                        </div>
+                    ) : null}
+                </div>
+            </section>
+
+            {/* Accent Color */}
+            <section className="panel glass-effect" style={{ padding: '30px', marginBottom: '24px', borderRadius: '20px' }}>
+                <h3 style={{ marginBottom: '24px', fontSize: '1.3rem' }}>
+                    <i className="fas fa-palette" style={{ color: accentColor || 'var(--accent-primary)', marginRight: '12px' }}></i>
+                    Cor de Destaque
+                </h3>
+                <p style={{ color: 'var(--text-secondary)', marginBottom: '20px', fontSize: '0.95rem', lineHeight: 1.6 }}>
+                    Escolha uma cor personalizada para substituir o tema do wallpaper. A cor sera aplicada em botoes, icones, bordas e destaques.
+                </p>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '16px', flexWrap: 'wrap' }}>
+                    <div style={{ position: 'relative', width: '56px', height: '56px', borderRadius: '14px', overflow: 'hidden', border: '2px solid rgba(255,255,255,0.15)', flexShrink: 0, background: accentColor || 'var(--accent-primary)' }}>
+                        <input
+                            type="color"
+                            value={accentColor || '#7c89d9'}
+                            onChange={(e) => setAccentColor(e.target.value)}
+                            style={{ position: 'absolute', top: '-10px', left: '-10px', width: 'calc(100% + 20px)', height: 'calc(100% + 20px)', border: 'none', cursor: 'pointer', opacity: 0 }}
+                        />
+                        <i className="fas fa-eye-dropper" style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', color: 'white', fontSize: '1.2rem', pointerEvents: 'none', textShadow: '0 1px 3px rgba(0,0,0,0.5)' }}></i>
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                        <input
+                            type="text"
+                            className="modern-input"
+                            style={{ background: 'rgba(0,0,0,0.2)', color: 'white', width: '120px', border: '1px solid rgba(255,255,255,0.1)', padding: '10px 14px', borderRadius: '10px', fontFamily: 'monospace', fontSize: '0.95rem', textTransform: 'uppercase' }}
+                            value={accentColor || ''}
+                            onChange={(e) => {
+                                const v = e.target.value;
+                                if (/^#[0-9a-fA-F]{0,6}$/.test(v)) setAccentColor(v);
+                            }}
+                            placeholder="#7C89D9"
+                        />
+                        <button className="btn-modal primary" onClick={handleSaveAccent} style={{ whiteSpace: 'nowrap' }}>
+                            Aplicar
+                        </button>
+                        <button className="btn-modal secondary" onClick={handleResetAccent} style={{ background: 'rgba(255,255,255,0.08)', borderColor: 'rgba(255,255,255,0.15)', whiteSpace: 'nowrap' }}>
+                            <i className="fas fa-undo" style={{ marginRight: '6px' }}></i>Padrao
+                        </button>
+                    </div>
+                    {accentSaved ? (
+                        <div style={{ color: '#10b981', fontSize: '0.9rem', fontWeight: 'bold', background: 'rgba(16,185,129,0.1)', padding: '8px 16px', borderRadius: '20px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                            <i className="fas fa-check-circle"></i> Cor aplicada!
                         </div>
                     ) : null}
                 </div>

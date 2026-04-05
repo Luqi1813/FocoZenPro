@@ -2,6 +2,18 @@
 
 Todas as mudancas notaveis do FocoZen Pro serao documentadas neste arquivo.
 
+## [2.0.2] - 2026-04-05
+
+### Adicionado
+- Cor de destaque customizavel nas configuracoes (independente do wallpaper)
+- Color picker com preview em tempo real e campo hexadecimal
+- Botao "Padrao" para restaurar a cor original do tema
+
+### Corrigido
+- Auto-updater agora funciona no build empacotado (electron-log e electron-updater incluidos)
+- Chart.js empacotado via `vendor/` em vez de `node_modules/`
+- Assets (audio e imagens) incluidos no pacote
+
 ## [2.0.0] - 2026-04-04
 
 ### Adicionado

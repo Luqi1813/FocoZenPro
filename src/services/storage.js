@@ -18,7 +18,8 @@
         UPDATED_VERSION: 'focozen_updated_version',
         CHANGELOG: 'focozen_changelog',
         LAST_VERSION: 'focozen_last_version',
-        LAST_CHANGELOG: 'focozen_last_changelog'
+        LAST_CHANGELOG: 'focozen_last_changelog',
+        CUSTOM_ACCENT_COLOR: 'focozen_custom_accent_color'
     });
 
     const cloneFallback = (value) => {

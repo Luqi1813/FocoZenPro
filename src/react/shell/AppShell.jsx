@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useState } from 'react';
 import HomeReactView from '../components/HomeReactView.jsx';
 import StatsReactView from '../components/StatsReactView.jsx';
 import GoalsReactView from '../components/GoalsReactView.jsx';
-import SettingsReactView from '../components/SettingsReactView.jsx';
+import SettingsReactView, { applyAccentColor } from '../components/SettingsReactView.jsx';
 
 const VIEWS = [
     { id: 'home', label: 'Home', icon: 'fa-home' },
@@ -65,6 +65,12 @@ export default function AppShell() {
     const [userInitial, setUserInitial] = useState(() => {
         try { return (localStorage.getItem('foczen_username') || 'Z').charAt(0).toUpperCase(); } catch { return 'Z'; }
     });
+
+    useEffect(() => {
+        try {
+            applyAccentColor(localStorage.getItem('focozen_custom_accent_color') || '');
+        } catch { /* noop */ }
+    }, []);
 
     useEffect(() => {
         try {
